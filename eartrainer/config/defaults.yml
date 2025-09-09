@@ -1,6 +1,6 @@
 audio:
   backend: "fluidsynth"
-  soundfont_path: "./soundfonts/ColomboGMGS2.sf2" #"./soundfonts/GrandPiano.sf2"
+  soundfont_path: "./soundfonts/GM.sf2" #"./soundfonts/GrandPiano.sf2"
   sample_rate: 44100
   gain: 0.5
   instrument: "piano"
