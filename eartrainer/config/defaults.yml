@@ -1,6 +1,6 @@
 audio:
   backend: "fluidsynth"
-  soundfont_path: "./soundfonts/GrandPiano.sf2"
+  soundfont_path: "./soundfonts/ColomboGMGS2.sf2" #"./soundfonts/GrandPiano.sf2"
   sample_rate: 44100
   gain: 0.5
   instrument: "piano"
@@ -18,7 +18,7 @@ drill:
   degrees_in_scope: ["1", "2", "3", "4", "5", "6", "7"]
   include_chromatic: false
   note_range:
-    min_note: "C2"
+    min_note: "C3"
     max_note: "C5"
   test_note_delay_ms: 300
 stats:
@@ -29,3 +29,16 @@ transposition:
   randomize_key_each_session: true
 ui:
   mode: "cli"
+
+drone:
+  enabled: true
+  template: "root5"
+  instrument: "strings"
+  volume: 0.35
+  fade_in_ms: 200
+  fade_out_ms: 250
+  inactivity_timeout_s: 10
+  restart_on_key_change: true
+  auto_pause_during_question: false
+  channel: 1
+  templates_path: "eartrainer/resources/drones/strings_basic.yml"

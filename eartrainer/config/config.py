@@ -72,6 +72,7 @@ def validate_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     cfg.setdefault("stats", {})
     cfg.setdefault("transposition", {})
     cfg.setdefault("ui", {})
+    cfg.setdefault("drone", {})
 
     audio = cfg["audio"]
     context = cfg["context"]
@@ -112,6 +113,20 @@ def validate_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     stats.setdefault("show_summary", True)
 
     transp.setdefault("randomize_key_each_session", True)
+
+    # Drone defaults
+    drone = cfg["drone"]
+    drone.setdefault("enabled", False)
+    drone.setdefault("template", "root5")
+    drone.setdefault("instrument", "strings")
+    drone.setdefault("volume", 0.35)
+    drone.setdefault("fade_in_ms", 200)
+    drone.setdefault("fade_out_ms", 250)
+    drone.setdefault("inactivity_timeout_s", 10)
+    drone.setdefault("restart_on_key_change", True)
+    drone.setdefault("auto_pause_during_question", False)
+    drone.setdefault("channel", 1)
+    drone.setdefault("templates_path", "eartrainer/resources/drones/strings_basic.yml")
 
     # Enum validations
     backend = audio.get("backend")
