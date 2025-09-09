@@ -1,0 +1,27 @@
+[project]
+name = "eartrainer"
+version = "0.1.0"
+description = "Functional ear training MVP (CLI)"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "pyyaml",
+  "mido",
+  "pyfluidsynth",
+  "sounddevice",
+  "numpy",
+]
+
+[project.scripts]
+eartrainer = "eartrainer.main:cli"
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["eartrainer*"]
+exclude = ["soundfonts*"]
+
+[tool.setuptools.package-data]
+eartrainer = ["config/*.yml", "resources/*.md", "resources/*.yml"]

@@ -1,0 +1,112 @@
+from __future__ import annotations
+
+"""Base drill abstractions and context/results models."""
+
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Protocol
+
+from ..audio.synthesis import Synth
+from ..theory.harmony import build_cadence_midi
+
+
+@dataclass
+class DrillContext:
+    """Context information for a drill session."""
+
+    key_root: str
+    scale_type: str
+    reference_mode: str
+    degrees_in_scope: List[str]
+    include_chromatic: bool = False
+    min_midi: int | None = None
+    max_midi: int | None = None
+    test_note_delay_ms: int = 300
+    voicing_bass_octave: int = 2
+    voicing_chord_octave_by_pc: list[int] | None = None
+
+
+@dataclass
+class DrillResult:
+    """Aggregated result statistics for a drill session."""
+
+    total: int
+    correct: int
+    per_degree: Dict[str, Dict[str, int]] = field(default_factory=dict)
+
+
+class BaseDrill:
+    """Abstract base for drills."""
+
+    def __init__(self, ctx: DrillContext, synth: Synth) -> None:
+        self.ctx = ctx
+        self.synth = synth
+
+    def play_reference(self) -> None:
+        if self.ctx.reference_mode == "cadence":
+            # Pass voicing policy if available
+            policy = None
+            if self.ctx.voicing_chord_octave_by_pc is not None:
+                policy = {
+                    "bass_octave": self.ctx.voicing_bass_octave,
+                    "chord_octave_by_pc": self.ctx.voicing_chord_octave_by_pc,
+                }
+            cadence = build_cadence_midi(self.ctx.key_root, self.ctx.scale_type, octave=4, voicing_policy=policy)
+            for chord in cadence:
+                self.synth.play_chord(chord, velocity=90, dur_ms=800)
+                self.synth.sleep_ms(250)
+        # Stretch: handle scale/drone in future
+
+    def next_question(self) -> Dict:
+        raise NotImplementedError
+
+    def grade(self, answer: str, ground_truth: str) -> bool:
+        a = answer.strip().lower()
+        g = ground_truth.strip().lower()
+        return a == g
+
+    def run(self, num_questions: int, ui_callbacks: Dict[str, Callable]) -> DrillResult:
+        ask = ui_callbacks["ask"]
+        inform = ui_callbacks["inform"]
+        confirm_replay_reference = ui_callbacks.get("confirm_replay_reference", lambda: False)
+
+        correct = 0
+        per_degree: Dict[str, Dict[str, int]] = {}
+
+        for i in range(1, num_questions + 1):
+            # Announce and play the question audio before prompting
+            inform(f"Q{i}/{num_questions}: listen…")
+            q = self.next_question()
+            truth = str(q["truth_degree"])  # "1".."7"
+
+            while True:
+                ans = ask("Enter scale degree (1–7), 'r' replay cadence, 'p' replay note: ")
+                if ans.strip().lower() == "r":
+                    if confirm_replay_reference():
+                        self.play_reference()
+                        # separation, then replay the question note for context
+                        self.synth.sleep_ms(self.ctx.test_note_delay_ms)
+                        if "midi" in q:
+                            self.synth.note_on(int(q["midi"]), velocity=100, dur_ms=600)
+                        continue
+                if ans.strip().lower() == "p":
+                    if "midi" in q:
+                        self.synth.note_on(int(q["midi"]), velocity=100, dur_ms=600)
+                    continue
+                # grade if not replay request
+                is_correct = self.grade(ans, truth)
+                if is_correct:
+                    correct += 1
+                    inform("Correct!\n")
+                else:
+                    inform(f"Incorrect. Answer was {truth}.\n")
+
+                # stats update
+                bucket = per_degree.setdefault(truth, {"asked": 0, "correct": 0})
+                bucket["asked"] += 1
+                bucket["correct"] += 1 if is_correct else 0
+                break
+
+            # Delay after answer before next question's test note
+            self.synth.sleep_ms(self.ctx.test_note_delay_ms)
+
+        return DrillResult(total=num_questions, correct=correct, per_degree=per_degree)
