@@ -8,6 +8,7 @@ from typing import Dict
 
 from . import __version__
 from .audio.playback import make_synth_from_config
+from .audio.drone import DroneManager
 from .config.config import load_config, validate_config
 from .drills.base_drill import DrillContext
 from .drills.note_drill import NoteDegreeDrill
@@ -86,6 +87,20 @@ def cli() -> None:
     # For MVP always note drill
     drill = NoteDegreeDrill(ctx, synth)
 
+    # Optional drone setup
+    drone_mgr = None
+    drone_cfg = cfg.get("drone", {})
+    if bool(drone_cfg.get("enabled", False)):
+        drone_mgr = DroneManager(synth, drone_cfg)
+        try:
+            drone_mgr.configure_channel()
+            # Start drone at session key
+            from .theory.scale import Scale
+            scale = Scale(session_key, scale_type)
+            drone_mgr.start(scale, template_id=str(drone_cfg.get("template", "root5")))
+        except Exception as e:
+            print(f"[WARN] Drone initialization failed: {e}")
+
     # Play reference once
     drill.play_reference()
     synth.sleep_ms(ctx.test_note_delay_ms)
@@ -96,6 +111,8 @@ def cli() -> None:
     def ask(prompt: str) -> str:
         val = input(prompt)
         last_input["value"] = val
+        if drone_mgr:
+            drone_mgr.ping_activity("input")
         return val
 
     def inform(msg: str) -> None:
@@ -104,8 +121,18 @@ def cli() -> None:
     def confirm_replay_reference() -> bool:
         return (last_input.get("value", "").strip().lower() == "r")
 
+    def activity(event: str = "") -> None:
+        if drone_mgr:
+            drone_mgr.ping_activity(event)
+
+    def maybe_restart_drone() -> None:
+        if drone_mgr:
+            from .theory.scale import Scale
+            scale = Scale(session_key, scale_type)
+            drone_mgr.restart_if_key_changed(scale)
+
     num_q = int(drill_cfg.get("questions", 50))
-    result = drill.run(num_q, {"ask": ask, "inform": inform, "confirm_replay_reference": confirm_replay_reference})
+    result = drill.run(num_q, {"ask": ask, "inform": inform, "confirm_replay_reference": confirm_replay_reference, "activity": activity, "maybe_restart_drone": maybe_restart_drone})
 
     # Aggregate to session stats
     stats = new_session_stats()
@@ -131,6 +158,11 @@ def cli() -> None:
     print(format_summary(stats))
 
     # Cleanup
+    if drone_mgr:
+        try:
+            drone_mgr.stop("drill_end")
+        except Exception:
+            pass
     synth.close()
 
 

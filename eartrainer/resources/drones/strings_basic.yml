@@ -1,0 +1,12 @@
+version: 1
+defaults:
+  lh_octave: 2            # base octave for lowest root
+  mid_octave: 3           # octave for additional root/fifth
+  instrument_programs:
+    strings: 48           # GM: String Ensemble 1 (program 49 in 1-based)
+templates:
+  - id: "root"
+    notes: ["1@+0"]                 # tonic only (e.g., C2)
+  - id: "root5"
+    notes: ["1@+0", "1@+1", "5@+1"] # e.g., C2, C3, G3
+
