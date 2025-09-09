@@ -24,4 +24,4 @@ include = ["eartrainer*"]
 exclude = ["soundfonts*"]
 
 [tool.setuptools.package-data]
-eartrainer = ["config/*.yml", "resources/*.md", "resources/*.yml"]
+eartrainer = ["config/*.yml", "resources/*.md", "resources/*.yml", "resources/voicings/*.yml"]
