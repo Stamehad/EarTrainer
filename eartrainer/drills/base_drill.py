@@ -68,14 +68,18 @@ class BaseDrill:
         ask = ui_callbacks["ask"]
         inform = ui_callbacks["inform"]
         confirm_replay_reference = ui_callbacks.get("confirm_replay_reference", lambda: False)
+        activity = ui_callbacks.get("activity", lambda _e=None: None)
+        maybe_restart_drone = ui_callbacks.get("maybe_restart_drone", lambda: None)
 
         correct = 0
         per_degree: Dict[str, Dict[str, int]] = {}
 
         for i in range(1, num_questions + 1):
+            maybe_restart_drone()
             # Announce and play the question audio before prompting
             inform(f"Q{i}/{num_questions}: listen…")
             q = self.next_question()
+            activity("question_played")
             truth = str(q["truth_degree"])  # "1".."7"
 
             while True:
@@ -87,10 +91,12 @@ class BaseDrill:
                         self.synth.sleep_ms(self.ctx.test_note_delay_ms)
                         if "midi" in q:
                             self.synth.note_on(int(q["midi"]), velocity=100, dur_ms=600)
+                        activity("replay_reference")
                         continue
                 if ans.strip().lower() == "p":
                     if "midi" in q:
                         self.synth.note_on(int(q["midi"]), velocity=100, dur_ms=600)
+                    activity("replay_note")
                     continue
                 # grade if not replay request
                 is_correct = self.grade(ans, truth)
@@ -99,6 +105,7 @@ class BaseDrill:
                     inform("Correct!\n")
                 else:
                     inform(f"Incorrect. Answer was {truth}.\n")
+                activity("answer")
 
                 # stats update
                 bucket = per_degree.setdefault(truth, {"asked": 0, "correct": 0})

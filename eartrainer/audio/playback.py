@@ -32,7 +32,8 @@ class FluidSynthSynth(Synth):
             # Fallback to default driver if preferred one fails
             self._fs.start()
         sfid = self._fs.sfload(soundfont_path)
-        self._fs.program_select(0, sfid, 0, 0)  # channel, sfid, bank, preset (0=Acoustic Grand)
+        self._sfid = sfid
+        self._fs.program_select(0, sfid, 0, 0)  # channel 0 = Acoustic Grand
 
     def program_piano(self) -> None:
         # Already set in __init__ for GM acoustic grand
@@ -55,6 +56,23 @@ class FluidSynthSynth(Synth):
             self._fs.delete()
         except Exception:
             pass
+
+    # Advanced channel controls
+    def select_program(self, channel: int, bank: int, preset: int) -> None:
+        self._fs.program_select(int(channel), self._sfid, int(bank), int(preset))
+
+    def cc(self, channel: int, control: int, value: int) -> None:
+        self._fs.cc(int(channel), int(control), max(0, min(127, int(value))))
+
+    def note_on_raw(self, channel: int, midi: int, velocity: int) -> None:
+        self._fs.noteon(int(channel), int(midi), max(0, min(127, int(velocity))))
+
+    def note_off_raw(self, channel: int, midi: int) -> None:
+        self._fs.noteoff(int(channel), int(midi))
+
+    def all_notes_off(self, channel: int) -> None:
+        # CC#123 = All Notes Off
+        self._fs.cc(int(channel), 123, 0)
 
 
 def make_synth_from_config(cfg: Dict) -> Synth:

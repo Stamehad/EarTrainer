@@ -36,3 +36,18 @@ class Synth:
         """Release resources."""
         pass
 
+    # Optional advanced channel controls (for drones)
+    def select_program(self, channel: int, bank: int, preset: int) -> None:
+        raise NotImplementedError
+
+    def cc(self, channel: int, control: int, value: int) -> None:
+        raise NotImplementedError
+
+    def note_on_raw(self, channel: int, midi: int, velocity: int) -> None:
+        raise NotImplementedError
+
+    def note_off_raw(self, channel: int, midi: int) -> None:
+        raise NotImplementedError
+
+    def all_notes_off(self, channel: int) -> None:
+        raise NotImplementedError
