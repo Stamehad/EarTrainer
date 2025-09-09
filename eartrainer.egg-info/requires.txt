@@ -1,0 +1,5 @@
+pyyaml
+mido
+pyfluidsynth
+sounddevice
+numpy

@@ -1,0 +1,31 @@
+audio:
+  backend: "fluidsynth"
+  soundfont_path: "./soundfonts/GrandPiano.sf2"
+  sample_rate: 44100
+  gain: 0.5
+  instrument: "piano"
+context:
+  key: "C"
+  scale_type: "major"
+  reference_mode: "cadence"
+  drone:
+    tones: ["I", "V"]
+    sustain: false
+drill:
+  type: "note"
+  questions: 10
+  allow_replay_reference: true
+  degrees_in_scope: ["1", "2", "3", "4", "5", "6", "7"]
+  include_chromatic: false
+  note_range:
+    min_note: "C2"
+    max_note: "C5"
+  test_note_delay_ms: 300
+stats:
+  output_path: "./session_stats.json"
+  show_per_question_feedback: true
+  show_summary: true
+transposition:
+  randomize_key_each_session: true
+ui:
+  mode: "cli"
