@@ -14,6 +14,7 @@ from ..audio.synthesis import Synth
 from ..audio.drone import DroneManager
 from ..theory.scale import Scale
 from .drill_registry import list_drills, get_drill, make_drill
+from .explain import trace as xtrace
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,7 @@ class SessionManager:
             mistake_manager=None,
             results_sink=None,
         )
+        xtrace("session_started", {"drill": drill_id, "preset": preset, "key": key, "scale": scale_type})
 
     def preview_params(self) -> Dict[str, Any]:
         assert self.ctx is not None
@@ -87,16 +89,24 @@ class SessionManager:
         duck()
         self._drill.play_reference()
         unduck()
+        # Small delay between cadence and first question
+        try:
+            delay_ms = int(self.ctx.params.get("test_note_delay_ms", 300))
+        except Exception:
+            delay_ms = 300
+        self.synth.sleep_ms(delay_ms)
         num_q = int(self.ctx.params.get("questions", 10))
         result = self._drill.run(num_q, ui)
         self.state.ended_at = datetime.utcnow()
-        return {
+        summary = {
             "total": result.total,
             "correct": result.correct,
             "per_degree": result.per_degree,
             "started_at": self.ctx.started_at.isoformat(),
             "ended_at": self.state.ended_at.isoformat() if self.state.ended_at else None,
         }
+        xtrace("session_ended", summary)
+        return summary
 
     def stop(self) -> None:
         self.state.ended_at = datetime.utcnow()

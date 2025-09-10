@@ -7,6 +7,7 @@ from typing import Callable, Dict, List, Protocol
 
 from ..audio.synthesis import Synth
 from ..theory.harmony import build_cadence_midi
+from ..app.explain import trace as xtrace
 
 
 @dataclass
@@ -81,6 +82,7 @@ class BaseDrill:
             # Announce and play the question audio before prompting
             inform(f"Q{i}/{num_questions}: listen…")
             q = self.next_question()
+            xtrace("question_created", {"index": i, "truth": str(q.get("truth_degree"))})
             activity("question_played")
             truth = str(q["truth_degree"])  # "1".."7"
 
@@ -94,16 +96,27 @@ class BaseDrill:
                         # separation, then replay the question note for context
                         self.synth.sleep_ms(self.ctx.test_note_delay_ms)
                         if "midi" in q:
-                            self.synth.note_on(int(q["midi"]), velocity=100, dur_ms=600)
+                            midi_obj = q["midi"]
+                            if isinstance(midi_obj, list):
+                                self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
+                            else:
+                                self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
                         activity("replay_reference")
+                        xtrace("replay_reference", {"index": i})
                         continue
                 if ans.strip().lower() == "p":
                     if "midi" in q:
                         activity("replay_note")
-                        self.synth.note_on(int(q["midi"]), velocity=100, dur_ms=600)
+                        midi_obj = q["midi"]
+                        if isinstance(midi_obj, list):
+                            self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
+                        else:
+                            self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
+                        xtrace("replay_note", {"index": i})
                     continue
                 # grade if not replay request
                 is_correct = self.grade(ans, truth)
+                xtrace("graded", {"index": i, "answer": ans, "truth": truth, "correct": is_correct})
                 if is_correct:
                     correct += 1
                     inform("Correct!\n")
