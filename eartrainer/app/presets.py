@@ -28,3 +28,21 @@ NOTE_PRESETS = {
         "test_note_delay_ms": 200,
     },
 }
+
+CHORD_PRESETS = {
+    "beginner": {
+        "questions": 10,
+        "degrees_in_scope": ["1", "2", "3", "4", "5"],
+        "test_note_delay_ms": 300,
+    },
+    "default": {
+        "questions": 20,
+        "degrees_in_scope": ["1", "2", "3", "4", "5", "6", "7"],
+        "test_note_delay_ms": 250,
+    },
+    "advanced": {
+        "questions": 30,
+        "degrees_in_scope": ["1", "2", "3", "4", "5", "6", "7"],
+        "test_note_delay_ms": 200,
+    },
+}
