@@ -3,7 +3,7 @@ defaults:
   lh_bass_octave: 2
 
 templates:
-  - label: maj_triad_root_top
+  - label: maj36
     tags:
       quality: "maj"
       extensions: ["triad"]
@@ -13,7 +13,7 @@ templates:
     bass: ["1"]
     weight: 2.0
 
-  - label: maj_triad_third_top
+  - label: maj46
     tags:
       quality: "maj"
       extensions: ["triad"]
@@ -23,7 +23,7 @@ templates:
     bass: ["1"]
     weight: 1.0
 
-  - label: maj_triad_fifth_top
+  - label: maj
     tags:
       quality: "maj"
       extensions: ["triad"]
@@ -33,7 +33,7 @@ templates:
     bass: ["1"]
     weight: 1.0
 
-  - label: min_triad_root_top
+  - label: min36
     tags:
       quality: "min"
       extensions: ["triad"]
@@ -43,7 +43,7 @@ templates:
     bass: ["1"]
     weight: 2.0
 
-  - label: min_triad_third_top
+  - label: min46
     tags:
       quality: "min"
       extensions: ["triad"]
@@ -53,7 +53,7 @@ templates:
     bass: ["1"]
     weight: 1.0
 
-  - label: min_triad_fifth_top
+  - label: min
     tags:
       quality: "min"
       extensions: ["triad"]
@@ -63,7 +63,7 @@ templates:
     bass: ["1"]
     weight: 1.0
 
-  - label: dim_triad_root_top
+  - label: dim36
     tags:
       quality: "dim"
       extensions: ["triad"]
@@ -73,7 +73,7 @@ templates:
     bass: ["1"]
     weight: 1.0
 
-  - label: dim_triad_third_top
+  - label: dim46
     tags:
       quality: "dim"
       extensions: ["triad"]
@@ -83,7 +83,7 @@ templates:
     bass: ["1"]
     weight: 1.0
 
-  - label: dim_triad_fifth_top
+  - label: dim
     tags:
       quality: "dim"
       extensions: ["triad"]
@@ -93,7 +93,38 @@ templates:
     bass: ["1"]
     weight: 1.0
 
-  - label: dom7_df_gb
+  # Augmented triads
+  - label: aug36
+    tags:
+      quality: "aug"
+      extensions: ["triad"]
+      bass: "root_only"
+      instrument: "piano"
+    right_hand: ["3", "#5", "1@+1"]
+    bass: ["1"]
+    weight: 1.0
+
+  - label: aug
+    tags:
+      quality: "aug"
+      extensions: ["triad"]
+      bass: "root_only"
+      instrument: "piano"
+    right_hand: ["1", "3", "#5"]
+    bass: ["1"]
+    weight: 1.0
+
+  - label: aug46
+    tags:
+      quality: "aug"
+      extensions: ["triad"]
+      bass: "root_only"
+      instrument: "piano"
+    right_hand: ["#5@-1", "1", "3"]
+    bass: ["1"]
+    weight: 1.0
+
+  - label: dom43
     tags:
       quality: "dom7"
       extensions: ["7"]
@@ -103,7 +134,7 @@ templates:
     bass: ["1"]
     weight: 2.0
 
-  - label: dom7_1_3_5_b7
+  - label: dom7
     tags:
       quality: "dom7"
       extensions: ["7"]
@@ -113,7 +144,7 @@ templates:
     bass: ["1"]
     weight: 1.0
 
-  - label: dom7_3_5_b7_1up
+  - label: dom65
     tags:
       quality: "dom7"
       extensions: ["7"]
@@ -123,12 +154,94 @@ templates:
     bass: ["1"]
     weight: 1.0
 
-  - label: dom7_b7_1up_3up_5up
+  - label: dom42
     tags:
       quality: "dom7"
       extensions: ["7"]
       bass: "root_only"
       instrument: "piano"
     right_hand: ["b7@-1", "1", "3", "5"]
+    bass: ["1"]
+    weight: 1.0
+
+  # Major seventh (Δ7) voicings
+  - label: maj7
+    tags:
+      quality: "maj7"
+      extensions: ["7"]
+      bass: "root_only"
+      instrument: "piano"
+    right_hand: ["1", "3", "5", "7"]
+    bass: ["1"]
+    weight: 2.0
+
+  - label: maj65
+    tags:
+      quality: "maj7"
+      extensions: ["7"]
+      bass: "root_only"
+      instrument: "piano"
+    right_hand: ["3", "5", "7", "1@+1"]
+    bass: ["1"]
+    weight: 1.0
+
+  - label: maj43
+    tags:
+      quality: "maj7"
+      extensions: ["7"]
+      bass: "root_only"
+      instrument: "piano"
+    right_hand: ["5@-1", "7@-1", "1", "3"]
+    bass: ["1"]
+    weight: 1.0
+
+  - label: maj42
+    tags:
+      quality: "maj7"
+      extensions: ["7"]
+      bass: "root_only"
+      instrument: "piano"
+    right_hand: ["7@-1", "1", "3", "5"]
+    bass: ["1"]
+    weight: 1.0
+
+  # Minor seventh (m7) voicings
+  - label: min7
+    tags:
+      quality: "min7"
+      extensions: ["7"]
+      bass: "root_only"
+      instrument: "piano"
+    right_hand: ["1", "b3", "5", "b7"]
+    bass: ["1"]
+    weight: 2.0
+
+  - label: min65
+    tags:
+      quality: "min7"
+      extensions: ["7"]
+      bass: "root_only"
+      instrument: "piano"
+    right_hand: ["b3", "5", "b7", "1@+1"]
+    bass: ["1"]
+    weight: 1.0
+
+  - label: min43
+    tags:
+      quality: "min7"
+      extensions: ["7"]
+      bass: "root_only"
+      instrument: "piano"
+    right_hand: ["5@-1", "b7@-1", "1", "b3"]
+    bass: ["1"]
+    weight: 1.0
+
+  - label: min42
+    tags:
+      quality: "min7"
+      extensions: ["7"]
+      bass: "root_only"
+      instrument: "piano"
+    right_hand: ["b7@-1", "1", "b3", "5"]
     bass: ["1"]
     weight: 1.0
