@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.4.0 – Chord drill, voicing expansions, scale reference, fixes
+- New triad chord-degree drill with random voicings and no immediate repeats.
+- Expanded voicing bank: diminished, augmented triads; maj7/min7 with inversions; simplified labels.
+- Scale reference mode (ascending+descending) and 's' prompt option.
+- Replay supports both single notes and chords.
+- Minor-scale triad-quality maps corrected; cadence V forced to dom7 in minor.
+- CLI normalizes scale aliases (e.g., --scale minor → natural_minor).
+- Delay between cadence and first question.
+
 ## v0.3.0 – New CLI + SessionManager; drone auto-restart; improved randomness
 - Switch console entrypoint to `eartrainer.app.cli:main`.
 - Add SessionManager and DrillRegistry; presets for the note drill.
