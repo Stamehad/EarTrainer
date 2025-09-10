@@ -63,6 +63,36 @@ templates:
     bass: ["1"]
     weight: 1.0
 
+  - label: dim_triad_root_top
+    tags:
+      quality: "dim"
+      extensions: ["triad"]
+      bass: "root_only"
+      instrument: "piano"
+    right_hand: ["1", "b3", "b5", "1@+1"]
+    bass: ["1"]
+    weight: 1.0
+
+  - label: dim_triad_third_top
+    tags:
+      quality: "dim"
+      extensions: ["triad"]
+      bass: "root_only"
+      instrument: "piano"
+    right_hand: ["b5@-1", "1", "b3"]
+    bass: ["1"]
+    weight: 1.0
+
+  - label: dim_triad_fifth_top
+    tags:
+      quality: "dim"
+      extensions: ["triad"]
+      bass: "root_only"
+      instrument: "piano"
+    right_hand: ["1", "b3", "b5"]
+    bass: ["1"]
+    weight: 1.0
+
   - label: dom7_df_gb
     tags:
       quality: "dom7"

@@ -8,7 +8,9 @@ from .scales import diatonic_degree_to_pc
 
 
 MAJOR_DIATONIC_QUALITIES = {1: "maj", 2: "min", 3: "min", 4: "maj", 5: "dom7", 6: "min", 7: "dim"}
-NATMIN_DIATONIC_QUALITIES = {1: "min", 2: "dim", 3: "maj", 4: "min", 5: "min", 6: "maj", 7: "maj"}  # placeholder
+NATMIN_DIATONIC_QUALITIES = {1: "min", 2: "dim", 3: "maj", 4: "min", 5: "min", 6: "maj", 7: "maj"}
+HARM_MIN_DIATONIC_QUALITIES = {1: "min", 2: "dim", 3: "aug", 4: "min", 5: "maj", 6: "maj", 7: "dim"}
+MELODIC_MIN_DIATONIC_QUALITIES = {1: "min", 2: "min", 3: "aug", 4: "maj", 5: "maj", 6: "dim", 7: "dim"}
 
 SCALE_TYPES = {"major", "natural_minor", "harmonic_minor", "melodic_minor"}
 
@@ -56,12 +58,19 @@ class Scale:
     def degree_to_chord_spec(self, deg: int) -> ChordSpec:
         """Map degree to a functional chord spec in this key."""
         assert 1 <= deg <= 7
-        # Determine base quality by scale type (simplified for MVP):
-        if self.scale_type == "major":
+        # Determine base quality by scale type
+        st = self.scale_type
+        if st == "major":
             q = MAJOR_DIATONIC_QUALITIES[deg]
+        elif st == "natural_minor":
+            q = NATMIN_DIATONIC_QUALITIES[deg]
+        elif st == "harmonic_minor":
+            q = HARM_MIN_DIATONIC_QUALITIES[deg]
+        elif st == "melodic_minor":
+            q = MELODIC_MIN_DIATONIC_QUALITIES[deg]
         else:
-            # TODO: expand proper minor-scale diatonic mapping
-            q = "min" if deg in (2, 3, 6) else ("maj" if deg in (1, 4) else ("dom7" if deg == 5 else "dim"))
+            # Fallback sensibly to natural minor for unknown minor labels
+            q = NATMIN_DIATONIC_QUALITIES.get(deg, "min")
         # Compute absolute root name for this degree
         root_name = self._degree_root_name(deg)
         allowed_ext: Set[str] = {"triad"}

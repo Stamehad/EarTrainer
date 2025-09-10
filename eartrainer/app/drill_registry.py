@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List
 
 from ..drills.note_drill import NoteDegreeDrill
+from ..drills.chord_id import ChordDegreeDrill
 from ..drills.base_drill import DrillContext
 from ..audio.synthesis import Synth
 
@@ -51,7 +52,7 @@ def _note_drill_meta() -> DrillMeta:
 
 
 def list_drills() -> List[DrillMeta]:
-    return [_note_drill_meta()]
+    return [_note_drill_meta(), _chord_drill_meta()]
 
 
 def get_drill(drill_id: str) -> DrillMeta:
@@ -75,9 +76,6 @@ def make_drill(
 
     For now supports only the existing NoteDegreeDrill.
     """
-    if drill_id != "note":
-        raise KeyError(f"Unsupported drill for factory: {drill_id}")
-
     ctx = DrillContext(
         key_root=scale["key"],
         scale_type=scale["scale_type"],
@@ -88,4 +86,26 @@ def make_drill(
         max_midi=params.get("max_midi"),
         test_note_delay_ms=int(params.get("test_note_delay_ms", 300)),
     )
-    return NoteDegreeDrill(ctx, synth)
+
+    if drill_id == "note":
+        return NoteDegreeDrill(ctx, synth)
+    if drill_id == "chord":
+        return ChordDegreeDrill(ctx, synth)
+    raise KeyError(f"Unsupported drill for factory: {drill_id}")
+
+def _chord_drill_meta() -> DrillMeta:
+    from .presets import CHORD_PRESETS
+    return DrillMeta(
+        id="chord",
+        name="Chord Degree (triads)",
+        description="Identify diatonic triads by degree (1–7).",
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "questions": {"type": "integer", "minimum": 1, "default": 10},
+                "degrees_in_scope": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["questions"],
+        },
+        presets=CHORD_PRESETS,
+    )

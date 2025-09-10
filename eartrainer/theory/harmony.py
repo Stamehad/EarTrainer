@@ -38,7 +38,8 @@ def build_v7_chord_midi(root_name: str, scale_type: str, octave: int = 4, voicin
     """Build dominant seventh (V7) using voicing bank and selector."""
     scale = Scale(root_name, scale_type)
     spec = scale.degree_to_chord_spec(5)
-    chord = Chord.from_spec(spec, extensions=("7",))
+    # Force functional dominant quality regardless of minor variant mapping
+    chord = Chord(root_name=spec.root_name, quality="dom7", degree=5, extensions=("7",))
     selector = VoicingSelector(VoicingBank())
     policy = DrillPolicy(register_policy=_policy_from_dict(voicing_policy), allowed_extensions={"triad", "7"})
     voicing = selector.render(chord, policy)

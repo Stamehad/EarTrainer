@@ -15,6 +15,26 @@ from .drill_registry import list_drills, get_drill
 from .session_manager import SessionManager
 
 
+def _normalize_scale_type(value: str | None) -> str:
+    if not value:
+        return "major"
+    t = value.lower().replace("-", "_")
+    mapping = {
+        "major": "major",
+        "maj": "major",
+        "ionian": "major",
+        "minor": "natural_minor",
+        "min": "natural_minor",
+        "nat_minor": "natural_minor",
+        "natural_minor": "natural_minor",
+        "aeolian": "natural_minor",
+        "harmonic_minor": "harmonic_minor",
+        "harmonic": "harmonic_minor",
+        "melodic_minor": "melodic_minor",
+        "melodic": "melodic_minor",
+    }
+    return mapping.get(t, t)
+
 def _build_ui(drone_mgr: DroneManager | None, session_key: str, scale_type: str, *, auto_duck: bool, base_volume: float) -> dict[str, Any]:
     last_input = {"value": None}
 
@@ -80,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     rp.add_argument("--key", default=None)
     rp.add_argument("--scale", default=None)
     rp.add_argument("--questions", type=int, default=None)
+    rp.add_argument("--explain", action="store_true")
 
     args = p.parse_args(argv)
 
@@ -98,13 +119,16 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "run":
         seed_if_needed()
+        if args.explain:
+            from .explain import enable as explain_enable
+            explain_enable(True)
         cfg = validate_config(load_config(args.config))
 
         # Determine key/scale
         ctx = cfg.get("context", {})
         transp = cfg.get("transposition", {})
         key = args.key or ctx.get("key")
-        scale_type = args.scale or ctx.get("scale_type", "major")
+        scale_type = _normalize_scale_type(args.scale or ctx.get("scale_type", "major"))
         if not args.key and transp.get("randomize_key_each_session", True):
             key = choose_random_key()
 
