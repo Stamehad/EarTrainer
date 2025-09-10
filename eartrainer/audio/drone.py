@@ -192,6 +192,21 @@ class DroneManager:
                 self._running = True
                 self._arm_timer()
 
+    def ensure_running(self, scale: Scale) -> None:
+        """If the drone is not running, (re)start it for the provided scale.
+
+        Useful after an inactivity timeout when the user resumes activity.
+        """
+        with self._lock:
+            if self._running:
+                return
+        # Start outside lock using existing template and config
+        try:
+            self.start(scale, template_id=self.template_id)
+        except Exception:
+            # Fail silently; drill should continue without drone
+            pass
+
     def set_mix(self, volume: float) -> None:
         self.volume = float(volume)
         vol = max(0, min(127, int(self.volume * 127)))
@@ -199,4 +214,3 @@ class DroneManager:
 
     def is_running(self) -> bool:
         return self._running
-

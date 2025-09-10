@@ -3,7 +3,7 @@ from __future__ import annotations
 """Single note identification by scale degree drill."""
 
 import random
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .base_drill import BaseDrill
 from ..theory.keys import degree_to_semitone_offset, note_name_to_midi, transpose_key, PITCH_CLASS_NAMES
@@ -12,9 +12,31 @@ from ..theory.keys import degree_to_semitone_offset, note_name_to_midi, transpos
 class NoteDegreeDrill(BaseDrill):
     """Drill that plays a single note for a random diatonic degree."""
 
+    def __init__(self, ctx, synth):
+        super().__init__(ctx, synth)
+        self._bag: List[str] = []
+        self._last_degree: Optional[str] = None
+
+    def _refill_bag(self) -> None:
+        self._bag = list(self.ctx.degrees_in_scope)
+        random.shuffle(self._bag)
+
     def next_question(self) -> Dict:
-        degrees = self.ctx.degrees_in_scope
-        degree_str = random.choice(degrees)
+        if not self._bag:
+            self._refill_bag()
+        # Pop ensuring no immediate repeat if alternatives exist
+        if len(self._bag) == 1 and self._bag[0] == self._last_degree:
+            # Force refill to avoid repetition
+            self._refill_bag()
+        # Select next degree avoiding immediate repeat when possible
+        if self._last_degree is not None and len(self._bag) > 1 and self._bag[0] == self._last_degree:
+            # Swap with a different element
+            for i in range(1, len(self._bag)):
+                if self._bag[i] != self._last_degree:
+                    self._bag[0], self._bag[i] = self._bag[i], self._bag[0]
+                    break
+        degree_str = self._bag.pop(0)
+        self._last_degree = degree_str
         degree = int(degree_str)
 
         offset = degree_to_semitone_offset(self.ctx.scale_type, degree)

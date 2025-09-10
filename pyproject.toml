@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-eartrainer = "eartrainer.main:cli"
+eartrainer = "eartrainer.app.cli:main"
 
 [build-system]
 requires = ["setuptools>=61", "wheel"]
