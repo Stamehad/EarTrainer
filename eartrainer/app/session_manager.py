@@ -81,8 +81,12 @@ class SessionManager:
 
     def run(self, ui: Dict[str, Callable[[str], Any]]) -> Dict[str, Any]:
         assert self.ctx is not None and self._drill is not None
-        # Minimal run loop: play reference and delegate question loop to existing drill
+        # Minimal run loop: duck drone if configured, play reference and delegate loop
+        duck = ui.get("duck_drone", lambda *_a, **_k: None)
+        unduck = ui.get("unduck_drone", lambda *_a, **_k: None)
+        duck()
         self._drill.play_reference()
+        unduck()
         num_q = int(self.ctx.params.get("questions", 10))
         result = self._drill.run(num_q, ui)
         self.state.ended_at = datetime.utcnow()

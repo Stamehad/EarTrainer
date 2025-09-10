@@ -1,2 +1,2 @@
 [console_scripts]
-eartrainer = eartrainer.main:cli
+eartrainer = eartrainer.app.cli:main

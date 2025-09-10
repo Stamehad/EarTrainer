@@ -70,6 +70,8 @@ class BaseDrill:
         confirm_replay_reference = ui_callbacks.get("confirm_replay_reference", lambda: False)
         activity = ui_callbacks.get("activity", lambda _e=None: None)
         maybe_restart_drone = ui_callbacks.get("maybe_restart_drone", lambda: None)
+        duck = ui_callbacks.get("duck_drone", lambda *_a, **_k: None)
+        unduck = ui_callbacks.get("unduck_drone", lambda *_a, **_k: None)
 
         correct = 0
         per_degree: Dict[str, Dict[str, int]] = {}
@@ -86,7 +88,9 @@ class BaseDrill:
                 ans = ask("Enter scale degree (1–7), 'r' replay cadence, 'p' replay note: ")
                 if ans.strip().lower() == "r":
                     if confirm_replay_reference():
+                        duck()
                         self.play_reference()
+                        unduck()
                         # separation, then replay the question note for context
                         self.synth.sleep_ms(self.ctx.test_note_delay_ms)
                         if "midi" in q:
@@ -95,8 +99,8 @@ class BaseDrill:
                         continue
                 if ans.strip().lower() == "p":
                     if "midi" in q:
+                        activity("replay_note")
                         self.synth.note_on(int(q["midi"]), velocity=100, dur_ms=600)
-                    activity("replay_note")
                     continue
                 # grade if not replay request
                 is_correct = self.grade(ans, truth)

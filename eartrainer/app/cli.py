@@ -15,7 +15,7 @@ from .drill_registry import list_drills, get_drill
 from .session_manager import SessionManager
 
 
-def _build_ui(drone_mgr: DroneManager | None, session_key: str, scale_type: str) -> dict[str, Any]:
+def _build_ui(drone_mgr: DroneManager | None, session_key: str, scale_type: str, *, auto_duck: bool, base_volume: float) -> dict[str, Any]:
     last_input = {"value": None}
 
     def ask(prompt: str) -> str:
@@ -34,11 +34,23 @@ def _build_ui(drone_mgr: DroneManager | None, session_key: str, scale_type: str)
     def activity(event: str = "") -> None:
         if drone_mgr:
             drone_mgr.ping_activity(event)
+            # Ensure drone restarts promptly after a timeout when user resumes
+            from ..theory.scale import Scale as _Scale
+            drone_mgr.ensure_running(_Scale(session_key, scale_type))
 
     def maybe_restart_drone() -> None:
         if drone_mgr:
             scale = Scale(session_key, scale_type)
             drone_mgr.restart_if_key_changed(scale)
+            drone_mgr.ensure_running(scale)
+
+    def duck_drone(level: float = 0.15) -> None:
+        if drone_mgr and auto_duck:
+            drone_mgr.set_mix(level)
+
+    def unduck_drone() -> None:
+        if drone_mgr and auto_duck:
+            drone_mgr.set_mix(base_volume)
 
     return {
         "ask": ask,
@@ -46,6 +58,8 @@ def _build_ui(drone_mgr: DroneManager | None, session_key: str, scale_type: str)
         "confirm_replay_reference": confirm_replay_reference,
         "activity": activity,
         "maybe_restart_drone": maybe_restart_drone,
+        "duck_drone": duck_drone,
+        "unduck_drone": unduck_drone,
     }
 
 
@@ -112,13 +126,18 @@ def main(argv: list[str] | None = None) -> int:
 
         # Session manager
         sm = SessionManager(cfg, synth, drone=drone_mgr)
-        overrides: dict[str, Any] = {}
+        overrides: dict[str, Any] = {
+            "key": key,
+            "scale_type": scale_type,
+        }
         if args.questions is not None:
             overrides["questions"] = args.questions
         sm.start_session(args.drill, args.preset, overrides)
 
         # UI callbacks
-        ui = _build_ui(drone_mgr, key, scale_type)
+        auto_duck = bool(drone_cfg.get("auto_pause_during_question", False))
+        base_vol = float(drone_cfg.get("volume", 0.35))
+        ui = _build_ui(drone_mgr, key, scale_type, auto_duck=auto_duck, base_volume=base_vol)
 
         # Run
         summary = sm.run(ui)
