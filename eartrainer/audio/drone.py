@@ -133,6 +133,8 @@ class DroneManager:
             if template_id is None:
                 template_id = self.template_id
             notes = self._render_template(scale, template_id)
+            if not notes:
+                raise ValueError(f"Drone template produced no notes: {template_id}")
             self._last_scale_key = (scale.root_name, scale.scale_type)
             # Start at expression 0, then fade in to 127 (scaled by CC7 volume)
             self.synth.cc(self.channel, 11, 0)
