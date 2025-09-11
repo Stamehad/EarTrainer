@@ -31,7 +31,7 @@ ui:
   mode: "cli"
 
 drone:
-  enabled: false
+  enabled: True
   template: "root5"
   instrument: "strings"
   volume: 0.35

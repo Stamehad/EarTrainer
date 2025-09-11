@@ -101,6 +101,12 @@ def main(argv: list[str] | None = None) -> int:
     rp.add_argument("--scale", default=None)
     rp.add_argument("--questions", type=int, default=None)
     rp.add_argument("--explain", action="store_true")
+    # Drone overrides
+    rp.add_argument("--drone", dest="drone_enabled", action="store_true", help="Enable drone for this run")
+    rp.add_argument("--no-drone", dest="drone_enabled", action="store_false", help="Disable drone for this run")
+    rp.set_defaults(drone_enabled=None)
+    rp.add_argument("--drone-template", dest="drone_template", default=None, help="Drone template id (e.g., root, root5)")
+    rp.add_argument("--drone-volume", dest="drone_volume", type=float, default=None, help="Drone volume 0..1")
 
     args = p.parse_args(argv)
 
@@ -138,7 +144,15 @@ def main(argv: list[str] | None = None) -> int:
         synth.sleep_ms(150)
 
         drone_mgr = None
-        drone_cfg = cfg.get("drone", {})
+        drone_cfg = dict(cfg.get("drone", {}))
+        # Apply CLI overrides for drone
+        if args.drone_enabled is not None:
+            drone_cfg["enabled"] = bool(args.drone_enabled)
+        if args.drone_template is not None:
+            drone_cfg["template"] = str(args.drone_template)
+        if args.drone_volume is not None:
+            drone_cfg["volume"] = float(args.drone_volume)
+
         if bool(drone_cfg.get("enabled", False)):
             drone_mgr = DroneManager(synth, drone_cfg)
             try:
