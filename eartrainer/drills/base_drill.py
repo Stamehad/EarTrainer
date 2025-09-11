@@ -9,6 +9,7 @@ from ..audio.synthesis import Synth
 from ..theory.harmony import build_cadence_midi
 from ..theory.scales import diatonic_degree_to_pc
 from ..theory.keys import transpose_key, note_name_to_midi
+from ..theory.pathways import get_pathway
 from ..app.explain import trace as xtrace
 
 
@@ -77,6 +78,38 @@ class BaseDrill:
         for m in seq:
             self.synth.note_on(m, velocity=90, dur_ms=300)
 
+    def _play_pathway_sequence(self, degree_str: str, octave: int = 4) -> None:
+        """Play pathway (sequence of degrees) for current scale from given degree.
+
+        Supports optional octave offsets per token: e.g., "1@+1" or "1@1" or "5@-1".
+        """
+        seq_degrees = get_pathway(self.ctx.scale_type, degree_str)
+        if not seq_degrees:
+            seq_degrees = [degree_str]
+        root = transpose_key(self.ctx.key_root)
+        tonic = note_name_to_midi(root, octave)
+        for token in seq_degrees:
+            t = str(token)
+            if "@" in t:
+                deg_part, off_part = t.split("@", 1)
+                off_part = off_part.strip()
+                if off_part.startswith("+"):
+                    off_part = off_part[1:]
+                try:
+                    oct_off = int(off_part)
+                except Exception:
+                    oct_off = 0
+            else:
+                deg_part = t
+                oct_off = 0
+            try:
+                d = int(deg_part)
+            except Exception:
+                continue
+            base = tonic + 12 * oct_off
+            m = base + diatonic_degree_to_pc(self.ctx.scale_type, d)
+            self.synth.note_on(m, velocity=95, dur_ms=500)
+
     def next_question(self) -> Dict:
         raise NotImplementedError
 
@@ -107,23 +140,17 @@ class BaseDrill:
             truth = str(q["truth_degree"])  # "1".."7"
 
             while True:
-                ans = ask("Enter scale degree (1–7), 'r' replay cadence, 's' play scale, 'p' replay note: ")
+                ans = ask("Enter scale degree (1–7), 'c' cadence, 's' scale, 'r' replay note, 'p' pathway: ")
                 if ans.strip().lower() == "r":
-                    if confirm_replay_reference():
-                        duck()
-                        self.play_reference()
-                        unduck()
-                        # separation, then replay the question note for context
-                        self.synth.sleep_ms(self.ctx.test_note_delay_ms)
-                        if "midi" in q:
-                            midi_obj = q["midi"]
-                            if isinstance(midi_obj, list):
-                                self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
-                            else:
-                                self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
-                        activity("replay_reference")
-                        xtrace("replay_reference", {"index": i})
-                        continue
+                    if "midi" in q:
+                        activity("replay_note")
+                        midi_obj = q["midi"]
+                        if isinstance(midi_obj, list):
+                            self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
+                        else:
+                            self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
+                        xtrace("replay_note", {"index": i})
+                    continue
                 if ans.strip().lower() == "s":
                     duck()
                     self._play_scale_sequence()
@@ -138,15 +165,33 @@ class BaseDrill:
                     activity("replay_scale")
                     xtrace("replay_scale", {"index": i})
                     continue
-                if ans.strip().lower() == "p":
+                if ans.strip().lower() == "c":
+                    duck()
+                    self.play_reference()
+                    unduck()
+                    self.synth.sleep_ms(self.ctx.test_note_delay_ms)
                     if "midi" in q:
-                        activity("replay_note")
                         midi_obj = q["midi"]
                         if isinstance(midi_obj, list):
                             self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
                         else:
                             self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
-                        xtrace("replay_note", {"index": i})
+                    activity("replay_cadence")
+                    xtrace("replay_cadence", {"index": i})
+                    continue
+                if ans.strip().lower() == "p":
+                    duck()
+                    self._play_pathway_sequence(truth)
+                    unduck()
+                    self.synth.sleep_ms(self.ctx.test_note_delay_ms)
+                    if "midi" in q:
+                        midi_obj = q["midi"]
+                        if isinstance(midi_obj, list):
+                            self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
+                        else:
+                            self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
+                    activity("replay_pathway")
+                    xtrace("replay_pathway", {"index": i, "degree": truth})
                     continue
                 # grade if not replay request
                 is_correct = self.grade(ans, truth)
