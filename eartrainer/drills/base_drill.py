@@ -140,7 +140,7 @@ class BaseDrill:
             truth = str(q["truth_degree"])  # "1".."7"
 
             while True:
-                ans = ask("Enter scale degree (1–7), 'c' cadence, 's' scale, 'r' replay note, 'p' pathway: ")
+                ans = ask("Enter scale degree (1–7), 'c' cadence, 's' scale, 'r' replay note, 'p' pathway, 't' tonic: ")
                 if ans.strip().lower() == "r":
                     if "midi" in q:
                         activity("replay_note")
@@ -192,6 +192,23 @@ class BaseDrill:
                             self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
                     activity("replay_pathway")
                     xtrace("replay_pathway", {"index": i, "degree": truth})
+                    continue
+                if ans.strip().lower() == "t":
+                    # Play tonic (C4 by default transposed to key) for ~2 seconds
+                    duck()
+                    root = transpose_key(self.ctx.key_root)
+                    tonic = note_name_to_midi(root, 4)
+                    self.synth.note_on(tonic, velocity=95, dur_ms=2000)
+                    unduck()
+                    self.synth.sleep_ms(self.ctx.test_note_delay_ms)
+                    if "midi" in q:
+                        midi_obj = q["midi"]
+                        if isinstance(midi_obj, list):
+                            self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
+                        else:
+                            self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
+                    activity("play_tonic")
+                    xtrace("play_tonic", {"index": i})
                     continue
                 # grade if not replay request
                 is_correct = self.grade(ans, truth)
