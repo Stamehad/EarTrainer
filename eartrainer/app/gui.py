@@ -17,6 +17,7 @@ from ..audio.drone import DroneManager
 from ..theory.scale import Scale
 from ..util.randomness import seed_if_needed
 from .session_manager import SessionManager
+from .training_sets import list_sets as ts_list_sets, get_set as ts_get_set
 
 
 KEYS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
@@ -36,6 +37,12 @@ class App(tk.Tk):
         self.drone_var = tk.BooleanVar(value=False)
         self.questions_var = tk.IntVar(value=10)
         self.flicker_var = tk.BooleanVar(value=True)
+        # Training sets (YAML-backed)
+        self.set_var = tk.StringVar(value="")
+        try:
+            self._available_sets = ts_list_sets()
+        except Exception:
+            self._available_sets = []
 
         self._build_controls()
         self._build_console()
@@ -46,6 +53,9 @@ class App(tk.Tk):
         self._asked = 0
         self._correct = 0
         self._last_answer = ""
+        self._seq_mode = False
+        self._seq_total = 0
+        self._seq_current = 0
 
     def _build_controls(self) -> None:
         frm = ttk.Frame(self)
@@ -60,12 +70,20 @@ class App(tk.Tk):
         ttk.Label(frm, text="Drill:").grid(row=0, column=4, sticky=tk.W, padx=12)
         ttk.OptionMenu(frm, self.drill_var, self.drill_var.get(), *DRILLS).grid(row=0, column=5, sticky=tk.W)
 
-        ttk.Checkbutton(frm, text="Drone", variable=self.drone_var).grid(row=0, column=6, sticky=tk.W, padx=12)
+        # Optional training set selector if any sets are available
+        col = 6
+        if self._available_sets:
+            ttk.Label(frm, text="Set:").grid(row=0, column=6, sticky=tk.W, padx=12)
+            set_ids = [s.get("id", "") for s in self._available_sets]
+            ttk.OptionMenu(frm, self.set_var, self.set_var.get(), *( [""] + set_ids )).grid(row=0, column=7, sticky=tk.W)
+            col = 8
 
-        ttk.Label(frm, text="# Questions:").grid(row=0, column=7, sticky=tk.W, padx=12)
-        ttk.Entry(frm, textvariable=self.questions_var, width=6).grid(row=0, column=8, sticky=tk.W)
+        ttk.Checkbutton(frm, text="Drone", variable=self.drone_var).grid(row=0, column=col, sticky=tk.W, padx=12)
 
-        ttk.Button(frm, text="Start", command=self.start_session).grid(row=0, column=9, padx=12)
+        ttk.Label(frm, text="# Questions:").grid(row=0, column=col+1, sticky=tk.W, padx=12)
+        ttk.Entry(frm, textvariable=self.questions_var, width=6).grid(row=0, column=col+2, sticky=tk.W)
+
+        ttk.Button(frm, text="Start", command=self.start_session).grid(row=0, column=col+3, padx=12)
         # Move gear to status bar (bottom) near score, right-justified. See _build_console.
 
     def _build_console(self) -> None:
@@ -151,6 +169,10 @@ class App(tk.Tk):
 
         def inform(msg: str) -> None:
             m = msg.rstrip()
+            # Rewrite Qx/N to continuous numbering in sequence mode
+            if self._seq_mode and m.startswith("Q") and ":" in m:
+                self._seq_current += 1
+                m = f"Q{self._seq_current}/{self._seq_total}: listen…"
             # Normalize incorrect message and update running score
             if m.startswith("Incorrect. Answer was "):
                 try:
@@ -209,6 +231,7 @@ class App(tk.Tk):
         key = self.key_var.get()
         scale_type = self.scale_var.get()
         drill = self.drill_var.get()
+        set_id = self.set_var.get().strip() if hasattr(self, "set_var") else ""
         questions = max(1, int(self.questions_var.get() or 10))
 
         cfg = validate_config(load_config(None))
@@ -235,14 +258,42 @@ class App(tk.Tk):
             self.instructions.configure(text="")
 
             sm = SessionManager(cfg, synth, drone=drone_mgr)
-            overrides = {"questions": questions, "key": key, "scale_type": scale_type}
-            sm.start_session(drill, "default", overrides)
             ui = self._ui_callbacks(drone_mgr, key, scale_type)
             try:
-                summary = sm.run(ui)
-                self.log("")
-                self.log("Session Summary:")
-                self.log(self._format_summary(summary))
+                if set_id:
+                    # Run selected YAML training set
+                    try:
+                        sdef = ts_get_set(set_id)
+                        steps_def = sdef.get("steps", []) or []
+                        steps = [(str(st.get("drill")), int(st.get("questions", 0))) for st in steps_def if st.get("drill") and st.get("questions")]
+                    except Exception as e:
+                        self.log(f"[ERROR] Failed to load set '{set_id}': {e}")
+                        return
+                    self._seq_mode = True
+                    self._seq_total = sum(n for _d, n in steps)
+                    self._seq_current = 0
+                    summaries = []
+                    for idx, (d_id, n_q) in enumerate(steps):
+                        overrides = {"questions": n_q, "key": key, "scale_type": scale_type}
+                        sm.start_session(d_id, "default", overrides)
+                        summary = sm.run(ui, skip_reference=(idx > 0))
+                        summaries.append((d_id, summary))
+                    total = sum(s[1].get("total", 0) for s in summaries)
+                    correct = sum(s[1].get("correct", 0) for s in summaries)
+                    self.log("")
+                    self.log("Session Summary:")
+                    self.log(f"Score: {correct}/{total}")
+                    for d_id, s in summaries:
+                        label = "Notes" if d_id == "note" else ("Chords" if d_id == "chord" else d_id.capitalize())
+                        self.log(f"{label}: {s.get('correct',0)}/{s.get('total',0)}")
+                    self._seq_mode = False
+                else:
+                    overrides = {"questions": questions, "key": key, "scale_type": scale_type}
+                    sm.start_session(drill, "default", overrides)
+                    summary = sm.run(ui)
+                    self.log("")
+                    self.log("Session Summary:")
+                    self.log(self._format_summary(summary))
             finally:
                 if drone_mgr:
                     try:
@@ -252,7 +303,18 @@ class App(tk.Tk):
                 synth.close()
 
         self.text.delete(1.0, tk.END)
-        self.log(f"Starting: drill={drill}, key={key}, scale={scale_type}, questions={questions}, drone={self.drone_var.get()}")
+        if set_id:
+            try:
+                sdef = ts_get_set(set_id)
+                steps = sdef.get("steps", []) or []
+                total_q = sum(int(step.get("questions", 0)) for step in steps)
+                name = sdef.get("name", set_id)
+                self.log(f"Starting set: {name}, key={key}, scale={scale_type}, total_questions={total_q}, drone={self.drone_var.get()}")
+            except Exception as e:
+                self.log(f"[ERROR] Failed to load set '{set_id}': {e}")
+                return
+        else:
+            self.log(f"Starting: drill={drill}, key={key}, scale={scale_type}, questions={questions}, drone={self.drone_var.get()}")
         self._running_thread = threading.Thread(target=runner, daemon=True)
         self._running_thread.start()
 
