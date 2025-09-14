@@ -1,2 +1,3 @@
 [console_scripts]
 eartrainer = eartrainer.app.cli:main
+eartrainer-gui = eartrainer.app.gui:main
