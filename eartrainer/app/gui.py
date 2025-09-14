@@ -16,11 +16,12 @@ from ..audio.playback import make_synth_from_config
 from ..audio.drone import DroneManager
 from ..theory.scale import Scale
 from ..util.randomness import seed_if_needed
+from ..util.randomness import choose_random_key
 from .session_manager import SessionManager
 from .training_sets import list_sets as ts_list_sets, get_set as ts_get_set
 
 
-KEYS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+KEYS = ["Random", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 SCALES = ["major", "natural_minor"]
 DRILLS = ["note", "chord", "chord_relative"]
 
@@ -31,7 +32,7 @@ class App(tk.Tk):
         self.title("EarTrainer (Minimal GUI)")
         self.geometry("760x520")
 
-        self.key_var = tk.StringVar(value="C")
+        self.key_var = tk.StringVar(value="Random")
         self.scale_var = tk.StringVar(value="major")
         self.drill_var = tk.StringVar(value="note")
         self.drone_var = tk.BooleanVar(value=False)
@@ -40,12 +41,19 @@ class App(tk.Tk):
         # Degrees selection and chord-repeat option
         self.degrees_var = tk.StringVar(value="1,2,3,4,5,6,7")
         self.allow_repeat_var = tk.BooleanVar(value=False)
+        # Mode and training sets (YAML-backed)
+        self.mode_var = tk.StringVar(value="set")
         # Training sets (YAML-backed)
         self.set_var = tk.StringVar(value="")
         try:
             self._available_sets = ts_list_sets()
         except Exception:
             self._available_sets = []
+        # Default selected set to the first available, if any
+        if self._available_sets:
+            first_id = str(self._available_sets[0].get("id", ""))
+            if first_id:
+                self.set_var.set(first_id)
 
         self._build_controls()
         self._build_console()
@@ -62,38 +70,82 @@ class App(tk.Tk):
         self._current_q_label = ""
 
     def _build_controls(self) -> None:
-        frm = ttk.Frame(self)
-        frm.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
+        container = ttk.Frame(self)
+        container.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
 
-        ttk.Label(frm, text="Key:").grid(row=0, column=0, sticky=tk.W, padx=4)
-        ttk.OptionMenu(frm, self.key_var, self.key_var.get(), *KEYS).grid(row=0, column=1, sticky=tk.W)
+        # Mode switch
+        mode_bar = ttk.Frame(container)
+        mode_bar.pack(side=tk.TOP, fill=tk.X)
+        ttk.Label(mode_bar, text="Mode:").pack(side=tk.LEFT)
+        ttk.Radiobutton(mode_bar, text="Drill", variable=self.mode_var, value="drill", command=self._on_mode_change).pack(side=tk.LEFT, padx=6)
+        ttk.Radiobutton(mode_bar, text="Set", variable=self.mode_var, value="set", command=self._on_mode_change).pack(side=tk.LEFT, padx=6)
 
-        ttk.Label(frm, text="Scale:").grid(row=0, column=2, sticky=tk.W, padx=12)
-        ttk.OptionMenu(frm, self.scale_var, self.scale_var.get(), *SCALES).grid(row=0, column=3, sticky=tk.W)
+        # Controls container with two independent rows to avoid grid cross-row spacing
+        frm = ttk.Frame(container)
+        frm.pack(side=tk.TOP, fill=tk.X)
+        self._controls_row = frm
 
-        ttk.Label(frm, text="Drill:").grid(row=0, column=4, sticky=tk.W, padx=12)
-        ttk.OptionMenu(frm, self.drill_var, self.drill_var.get(), *DRILLS).grid(row=0, column=5, sticky=tk.W)
+        # Top row frame (Key/Scale/Drill/Set/Start)
+        self._row_top = ttk.Frame(frm)
+        self._row_top.pack(side=tk.TOP, fill=tk.X)
 
-        # Optional training set selector if any sets are available
-        col = 6
-        if self._available_sets:
-            ttk.Label(frm, text="Set:").grid(row=0, column=6, sticky=tk.W, padx=12)
-            set_ids = [s.get("id", "") for s in self._available_sets]
-            ttk.OptionMenu(frm, self.set_var, self.set_var.get(), *( [""] + set_ids )).grid(row=0, column=7, sticky=tk.W)
-            col = 8
+        ttk.Label(self._row_top, text="Key:").grid(row=0, column=0, sticky=tk.W, padx=4)
+        ttk.OptionMenu(self._row_top, self.key_var, self.key_var.get(), *KEYS).grid(row=0, column=1, sticky=tk.W)
 
-        ttk.Checkbutton(frm, text="Drone", variable=self.drone_var).grid(row=0, column=col, sticky=tk.W, padx=12)
+        self._lbl_scale = ttk.Label(self._row_top, text="Scale:")
+        self._lbl_scale.grid(row=0, column=2, sticky=tk.W, padx=12)
+        self._om_scale = ttk.OptionMenu(self._row_top, self.scale_var, self.scale_var.get(), *SCALES)
+        self._om_scale.grid(row=0, column=3, sticky=tk.W)
 
-        ttk.Label(frm, text="# Questions:").grid(row=0, column=col+1, sticky=tk.W, padx=12)
-        ttk.Entry(frm, textvariable=self.questions_var, width=6).grid(row=0, column=col+2, sticky=tk.W)
+        self._lbl_drill = ttk.Label(self._row_top, text="Drill:")
+        self._lbl_drill.grid(row=0, column=4, sticky=tk.W, padx=12)
+        self._om_drill = ttk.OptionMenu(self._row_top, self.drill_var, self.drill_var.get(), *DRILLS)
+        self._om_drill.grid(row=0, column=5, sticky=tk.W)
 
-        ttk.Label(frm, text="Degrees:").grid(row=0, column=col+3, sticky=tk.W, padx=12)
-        ttk.Entry(frm, textvariable=self.degrees_var, width=16).grid(row=0, column=col+4, sticky=tk.W)
+        # Set selector (only for Set mode)
+        self._lbl_set = ttk.Label(self._row_top, text="Set:")
+        self._om_set = ttk.OptionMenu(self._row_top, self.set_var, self.set_var.get(), *( [s.get("id","") for s in self._available_sets] if self._available_sets else [""]))
+        self._lbl_set.grid(row=0, column=6, sticky=tk.W, padx=12)
+        self._om_set.grid(row=0, column=7, sticky=tk.W)
 
-        ttk.Checkbutton(frm, text="Allow repeat", variable=self.allow_repeat_var).grid(row=0, column=col+5, sticky=tk.W, padx=12)
+        ttk.Button(self._row_top, text="Start", command=self.start_session).grid(row=0, column=8, padx=12)
 
-        ttk.Button(frm, text="Start", command=self.start_session).grid(row=0, column=col+6, padx=12)
-        # Move gear to status bar (bottom) near score, right-justified. See _build_console.
+        # Bottom row frame (Questions/Degrees) shown only in drill mode
+        self._row_bottom = ttk.Frame(frm)
+        self._row_bottom.pack(side=tk.TOP, fill=tk.X)
+
+        self._lbl_questions = ttk.Label(self._row_bottom, text="# Questions:")
+        self._lbl_questions.grid(row=0, column=0, sticky=tk.W, padx=4, pady=(6,0))
+        self._ent_questions = ttk.Entry(self._row_bottom, textvariable=self.questions_var, width=6)
+        self._ent_questions.grid(row=0, column=1, sticky=tk.W, pady=(6,0))
+
+        self._lbl_degrees = ttk.Label(self._row_bottom, text="Degrees (1,2,3-5):")
+        self._lbl_degrees.grid(row=0, column=2, sticky=tk.W, padx=12, pady=(6,0))
+        self._ent_degrees = ttk.Entry(self._row_bottom, textvariable=self.degrees_var, width=20)
+        self._ent_degrees.grid(row=0, column=3, sticky=tk.W, pady=(6,0))
+
+        # Initialize visibility per mode
+        self._on_mode_change()
+
+    def _on_mode_change(self) -> None:
+        is_set = (self.mode_var.get() == "set")
+        # Drill controls visibility (top row: scale/drill, bottom row: all)
+        for w in [self._lbl_scale, self._om_scale, self._lbl_drill, self._om_drill]:
+            try:
+                w.grid_remove() if is_set else w.grid()
+            except Exception:
+                pass
+        # Bottom row frame entirely hidden in set mode
+        try:
+            self._row_bottom.pack_forget() if is_set else self._row_bottom.pack(side=tk.TOP, fill=tk.X)
+        except Exception:
+            pass
+        # Set controls visibility
+        for w in [self._lbl_set, self._om_set]:
+            try:
+                w.grid() if is_set else w.grid_remove()
+            except Exception:
+                pass
 
     def _build_console(self) -> None:
         console_frame = ttk.Frame(self)
@@ -254,10 +306,12 @@ class App(tk.Tk):
             messagebox.showwarning("Running", "A session is already running.")
             return
         seed_if_needed()
-        key = self.key_var.get()
+        key_choice = self.key_var.get()
+        key = choose_random_key() if key_choice.strip().lower() == "random" else key_choice
         scale_type = self.scale_var.get()
         drill = self.drill_var.get()
-        set_id = self.set_var.get().strip() if hasattr(self, "set_var") else ""
+        mode = self.mode_var.get()
+        set_id = self.set_var.get().strip() if mode == "set" else ""
         questions = max(1, int(self.questions_var.get() or 10))
 
         # Parse degrees list (accept comma-separated, allow spaces)
@@ -323,7 +377,7 @@ class App(tk.Tk):
             sm = SessionManager(cfg, synth, drone=drone_mgr)
             ui = self._ui_callbacks(drone_mgr, key, scale_type)
             try:
-                if set_id:
+                if mode == "set":
                     # Run selected YAML training set
                     try:
                         sdef = ts_get_set(set_id)
@@ -416,7 +470,7 @@ class App(tk.Tk):
                 synth.close()
 
         self.text.delete(1.0, tk.END)
-        if set_id:
+        if mode == "set":
             try:
                 sdef = ts_get_set(set_id)
                 steps = sdef.get("steps", []) or []
@@ -465,7 +519,9 @@ class App(tk.Tk):
         win.resizable(False, False)
         pad = {"padx": 10, "pady": 8}
         ttk.Checkbutton(win, text="Flicker on wrong", variable=self.flicker_var).grid(row=0, column=0, sticky=tk.W, **pad)
-        ttk.Button(win, text="Close", command=win.destroy).grid(row=1, column=0, sticky=tk.E, **pad)
+        ttk.Checkbutton(win, text="Drone enabled", variable=self.drone_var).grid(row=1, column=0, sticky=tk.W, **pad)
+        ttk.Checkbutton(win, text="Allow repeat (chord drills)", variable=self.allow_repeat_var).grid(row=2, column=0, sticky=tk.W, **pad)
+        ttk.Button(win, text="Close", command=win.destroy).grid(row=3, column=0, sticky=tk.E, **pad)
 
 
 def main() -> int:
