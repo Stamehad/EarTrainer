@@ -145,10 +145,16 @@ class BaseDrill:
             while True:
                 ans = ask("Enter scale degree (1–7), 'c' cadence, 's' scale, 'r' replay note, 'p' pathway, 't' tonic: ")
                 if ans.strip().lower() == "r":
-                    if "midi" in q:
+                    # Prefer question-provided replay callable for complex stimuli
+                    if callable(q.get("replay")):
+                        activity("replay_custom")
+                        q["replay"]()
+                        xtrace("replay_custom", {"index": i})
+                    elif "midi" in q:
                         activity("replay_note")
                         midi_obj = q["midi"]
                         if isinstance(midi_obj, list):
+                            # Assume list of MIDI integers for chord
                             self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
                         else:
                             self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
@@ -159,7 +165,9 @@ class BaseDrill:
                     self._play_scale_sequence()
                     unduck()
                     self.synth.sleep_ms(self.ctx.test_note_delay_ms)
-                    if "midi" in q:
+                    if callable(q.get("replay")):
+                        q["replay"]()
+                    elif "midi" in q:
                         midi_obj = q["midi"]
                         if isinstance(midi_obj, list):
                             self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
@@ -173,7 +181,9 @@ class BaseDrill:
                     self.play_reference()
                     unduck()
                     self.synth.sleep_ms(self.ctx.test_note_delay_ms)
-                    if "midi" in q:
+                    if callable(q.get("replay")):
+                        q["replay"]()
+                    elif "midi" in q:
                         midi_obj = q["midi"]
                         if isinstance(midi_obj, list):
                             self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
@@ -187,7 +197,9 @@ class BaseDrill:
                     self._play_pathway_sequence(truth)
                     unduck()
                     self.synth.sleep_ms(self.ctx.test_note_delay_ms)
-                    if "midi" in q:
+                    if callable(q.get("replay")):
+                        q["replay"]()
+                    elif "midi" in q:
                         midi_obj = q["midi"]
                         if isinstance(midi_obj, list):
                             self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
@@ -204,7 +216,9 @@ class BaseDrill:
                     self.synth.note_on(tonic, velocity=95, dur_ms=2000)
                     unduck()
                     self.synth.sleep_ms(self.ctx.test_note_delay_ms)
-                    if "midi" in q:
+                    if callable(q.get("replay")):
+                        q["replay"]()
+                    elif "midi" in q:
                         midi_obj = q["midi"]
                         if isinstance(midi_obj, list):
                             self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)

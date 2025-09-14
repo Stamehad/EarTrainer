@@ -16,6 +16,8 @@ sets:
     steps:
       - drill: "note"
         questions: 5
+      - drill: "chord_relative"
+        questions: 5
       - drill: "chord"
         questions: 5
         degrees_in_scope: ["1", "4", "5"]  # major triads in major scale
