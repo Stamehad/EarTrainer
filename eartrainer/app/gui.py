@@ -22,7 +22,7 @@ from .training_sets import list_sets as ts_list_sets, get_set as ts_get_set
 
 KEYS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 SCALES = ["major", "natural_minor"]
-DRILLS = ["note", "chord"]
+DRILLS = ["note", "chord", "chord_relative"]
 
 
 class App(tk.Tk):
@@ -363,6 +363,8 @@ class App(tk.Tk):
                         # Announce sub-drill start with degree subset if not all
                         if d_id == "note":
                             label = "Starting drill: scale degrees"
+                        elif d_id == "chord_relative":
+                            label = "Starting drill: chords relative"
                         else:
                             label = "Starting drill: chords"
                         degs_for_label = list(overrides.get("degrees_in_scope") or [])
@@ -373,8 +375,14 @@ class App(tk.Tk):
                         sm.start_session(d_id, "default", overrides)
                         summary = sm.run(ui, skip_reference=(idx > 0))
                         # Build per-step label for summary (include chord subset when not all)
-                        step_label = "Notes" if d_id == "note" else ("Chords" if d_id == "chord" else d_id.capitalize())
-                        if d_id == "chord" and degs_for_label and degs_for_label != all_degrees:
+                        step_label = (
+                            "Notes" if d_id == "note" else (
+                                "Chords relative" if d_id == "chord_relative" else (
+                                    "Chords" if d_id == "chord" else d_id.capitalize()
+                                )
+                            )
+                        )
+                        if d_id in ("chord", "chord_relative") and degs_for_label and degs_for_label != all_degrees:
                             step_label += " " + "-".join(degs_for_label)
                         summaries.append((step_label, summary))
                     total = sum(s[1].get("total", 0) for s in summaries)
@@ -392,7 +400,7 @@ class App(tk.Tk):
                 else:
                     overrides = {"questions": questions, "key": key, "scale_type": scale_type}
                     overrides["degrees_in_scope"] = _parse_degrees(self.degrees_var.get())
-                    if drill == "chord":
+                    if drill in ("chord", "chord_relative"):
                         overrides["allow_consecutive_repeat"] = bool(self.allow_repeat_var.get())
                     sm.start_session(drill, "default", overrides)
                     summary = sm.run(ui)
@@ -422,10 +430,12 @@ class App(tk.Tk):
             # Friendly single-drill start message
             if drill == "note":
                 label = "Starting drill: scale degrees"
+            elif drill == "chord_relative":
+                label = "Starting drill: chords relative"
             else:
                 label = "Starting drill: chords"
             degs_for_label = _parse_degrees(self.degrees_var.get())
-            if degs_for_label and degs_for_label != ["1","2","3","4","5","6","7"] and drill == "chord":
+            if degs_for_label and degs_for_label != ["1","2","3","4","5","6","7"] and drill in ("chord", "chord_relative"):
                 label += " " + "-".join(degs_for_label)
             self.log(label)
         self._running_thread = threading.Thread(target=runner, daemon=True)
