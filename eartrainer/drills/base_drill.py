@@ -27,6 +27,9 @@ class DrillContext:
     test_note_delay_ms: int = 300
     voicing_bass_octave: int = 2
     voicing_chord_octave_by_pc: list[int] | None = None
+    # For chord drills: allow immediate repetition of the same degree
+    # (the drill should try to switch inversion on repeats)
+    allow_consecutive_degree_repeat: bool = False
 
 
 @dataclass

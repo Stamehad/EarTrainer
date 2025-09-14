@@ -37,6 +37,9 @@ class App(tk.Tk):
         self.drone_var = tk.BooleanVar(value=False)
         self.questions_var = tk.IntVar(value=10)
         self.flicker_var = tk.BooleanVar(value=True)
+        # Degrees selection and chord-repeat option
+        self.degrees_var = tk.StringVar(value="1,2,3,4,5,6,7")
+        self.allow_repeat_var = tk.BooleanVar(value=False)
         # Training sets (YAML-backed)
         self.set_var = tk.StringVar(value="")
         try:
@@ -83,7 +86,12 @@ class App(tk.Tk):
         ttk.Label(frm, text="# Questions:").grid(row=0, column=col+1, sticky=tk.W, padx=12)
         ttk.Entry(frm, textvariable=self.questions_var, width=6).grid(row=0, column=col+2, sticky=tk.W)
 
-        ttk.Button(frm, text="Start", command=self.start_session).grid(row=0, column=col+3, padx=12)
+        ttk.Label(frm, text="Degrees:").grid(row=0, column=col+3, sticky=tk.W, padx=12)
+        ttk.Entry(frm, textvariable=self.degrees_var, width=16).grid(row=0, column=col+4, sticky=tk.W)
+
+        ttk.Checkbutton(frm, text="Allow repeat", variable=self.allow_repeat_var).grid(row=0, column=col+5, sticky=tk.W, padx=12)
+
+        ttk.Button(frm, text="Start", command=self.start_session).grid(row=0, column=col+6, padx=12)
         # Move gear to status bar (bottom) near score, right-justified. See _build_console.
 
     def _build_console(self) -> None:
@@ -234,6 +242,43 @@ class App(tk.Tk):
         set_id = self.set_var.get().strip() if hasattr(self, "set_var") else ""
         questions = max(1, int(self.questions_var.get() or 10))
 
+        # Parse degrees list (accept comma-separated, allow spaces)
+        def _parse_degrees(s: str) -> list[str]:
+            raw = [t.strip() for t in (s or "").split(",")]
+            out: list[str] = []
+            for t in raw:
+                if not t:
+                    continue
+                # Simple range support like 1-5
+                if "-" in t:
+                    a, b = t.split("-", 1)
+                    try:
+                        start = int(a)
+                        end = int(b)
+                        if 1 <= start <= 7 and 1 <= end <= 7:
+                            if start <= end:
+                                out.extend([str(x) for x in range(start, end + 1)])
+                            else:
+                                out.extend([str(x) for x in range(end, start + 1)])
+                        continue
+                    except Exception:
+                        pass
+                # Single token 1..7
+                try:
+                    v = int(t)
+                    if 1 <= v <= 7:
+                        out.append(str(v))
+                except Exception:
+                    continue
+            # dedupe preserving order
+            seen = set()
+            deduped = []
+            for d in out:
+                if d not in seen:
+                    seen.add(d)
+                    deduped.append(d)
+            return deduped or ["1","2","3","4","5","6","7"]
+
         cfg = validate_config(load_config(None))
         cfg_drone = cfg.get("drone", {})
         cfg_drone["enabled"] = bool(self.drone_var.get())
@@ -275,6 +320,9 @@ class App(tk.Tk):
                     summaries = []
                     for idx, (d_id, n_q) in enumerate(steps):
                         overrides = {"questions": n_q, "key": key, "scale_type": scale_type}
+                        overrides["degrees_in_scope"] = _parse_degrees(self.degrees_var.get())
+                        if d_id == "chord":
+                            overrides["allow_consecutive_repeat"] = bool(self.allow_repeat_var.get())
                         sm.start_session(d_id, "default", overrides)
                         summary = sm.run(ui, skip_reference=(idx > 0))
                         summaries.append((d_id, summary))
@@ -289,6 +337,9 @@ class App(tk.Tk):
                     self._seq_mode = False
                 else:
                     overrides = {"questions": questions, "key": key, "scale_type": scale_type}
+                    overrides["degrees_in_scope"] = _parse_degrees(self.degrees_var.get())
+                    if drill == "chord":
+                        overrides["allow_consecutive_repeat"] = bool(self.allow_repeat_var.get())
                     sm.start_session(drill, "default", overrides)
                     summary = sm.run(ui)
                     self.log("")

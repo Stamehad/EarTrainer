@@ -33,16 +33,19 @@ CHORD_PRESETS = {
     "beginner": {
         "questions": 10,
         "degrees_in_scope": ["1", "2", "3", "4", "5"],
+        "allow_consecutive_repeat": False,
         "test_note_delay_ms": 300,
     },
     "default": {
         "questions": 20,
         "degrees_in_scope": ["1", "2", "3", "4", "5", "6", "7"],
+        "allow_consecutive_repeat": False,
         "test_note_delay_ms": 250,
     },
     "advanced": {
         "questions": 30,
         "degrees_in_scope": ["1", "2", "3", "4", "5", "6", "7"],
+        "allow_consecutive_repeat": True,
         "test_note_delay_ms": 200,
     },
 }

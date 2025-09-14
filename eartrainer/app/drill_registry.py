@@ -85,6 +85,7 @@ def make_drill(
         min_midi=params.get("min_midi"),
         max_midi=params.get("max_midi"),
         test_note_delay_ms=int(params.get("test_note_delay_ms", 300)),
+        allow_consecutive_degree_repeat=bool(params.get("allow_consecutive_repeat", False)),
     )
 
     if drill_id == "note":
@@ -104,6 +105,7 @@ def _chord_drill_meta() -> DrillMeta:
             "properties": {
                 "questions": {"type": "integer", "minimum": 1, "default": 10},
                 "degrees_in_scope": {"type": "array", "items": {"type": "string"}},
+                "allow_consecutive_repeat": {"type": "boolean", "default": False},
             },
             "required": ["questions"],
         },
