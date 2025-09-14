@@ -10,6 +10,8 @@ eartrainer.egg-info/top_level.txt
 eartrainer/app/cli.py
 eartrainer/app/drill_registry.py
 eartrainer/app/events.py
+eartrainer/app/explain.py
+eartrainer/app/gui.py
 eartrainer/app/presets.py
 eartrainer/app/session_manager.py
 eartrainer/audio/drone.py
@@ -26,6 +28,7 @@ eartrainer/drills/note_drill.py
 eartrainer/policy/mistake_manager.py
 eartrainer/resources/README.md
 eartrainer/resources/drones/strings_basic.yml
+eartrainer/resources/pathways/basic.yml
 eartrainer/resources/voicings/piano_basic.yml
 eartrainer/results/result_manager.py
 eartrainer/results/schema.py
@@ -36,6 +39,7 @@ eartrainer/theory/chords.py
 eartrainer/theory/harmony.py
 eartrainer/theory/keys.py
 eartrainer/theory/note_utils.py
+eartrainer/theory/pathways.py
 eartrainer/theory/scale.py
 eartrainer/theory/scales.py
 eartrainer/theory/voicing_bank.py
