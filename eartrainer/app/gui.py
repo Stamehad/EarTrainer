@@ -35,6 +35,7 @@ class App(tk.Tk):
         self.drill_var = tk.StringVar(value="note")
         self.drone_var = tk.BooleanVar(value=False)
         self.questions_var = tk.IntVar(value=10)
+        self.flicker_var = tk.BooleanVar(value=True)
 
         self._build_controls()
         self._build_console()
@@ -42,6 +43,9 @@ class App(tk.Tk):
         self._input_event = threading.Event()
         self._input_value = ""
         self._running_thread: threading.Thread | None = None
+        self._asked = 0
+        self._correct = 0
+        self._last_answer = ""
 
     def _build_controls(self) -> None:
         frm = ttk.Frame(self)
@@ -62,10 +66,15 @@ class App(tk.Tk):
         ttk.Entry(frm, textvariable=self.questions_var, width=6).grid(row=0, column=8, sticky=tk.W)
 
         ttk.Button(frm, text="Start", command=self.start_session).grid(row=0, column=9, padx=12)
+        # Move gear to status bar (bottom) near score, right-justified. See _build_console.
 
     def _build_console(self) -> None:
         console_frame = ttk.Frame(self)
         console_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=6)
+
+        # Instructions shown once per session
+        self.instructions = ttk.Label(console_frame, text="", anchor=tk.W, justify=tk.LEFT)
+        self.instructions.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
 
         self.text = tk.Text(console_frame, height=20, wrap=tk.WORD)
         self.text.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -73,24 +82,63 @@ class App(tk.Tk):
         entry_frame = ttk.Frame(console_frame)
         entry_frame.pack(side=tk.BOTTOM, fill=tk.X)
         ttk.Label(entry_frame, text="Answer:").pack(side=tk.LEFT)
-        self.entry = ttk.Entry(entry_frame)
+        self.entry = tk.Entry(entry_frame)
         self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=6)
         ttk.Button(entry_frame, text="Submit", command=self._on_submit).pack(side=tk.LEFT)
         # Allow pressing Enter to submit
         self.entry.bind("<Return>", lambda _e: self._on_submit())
 
+        # Status bar with running score
+        status = ttk.Frame(self)
+        status.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=(0, 8))
+        self.score_var = tk.StringVar(value="Score: 0/0")
+        ttk.Label(status, textvariable=self.score_var, anchor=tk.W).pack(side=tk.LEFT)
+        ttk.Button(status, text="⚙️", width=2, command=self.open_options).pack(side=tk.RIGHT)
+
     def log(self, msg: str) -> None:
         self.text.insert(tk.END, msg + "\n")
         self.text.see(tk.END)
 
+    def _flicker_widget(self, widget: tk.Widget, color: str = "#ff0000", times: int = 1, interval_ms: int = 120) -> None:
+        """Briefly flicker a widget background color to draw attention (UI thread safe)."""
+        try:
+            original = widget.cget("background")
+        except Exception:
+            return
+
+        def step(i: int) -> None:
+            try:
+                widget.configure(background=(color if i % 2 == 0 else original))
+            except Exception:
+                return
+            if i < times * 2:
+                self.after(interval_ms, step, i + 1)
+            else:
+                try:
+                    widget.configure(background=original)
+                except Exception:
+                    pass
+
+        # Schedule on UI loop
+        self.after(0, step, 0)
+
+    def _flash_incorrect(self) -> None:
+        # Flicker both the console and the answer entry for feedback
+        if self.flicker_var.get():
+            self._flicker_widget(self.text)
+            self._flicker_widget(self.entry)
+
     def _on_submit(self) -> None:
         self._input_value = self.entry.get()
+        self._last_answer = self._input_value
         self.entry.delete(0, tk.END)
         self._input_event.set()
 
     def _ui_callbacks(self, drone_mgr: DroneManager | None, session_key: str, scale_type: str) -> Dict[str, Any]:
         def ask(prompt: str) -> str:
-            self.log(prompt)
+            # Show instructions once at top; avoid repeating in console
+            if "Enter scale degree" in prompt and not self.instructions.cget("text"):
+                self.instructions.configure(text=prompt)
             self._input_event.clear()
             self.entry.focus_set()
             self.wait_variable(tk.BooleanVar(value=False)) if False else None  # no-op; keeps signature
@@ -102,7 +150,23 @@ class App(tk.Tk):
             return self._input_value
 
         def inform(msg: str) -> None:
-            self.log(msg.rstrip())
+            m = msg.rstrip()
+            # Normalize incorrect message and update running score
+            if m.startswith("Incorrect. Answer was "):
+                try:
+                    truth = m.split("Incorrect. Answer was ", 1)[1].strip(".")
+                except Exception:
+                    truth = "?"
+                heard = (self._last_answer or "?").strip()
+                m = f"Incorrect. Answer was {truth}. You heard {heard}."
+                self._asked += 1
+                # Visual feedback
+                self._flash_incorrect()
+            elif m.startswith("Correct!"):
+                self._asked += 1
+                self._correct += 1
+            self.score_var.set(f"Score: {self._correct}/{self._asked}")
+            self.log(m)
 
         def confirm_replay_reference() -> bool:
             # Not used by current prompt mapping but kept for compatibility
@@ -164,6 +228,12 @@ class App(tk.Tk):
                 except Exception as e:
                     self.log(f"[WARN] Drone init failed: {e}")
 
+            # Reset UI counters
+            self._asked = 0
+            self._correct = 0
+            self.score_var.set("Score: 0/0")
+            self.instructions.configure(text="")
+
             sm = SessionManager(cfg, synth, drone=drone_mgr)
             overrides = {"questions": questions, "key": key, "scale_type": scale_type}
             sm.start_session(drill, "default", overrides)
@@ -202,6 +272,15 @@ class App(tk.Tk):
         if items:
             parts.append(", ".join(items))
         return "\n".join(parts)
+
+    def open_options(self) -> None:
+        win = tk.Toplevel(self)
+        win.title("Options")
+        win.transient(self)
+        win.resizable(False, False)
+        pad = {"padx": 10, "pady": 8}
+        ttk.Checkbutton(win, text="Flicker on wrong", variable=self.flicker_var).grid(row=0, column=0, sticky=tk.W, **pad)
+        ttk.Button(win, text="Close", command=win.destroy).grid(row=1, column=0, sticky=tk.E, **pad)
 
 
 def main() -> int:
