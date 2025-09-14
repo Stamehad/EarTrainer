@@ -22,7 +22,7 @@ from .training_sets import list_sets as ts_list_sets, get_set as ts_get_set
 
 KEYS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 SCALES = ["major", "natural_minor"]
-DRILLS = ["note", "chord"]
+DRILLS = ["note", "chord", "chord_relative"]
 
 
 class App(tk.Tk):
@@ -37,6 +37,9 @@ class App(tk.Tk):
         self.drone_var = tk.BooleanVar(value=False)
         self.questions_var = tk.IntVar(value=10)
         self.flicker_var = tk.BooleanVar(value=True)
+        # Degrees selection and chord-repeat option
+        self.degrees_var = tk.StringVar(value="1,2,3,4,5,6,7")
+        self.allow_repeat_var = tk.BooleanVar(value=False)
         # Training sets (YAML-backed)
         self.set_var = tk.StringVar(value="")
         try:
@@ -56,6 +59,7 @@ class App(tk.Tk):
         self._seq_mode = False
         self._seq_total = 0
         self._seq_current = 0
+        self._current_q_label = ""
 
     def _build_controls(self) -> None:
         frm = ttk.Frame(self)
@@ -83,7 +87,12 @@ class App(tk.Tk):
         ttk.Label(frm, text="# Questions:").grid(row=0, column=col+1, sticky=tk.W, padx=12)
         ttk.Entry(frm, textvariable=self.questions_var, width=6).grid(row=0, column=col+2, sticky=tk.W)
 
-        ttk.Button(frm, text="Start", command=self.start_session).grid(row=0, column=col+3, padx=12)
+        ttk.Label(frm, text="Degrees:").grid(row=0, column=col+3, sticky=tk.W, padx=12)
+        ttk.Entry(frm, textvariable=self.degrees_var, width=16).grid(row=0, column=col+4, sticky=tk.W)
+
+        ttk.Checkbutton(frm, text="Allow repeat", variable=self.allow_repeat_var).grid(row=0, column=col+5, sticky=tk.W, padx=12)
+
+        ttk.Button(frm, text="Start", command=self.start_session).grid(row=0, column=col+6, padx=12)
         # Move gear to status bar (bottom) near score, right-justified. See _build_console.
 
     def _build_console(self) -> None:
@@ -169,25 +178,42 @@ class App(tk.Tk):
 
         def inform(msg: str) -> None:
             m = msg.rstrip()
-            # Rewrite Qx/N to continuous numbering in sequence mode
-            if self._seq_mode and m.startswith("Q") and ":" in m:
-                self._seq_current += 1
-                m = f"Q{self._seq_current}/{self._seq_total}: listen…"
-            # Normalize incorrect message and update running score
+            # Track current question label (but do not log yet)
+            if m.startswith("Q") and ":" in m:
+                # Rewrite Qx/N numbering in sequence mode, store label only
+                if self._seq_mode:
+                    self._seq_current += 1
+                    self._current_q_label = f"Q{self._seq_current}/{self._seq_total}"
+                else:
+                    # Extract the prefix before ':'
+                    try:
+                        self._current_q_label = m.split(":", 1)[0]
+                    except Exception:
+                        self._current_q_label = "Q?"
+                return
+
+            # One-line per-question output
             if m.startswith("Incorrect. Answer was "):
                 try:
                     truth = m.split("Incorrect. Answer was ", 1)[1].strip(".")
                 except Exception:
                     truth = "?"
                 heard = (self._last_answer or "?").strip()
-                m = f"Incorrect. Answer was {truth}. You heard {heard}."
+                pretty = f"{self._current_q_label or 'Q?'}: ❌ Answer was {truth}. You heard {heard}."
                 self._asked += 1
-                # Visual feedback
                 self._flash_incorrect()
-            elif m.startswith("Correct!"):
+                self.score_var.set(f"Score: {self._correct}/{self._asked}")
+                self.log(pretty)
+                return
+            if m.startswith("Correct!"):
                 self._asked += 1
                 self._correct += 1
-            self.score_var.set(f"Score: {self._correct}/{self._asked}")
+                pretty = f"{self._current_q_label or 'Q?'}: ✅"
+                self.score_var.set(f"Score: {self._correct}/{self._asked}")
+                self.log(pretty)
+                return
+
+            # Fallback: log any other messages unchanged
             self.log(m)
 
         def confirm_replay_reference() -> bool:
@@ -234,6 +260,43 @@ class App(tk.Tk):
         set_id = self.set_var.get().strip() if hasattr(self, "set_var") else ""
         questions = max(1, int(self.questions_var.get() or 10))
 
+        # Parse degrees list (accept comma-separated, allow spaces)
+        def _parse_degrees(s: str) -> list[str]:
+            raw = [t.strip() for t in (s or "").split(",")]
+            out: list[str] = []
+            for t in raw:
+                if not t:
+                    continue
+                # Simple range support like 1-5
+                if "-" in t:
+                    a, b = t.split("-", 1)
+                    try:
+                        start = int(a)
+                        end = int(b)
+                        if 1 <= start <= 7 and 1 <= end <= 7:
+                            if start <= end:
+                                out.extend([str(x) for x in range(start, end + 1)])
+                            else:
+                                out.extend([str(x) for x in range(end, start + 1)])
+                        continue
+                    except Exception:
+                        pass
+                # Single token 1..7
+                try:
+                    v = int(t)
+                    if 1 <= v <= 7:
+                        out.append(str(v))
+                except Exception:
+                    continue
+            # dedupe preserving order
+            seen = set()
+            deduped = []
+            for d in out:
+                if d not in seen:
+                    seen.add(d)
+                    deduped.append(d)
+            return deduped or ["1","2","3","4","5","6","7"]
+
         cfg = validate_config(load_config(None))
         cfg_drone = cfg.get("drone", {})
         cfg_drone["enabled"] = bool(self.drone_var.get())
@@ -265,30 +328,80 @@ class App(tk.Tk):
                     try:
                         sdef = ts_get_set(set_id)
                         steps_def = sdef.get("steps", []) or []
-                        steps = [(str(st.get("drill")), int(st.get("questions", 0))) for st in steps_def if st.get("drill") and st.get("questions")]
+                        # Keep full step dicts so we can pass per-step params
+                        steps: list[dict] = [dict(st) for st in steps_def if st.get("drill") and st.get("questions")]
                     except Exception as e:
                         self.log(f"[ERROR] Failed to load set '{set_id}': {e}")
                         return
                     self._seq_mode = True
-                    self._seq_total = sum(n for _d, n in steps)
+                    self._seq_total = sum(int(st.get("questions", 0)) for st in steps)
                     self._seq_current = 0
                     summaries = []
-                    for idx, (d_id, n_q) in enumerate(steps):
+                    for idx, step in enumerate(steps):
+                        d_id = str(step.get("drill"))
+                        n_q = int(step.get("questions", 0))
                         overrides = {"questions": n_q, "key": key, "scale_type": scale_type}
+                        # Merge explicit per-step params if provided
+                        step_params = step.get("params", {}) or {}
+                        if isinstance(step_params, dict):
+                            overrides.update(step_params)
+                        # degrees_in_scope: prefer step override, else UI
+                        if "degrees_in_scope" in step:
+                            try:
+                                degs = [str(x) for x in (step.get("degrees_in_scope") or [])]
+                            except Exception:
+                                degs = []
+                            overrides["degrees_in_scope"] = degs if degs else _parse_degrees(self.degrees_var.get())
+                        else:
+                            overrides["degrees_in_scope"] = _parse_degrees(self.degrees_var.get())
+                        # chord-only flags
+                        if d_id == "chord":
+                            if "allow_consecutive_repeat" in step:
+                                overrides["allow_consecutive_repeat"] = bool(step.get("allow_consecutive_repeat"))
+                            else:
+                                overrides["allow_consecutive_repeat"] = bool(self.allow_repeat_var.get())
+                        # Announce sub-drill start with degree subset if not all
+                        if d_id == "note":
+                            label = "Starting drill: scale degrees"
+                        elif d_id == "chord_relative":
+                            label = "Starting drill: chords relative"
+                        else:
+                            label = "Starting drill: chords"
+                        degs_for_label = list(overrides.get("degrees_in_scope") or [])
+                        all_degrees = ["1","2","3","4","5","6","7"]
+                        if degs_for_label and degs_for_label != all_degrees:
+                            label += " " + "-".join(degs_for_label)
+                        self.log(label)
                         sm.start_session(d_id, "default", overrides)
                         summary = sm.run(ui, skip_reference=(idx > 0))
-                        summaries.append((d_id, summary))
+                        # Build per-step label for summary (include chord subset when not all)
+                        step_label = (
+                            "Notes" if d_id == "note" else (
+                                "Chords relative" if d_id == "chord_relative" else (
+                                    "Chords" if d_id == "chord" else d_id.capitalize()
+                                )
+                            )
+                        )
+                        if d_id in ("chord", "chord_relative") and degs_for_label and degs_for_label != all_degrees:
+                            step_label += " " + "-".join(degs_for_label)
+                        summaries.append((step_label, summary))
                     total = sum(s[1].get("total", 0) for s in summaries)
                     correct = sum(s[1].get("correct", 0) for s in summaries)
                     self.log("")
                     self.log("Session Summary:")
-                    self.log(f"Score: {correct}/{total}")
-                    for d_id, s in summaries:
-                        label = "Notes" if d_id == "note" else ("Chords" if d_id == "chord" else d_id.capitalize())
-                        self.log(f"{label}: {s.get('correct',0)}/{s.get('total',0)}")
+                    if summaries:
+                        width = max(len("Score"), max(len(lbl) for (lbl, _s) in summaries))
+                        self.log(f"{'Score'.ljust(width)} : {correct}/{total}")
+                        for lbl, s in summaries:
+                            self.log(f"{lbl.ljust(width)} : {s.get('correct',0)}/{s.get('total',0)}")
+                    else:
+                        self.log(f"Score: {correct}/{total}")
                     self._seq_mode = False
                 else:
                     overrides = {"questions": questions, "key": key, "scale_type": scale_type}
+                    overrides["degrees_in_scope"] = _parse_degrees(self.degrees_var.get())
+                    if drill in ("chord", "chord_relative"):
+                        overrides["allow_consecutive_repeat"] = bool(self.allow_repeat_var.get())
                     sm.start_session(drill, "default", overrides)
                     summary = sm.run(ui)
                     self.log("")
@@ -314,7 +427,17 @@ class App(tk.Tk):
                 self.log(f"[ERROR] Failed to load set '{set_id}': {e}")
                 return
         else:
-            self.log(f"Starting: drill={drill}, key={key}, scale={scale_type}, questions={questions}, drone={self.drone_var.get()}")
+            # Friendly single-drill start message
+            if drill == "note":
+                label = "Starting drill: scale degrees"
+            elif drill == "chord_relative":
+                label = "Starting drill: chords relative"
+            else:
+                label = "Starting drill: chords"
+            degs_for_label = _parse_degrees(self.degrees_var.get())
+            if degs_for_label and degs_for_label != ["1","2","3","4","5","6","7"] and drill in ("chord", "chord_relative"):
+                label += " " + "-".join(degs_for_label)
+            self.log(label)
         self._running_thread = threading.Thread(target=runner, daemon=True)
         self._running_thread.start()
 

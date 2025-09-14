@@ -12,6 +12,7 @@ from typing import Any, Dict, List
 from ..drills.note_drill import NoteDegreeDrill
 from ..drills.chord_id import ChordDegreeDrill
 from ..drills.base_drill import DrillContext
+from ..drills.chord_relative import TwoChordRelativeDrill
 from ..audio.synthesis import Synth
 
 
@@ -52,7 +53,7 @@ def _note_drill_meta() -> DrillMeta:
 
 
 def list_drills() -> List[DrillMeta]:
-    return [_note_drill_meta(), _chord_drill_meta()]
+    return [_note_drill_meta(), _chord_drill_meta(), _chord_relative_meta()]
 
 
 def get_drill(drill_id: str) -> DrillMeta:
@@ -85,12 +86,22 @@ def make_drill(
         min_midi=params.get("min_midi"),
         max_midi=params.get("max_midi"),
         test_note_delay_ms=int(params.get("test_note_delay_ms", 300)),
+        allow_consecutive_degree_repeat=bool(params.get("allow_consecutive_repeat", False)),
     )
 
     if drill_id == "note":
         return NoteDegreeDrill(ctx, synth)
     if drill_id == "chord":
         return ChordDegreeDrill(ctx, synth)
+    if drill_id == "chord_relative":
+        dr = TwoChordRelativeDrill(ctx, synth)
+        dr.configure(
+            orientation=str(params.get("orientation", "both")),
+            weight_from_root=float(params.get("weight_from_root", 1.0)),
+            weight_to_root=float(params.get("weight_to_root", 1.0)),
+            inter_chord_gap_ms=int(params.get("inter_chord_gap_ms", 250)),
+        )
+        return dr
     raise KeyError(f"Unsupported drill for factory: {drill_id}")
 
 def _chord_drill_meta() -> DrillMeta:
@@ -104,8 +115,32 @@ def _chord_drill_meta() -> DrillMeta:
             "properties": {
                 "questions": {"type": "integer", "minimum": 1, "default": 10},
                 "degrees_in_scope": {"type": "array", "items": {"type": "string"}},
+                "allow_consecutive_repeat": {"type": "boolean", "default": False},
             },
             "required": ["questions"],
         },
         presets=CHORD_PRESETS,
+    )
+
+
+def _chord_relative_meta() -> DrillMeta:
+    from .presets import CHORD_RELATIVE_PRESETS
+    return DrillMeta(
+        id="chord_relative",
+        name="Chord Relative (1↔︎X)",
+        description="Hear two chords where one is I and the other is a diatonic triad; identify the non-root degree.",
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "questions": {"type": "integer", "minimum": 1, "default": 10},
+                "degrees_in_scope": {"type": "array", "items": {"type": "string"}},
+                "allow_consecutive_repeat": {"type": "boolean", "default": False},
+                "orientation": {"type": "string", "enum": ["from_root", "to_root", "both"], "default": "both"},
+                "weight_from_root": {"type": "number", "default": 1.0},
+                "weight_to_root": {"type": "number", "default": 1.0},
+                "inter_chord_gap_ms": {"type": "integer", "default": 250},
+            },
+            "required": ["questions"],
+        },
+        presets=CHORD_RELATIVE_PRESETS,
     )
