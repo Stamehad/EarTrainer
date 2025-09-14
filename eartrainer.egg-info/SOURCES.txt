@@ -14,6 +14,7 @@ eartrainer/app/explain.py
 eartrainer/app/gui.py
 eartrainer/app/presets.py
 eartrainer/app/session_manager.py
+eartrainer/app/training_sets.py
 eartrainer/audio/drone.py
 eartrainer/audio/playback.py
 eartrainer/audio/synthesis.py
@@ -29,6 +30,7 @@ eartrainer/policy/mistake_manager.py
 eartrainer/resources/README.md
 eartrainer/resources/drones/strings_basic.yml
 eartrainer/resources/pathways/basic.yml
+eartrainer/resources/training_sets/basic.yml
 eartrainer/resources/voicings/piano_basic.yml
 eartrainer/results/result_manager.py
 eartrainer/results/schema.py

@@ -81,14 +81,15 @@ class SessionManager:
         assert self.ctx is not None
         return dict(self.ctx.params)
 
-    def run(self, ui: Dict[str, Callable[[str], Any]]) -> Dict[str, Any]:
+    def run(self, ui: Dict[str, Callable[[str], Any]], *, skip_reference: bool = False) -> Dict[str, Any]:
         assert self.ctx is not None and self._drill is not None
         # Minimal run loop: duck drone if configured, play reference and delegate loop
         duck = ui.get("duck_drone", lambda *_a, **_k: None)
         unduck = ui.get("unduck_drone", lambda *_a, **_k: None)
-        duck()
-        self._drill.play_reference()
-        unduck()
+        if not skip_reference:
+            duck()
+            self._drill.play_reference()
+            unduck()
         # Small delay between cadence and first question
         try:
             delay_ms = int(self.ctx.params.get("test_note_delay_ms", 300))

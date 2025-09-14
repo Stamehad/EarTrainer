@@ -108,6 +108,20 @@ def main(argv: list[str] | None = None) -> int:
     rp.add_argument("--drone-template", dest="drone_template", default=None, help="Drone template id (e.g., root, root5)")
     rp.add_argument("--drone-volume", dest="drone_volume", type=float, default=None, help="Drone volume 0..1")
 
+    # Add run-sequence subcommand
+    rs = sub.add_parser("run-sequence")
+    rs.add_argument("--config", default=None)
+    rs.add_argument("--steps", required=True, help="Comma-separated steps drill:questions, e.g., note:40,chord:40")
+    rs.add_argument("--key", default=None)
+    rs.add_argument("--scale", default=None)
+    rs.add_argument("--explain", action="store_true")
+    # Drone overrides for sequence
+    rs.add_argument("--drone", dest="drone_enabled", action="store_true")
+    rs.add_argument("--no-drone", dest="drone_enabled", action="store_false")
+    rs.set_defaults(drone_enabled=None)
+    rs.add_argument("--drone-template", dest="drone_template", default=None)
+    rs.add_argument("--drone-volume", dest="drone_volume", type=float, default=None)
+
     args = p.parse_args(argv)
 
     if args.cmd == "list-drills":
@@ -189,6 +203,92 @@ def main(argv: list[str] | None = None) -> int:
             except Exception:
                 pass
         synth.close()
+        return 0
+
+    # New: run-sequence (multi-drill continuous session)
+    if args.cmd == "run-sequence":
+        seed_if_needed()
+        if args.explain:
+            from .explain import enable as explain_enable
+            explain_enable(True)
+        cfg = validate_config(load_config(args.config))
+
+        # Determine key/scale
+        ctx = cfg.get("context", {})
+        transp = cfg.get("transposition", {})
+        key = args.key or ctx.get("key")
+        scale_type = _normalize_scale_type(args.scale or ctx.get("scale_type", "major"))
+        if not args.key and transp.get("randomize_key_each_session", True):
+            key = choose_random_key()
+
+        # Build synth and optional drone
+        synth = make_synth_from_config(cfg)
+        synth.program_piano()
+        synth.sleep_ms(150)
+
+        drone_mgr = None
+        drone_cfg = dict(cfg.get("drone", {}))
+        if args.drone_enabled is not None:
+            drone_cfg["enabled"] = bool(args.drone_enabled)
+        if args.drone_template is not None:
+            drone_cfg["template"] = str(args.drone_template)
+        if args.drone_volume is not None:
+            drone_cfg["volume"] = float(args.drone_volume)
+
+        if bool(drone_cfg.get("enabled", False)):
+            drone_mgr = DroneManager(synth, drone_cfg)
+            try:
+                drone_mgr.configure_channel()
+                drone_mgr.start(Scale(key, scale_type), template_id=str(drone_cfg.get("template", "root5")))
+            except Exception as e:
+                print(f"[WARN] Drone init failed: {e}")
+
+        sm = SessionManager(cfg, synth, drone=drone_mgr)
+        auto_duck = bool(drone_cfg.get("auto_pause_during_question", False))
+        base_vol = float(drone_cfg.get("volume", 0.35))
+        ui = _build_ui(drone_mgr, key, scale_type, auto_duck=auto_duck, base_volume=base_vol)
+
+        # Parse steps
+        steps_raw = [s.strip() for s in str(args.steps).split(",") if s.strip()]
+        steps: list[tuple[str, int]] = []
+        for token in steps_raw:
+            try:
+                did, qstr = token.split(":", 1)
+                steps.append((did.strip(), int(qstr)))
+            except Exception:
+                print(f"Invalid step format: '{token}'. Use drill:questions (e.g., note:40)")
+                if drone_mgr:
+                    try:
+                        drone_mgr.stop("session_end")
+                    except Exception:
+                        pass
+                synth.close()
+                return 2
+
+        total = 0
+        correct = 0
+        per_drill: list[tuple[str, dict]] = []
+        try:
+            for idx, (did, qn) in enumerate(steps):
+                overrides: dict[str, Any] = {"questions": int(qn), "key": key, "scale_type": scale_type}
+                sm.start_session(did, "default", overrides)
+                summary = sm.run(ui, skip_reference=(idx > 0))
+                total += int(summary.get("total", 0))
+                correct += int(summary.get("correct", 0))
+                per_drill.append((did, summary))
+        finally:
+            if drone_mgr:
+                try:
+                    drone_mgr.stop("session_end")
+                except Exception:
+                    pass
+            synth.close()
+
+        print("\nSession Summary:")
+        print(f"Score: {correct}/{total}")
+        for did, s in per_drill:
+            label = "Notes" if did == "note" else ("Chords" if did == "chord" else did.capitalize())
+            print(f"{label}: {s.get('correct',0)}/{s.get('total',0)}")
         return 0
 
     return 0

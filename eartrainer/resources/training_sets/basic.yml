@@ -1,0 +1,12 @@
+version: 1
+sets:
+  notes_then_chords:
+    name: "Notes(5) → Chords(5)"
+    description: "Single key session: 5 note degrees then 5 triad chords"
+    rest_ms: 0
+    steps:
+      - drill: "note"
+        questions: 5
+      - drill: "chord"
+        questions: 5
+
