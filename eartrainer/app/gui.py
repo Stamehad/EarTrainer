@@ -68,6 +68,7 @@ class App(tk.Tk):
         self._seq_total = 0
         self._seq_current = 0
         self._current_q_label = ""
+        self._stop_requested = False
 
     def _build_controls(self) -> None:
         container = ttk.Frame(self)
@@ -173,6 +174,7 @@ class App(tk.Tk):
         self.score_var = tk.StringVar(value="Score: 0/0")
         ttk.Label(status, textvariable=self.score_var, anchor=tk.W).pack(side=tk.LEFT)
         ttk.Button(status, text="⚙️", width=2, command=self.open_options).pack(side=tk.RIGHT)
+        ttk.Button(status, text="Stop", command=self.request_stop).pack(side=tk.RIGHT, padx=8)
 
     def log(self, msg: str) -> None:
         self.text.insert(tk.END, msg + "\n")
@@ -213,6 +215,13 @@ class App(tk.Tk):
         self.entry.delete(0, tk.END)
         self._input_event.set()
 
+    def request_stop(self) -> None:
+        """Request graceful termination of the running session."""
+        self._stop_requested = True
+        # If a question is awaiting input, unblock it with quit command
+        self._input_value = "q"
+        self._input_event.set()
+
     def _ui_callbacks(self, drone_mgr: DroneManager | None, session_key: str, scale_type: str) -> Dict[str, Any]:
         def ask(prompt: str) -> str:
             # Show instructions once at top; avoid repeating in console
@@ -226,6 +235,9 @@ class App(tk.Tk):
                 self.update()
                 if drone_mgr:
                     drone_mgr.ping_activity("poll")
+                if self._stop_requested:
+                    self._input_value = "q"
+                    self._input_event.set()
             return self._input_value
 
         def inform(msg: str) -> None:
@@ -356,6 +368,7 @@ class App(tk.Tk):
         cfg_drone["enabled"] = bool(self.drone_var.get())
 
         def runner() -> None:
+            self._stop_requested = False
             synth = make_synth_from_config(cfg)
             synth.program_piano()
             synth.sleep_ms(150)
@@ -391,10 +404,13 @@ class App(tk.Tk):
                     self._seq_total = sum(int(st.get("questions", 0)) for st in steps)
                     self._seq_current = 0
                     summaries = []
+                    # Aggregator for compact session persistence (per category)
+                    cats_aggr: dict[str, dict] = {}
                     for idx, step in enumerate(steps):
                         d_id = str(step.get("drill"))
                         n_q = int(step.get("questions", 0))
                         overrides = {"questions": n_q, "key": key, "scale_type": scale_type}
+                        overrides["stats_disable"] = True  # We'll persist once at end
                         # Merge explicit per-step params if provided
                         step_params = step.get("params", {}) or {}
                         if isinstance(step_params, dict):
@@ -439,6 +455,29 @@ class App(tk.Tk):
                         if d_id in ("chord", "chord_relative") and degs_for_label and degs_for_label != all_degrees:
                             step_label += " " + "-".join(degs_for_label)
                         summaries.append((step_label, summary))
+                        if self._stop_requested:
+                            break
+                        # Aggregate per-category
+                        cat = "note" if d_id == "note" else ("chord" if d_id in ("chord", "chord_relative") else d_id)
+                        ag = cats_aggr.setdefault(cat, {"Q": 0, "C": 0, "D": {}})
+                        ag["Q"] = int(ag.get("Q", 0)) + int(summary.get("total", 0))
+                        ag["C"] = int(ag.get("C", 0)) + int(summary.get("correct", 0))
+                        per = summary.get("per_degree", {}) or {}
+                        for d_k, d_st in per.items():
+                            node = ag["D"].setdefault(str(d_k), {"Q": 0, "C": 0})
+                            node["Q"] = int(node.get("Q", 0)) + int(d_st.get("asked", 0))
+                            node["C"] = int(node.get("C", 0)) + int(d_st.get("correct", 0))
+                            meta = d_st.get("meta", {}) or {}
+                            ac = meta.get("assist_counts", {}) or {}
+                            # Keep only non-zero assist counts; record as we go
+                            nz = {k: int(v) for k, v in ac.items() if int(v) > 0}
+                            if nz:
+                                a_dst = node.setdefault("A", {})
+                                for k, v in nz.items():
+                                    a_dst[k] = int(a_dst.get(k, 0)) + v
+                            tms = int(meta.get("time_ms_total", 0) or 0)
+                            if tms > 0:
+                                node["T"] = int(node.get("T", 0)) + tms
                     total = sum(s[1].get("total", 0) for s in summaries)
                     correct = sum(s[1].get("correct", 0) for s in summaries)
                     self.log("")
@@ -451,6 +490,18 @@ class App(tk.Tk):
                     else:
                         self.log(f"Score: {correct}/{total}")
                     self._seq_mode = False
+                    # Persist compact session entry
+                    try:
+                        from ..results.persist import persist_compact_session
+                        if not hasattr(self, "_cfg_stats_cache"):
+                            self._cfg_stats_cache = dict(validate_config(load_config(None)).get("stats", {}))
+                        cfg_stats = self._cfg_stats_cache
+                        out_path = str(cfg_stats.get("output_path") or "./session_stats.json")
+                        detail = str(cfg_stats.get("detail", "basic")).strip().lower()
+                        if cats_aggr:
+                            persist_compact_session(out_path, scale=scale_type, key=key, categories=cats_aggr, detail=detail)
+                    except Exception as e:
+                        self.log(f"[WARN] Persist failed: {e}")
                 else:
                     overrides = {"questions": questions, "key": key, "scale_type": scale_type}
                     overrides["degrees_in_scope"] = _parse_degrees(self.degrees_var.get())
@@ -468,6 +519,7 @@ class App(tk.Tk):
                     except Exception:
                         pass
                 synth.close()
+                self._stop_requested = False
 
         self.text.delete(1.0, tk.END)
         if mode == "set":

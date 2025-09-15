@@ -3,6 +3,7 @@ from __future__ import annotations
 """Base drill abstractions and context/results models."""
 
 from dataclasses import dataclass, field
+import time
 from typing import Callable, Dict, List, Protocol
 
 from ..audio.synthesis import Synth
@@ -132,6 +133,8 @@ class BaseDrill:
 
         correct = 0
         per_degree: Dict[str, Dict[str, int]] = {}
+        stopped = False
+        asked_total = 0
 
         for i in range(1, num_questions + 1):
             maybe_restart_drone()
@@ -141,10 +144,17 @@ class BaseDrill:
             xtrace("question_created", {"index": i, "truth": str(q.get("truth_degree"))})
             activity("question_played")
             truth = str(q["truth_degree"])  # "1".."7"
+            # assistance counters for this question
+            assist_counts = {"r": 0, "s": 0, "c": 0, "p": 0, "t": 0}
+            t_start = time.monotonic()
 
             while True:
                 ans = ask("Enter scale degree (1–7), 'c' cadence, 's' scale, 'r' replay note, 'p' pathway, 't' tonic: ")
+                if ans.strip().lower() in {"q", "quit", "stop"}:
+                    stopped = True
+                    break
                 if ans.strip().lower() == "r":
+                    assist_counts["r"] += 1
                     # Prefer question-provided replay callable for complex stimuli
                     if callable(q.get("replay")):
                         activity("replay_custom")
@@ -161,6 +171,7 @@ class BaseDrill:
                         xtrace("replay_note", {"index": i})
                     continue
                 if ans.strip().lower() == "s":
+                    assist_counts["s"] += 1
                     duck()
                     self._play_scale_sequence()
                     unduck()
@@ -177,6 +188,7 @@ class BaseDrill:
                     xtrace("replay_scale", {"index": i})
                     continue
                 if ans.strip().lower() == "c":
+                    assist_counts["c"] += 1
                     duck()
                     self.play_reference()
                     unduck()
@@ -193,6 +205,7 @@ class BaseDrill:
                     xtrace("replay_cadence", {"index": i})
                     continue
                 if ans.strip().lower() == "p":
+                    assist_counts["p"] += 1
                     duck()
                     self._play_pathway_sequence(truth)
                     unduck()
@@ -209,6 +222,7 @@ class BaseDrill:
                     xtrace("replay_pathway", {"index": i, "degree": truth})
                     continue
                 if ans.strip().lower() == "t":
+                    assist_counts["t"] += 1
                     # Play tonic (C4 by default transposed to key) for ~2 seconds
                     duck()
                     root = transpose_key(self.ctx.key_root)
@@ -241,9 +255,22 @@ class BaseDrill:
                 bucket = per_degree.setdefault(truth, {"asked": 0, "correct": 0})
                 bucket["asked"] += 1
                 bucket["correct"] += 1 if is_correct else 0
+                # Augment per-degree with assistance counts and timing
+                t_elapsed_ms = int((time.monotonic() - t_start) * 1000)
+                meta = bucket.setdefault("meta", {})
+                # assistance tuple order (r,s,c,p,t)
+                ac = meta.setdefault("assist_counts", {"r": 0, "s": 0, "c": 0, "p": 0, "t": 0})
+                for k in ac.keys():
+                    ac[k] += int(assist_counts.get(k, 0))
+                meta["time_ms_total"] = int(meta.get("time_ms_total", 0)) + t_elapsed_ms
+                meta["answers"] = int(meta.get("answers", 0)) + 1
+                asked_total += 1
                 break
 
+            if stopped:
+                break
             # Delay after answer before next question's test note
             self.synth.sleep_ms(self.ctx.test_note_delay_ms)
 
-        return DrillResult(total=num_questions, correct=correct, per_degree=per_degree)
+        total_out = asked_total if stopped else num_questions
+        return DrillResult(total=total_out, correct=correct, per_degree=per_degree)
