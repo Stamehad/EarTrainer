@@ -25,6 +25,7 @@ stats:
   output_path: "./session_stats.json"
   show_per_question_feedback: true
   show_summary: true
+  detail: "rich"  # one of: basic, rich
 transposition:
   randomize_key_each_session: true
 ui:
