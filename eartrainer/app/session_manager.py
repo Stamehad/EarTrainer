@@ -17,8 +17,8 @@ from .drill_registry import list_drills, get_drill, make_drill
 from .explain import trace as xtrace
 from pathlib import Path
 from uuid import uuid4
-from storage.schema import SessionDegreeRow
-from storage.store import init_store as storage_init_store, validate_records as storage_validate_records, append_session_degree_stats as storage_append
+from ..storage.schema import SessionDegreeRow
+from ..storage.store import init_store as storage_init_store, validate_records as storage_validate_records, append_session_degree_stats as storage_append
 
 
 @dataclass(frozen=True)

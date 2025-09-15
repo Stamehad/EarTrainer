@@ -3,4 +3,7 @@ mido
 pyfluidsynth
 sounddevice
 numpy
-
+pandas
+pyarrow
+matplotlib
+pydantic
