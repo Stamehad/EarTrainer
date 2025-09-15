@@ -400,9 +400,11 @@ class App(tk.Tk):
                     except Exception as e:
                         self.log(f"[ERROR] Failed to load set '{set_id}': {e}")
                         return
+                    from datetime import datetime as _dt
                     self._seq_mode = True
                     self._seq_total = sum(int(st.get("questions", 0)) for st in steps)
                     self._seq_current = 0
+                    self._seq_start = _dt.utcnow()
                     summaries = []
                     # Aggregator for compact session persistence (per category)
                     cats_aggr: dict[str, dict] = {}
@@ -490,16 +492,46 @@ class App(tk.Tk):
                     else:
                         self.log(f"Score: {correct}/{total}")
                     self._seq_mode = False
-                    # Persist compact session entry
+                    # Persist a single Parquet session entry for the set (aggregated across steps)
                     try:
-                        from ..results.persist import persist_compact_session
-                        if not hasattr(self, "_cfg_stats_cache"):
-                            self._cfg_stats_cache = dict(validate_config(load_config(None)).get("stats", {}))
-                        cfg_stats = self._cfg_stats_cache
-                        out_path = str(cfg_stats.get("output_path") or "./session_stats.json")
-                        detail = str(cfg_stats.get("detail", "basic")).strip().lower()
-                        if cats_aggr:
-                            persist_compact_session(out_path, scale=scale_type, key=key, categories=cats_aggr, detail=detail)
+                        from pathlib import Path as _P
+                        from uuid import uuid4 as _uuid4
+                        from storage.schema import SessionDegreeRow as _Row
+                        from storage.store import init_store as _init, validate_records as _validate, append_session_degree_stats as _append
+                        sid = str(_uuid4())
+                        rows: list[_Row] = []
+                        # Convert category labels: note -> single_note
+                        for cat_key, cat_data in (cats_aggr or {}).items():
+                            category = "single_note" if cat_key == "note" else cat_key
+                            degs = cat_data.get("D", {}) or {}
+                            for d_k, node in degs.items():
+                                q = int(node.get("Q", 0))
+                                if q <= 0:
+                                    continue
+                                c = int(node.get("C", 0))
+                                tms = int(node.get("T", 0) or 0)
+                                a = node.get("A", {}) or {}
+                                rows.append(
+                                    _Row(
+                                        session_id=sid,
+                                        session_start=self._seq_start,
+                                        scale=scale_type,
+                                        category=category,
+                                        degree=int(d_k) if str(d_k).isdigit() else 0,
+                                        Q=q,
+                                        C=c,
+                                        T_ms=tms,
+                                        assist_c=int(a.get("c", 0)),
+                                        assist_s=int(a.get("s", 0)),
+                                        assist_r=int(a.get("r", 0)),
+                                        assist_p=int(a.get("p", 0)),
+                                        assist_t=int(a.get("t", 0)),
+                                    )
+                                )
+                        if rows:
+                            _init(_P("storage/data"))
+                            df_rows = _validate(rows)
+                            _append(df_rows, _P("storage/data"))
                     except Exception as e:
                         self.log(f"[WARN] Persist failed: {e}")
                 else:
