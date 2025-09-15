@@ -5,10 +5,7 @@ __pycache__/
 *.pyo
 *.DS_Store
 /soundfonts/
-/session_stats.json
-CODEMAP.md
-ear_training.md
-ear_training2.md
+
 
 reports/
 storage/data/
