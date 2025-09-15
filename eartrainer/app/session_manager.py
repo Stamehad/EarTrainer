@@ -15,6 +15,7 @@ from ..audio.drone import DroneManager
 from ..theory.scale import Scale
 from .drill_registry import list_drills, get_drill, make_drill
 from .explain import trace as xtrace
+from ..results.persist import persist_compact_session
 
 
 @dataclass(frozen=True)
@@ -107,6 +108,39 @@ class SessionManager:
             "ended_at": self.state.ended_at.isoformat() if self.state.ended_at else None,
         }
         xtrace("session_ended", summary)
+        # Persist results to JSON if configured
+        try:
+            path = str(self.cfg.get("stats", {}).get("output_path") or "./session_stats.json")
+            detail = str(self.cfg.get("stats", {}).get("detail", "basic")).strip().lower()
+            drill = self.ctx.drill_id
+            # Map drills to categories
+            category = "note" if drill == "note" else ("chord" if drill in ("chord", "chord_relative") else drill)
+            if not bool(self.ctx.params.get("stats_disable", False)):
+                # Build compact category map for this single drill
+                cats: dict[str, dict] = {}
+                per = summary.get("per_degree", {}) or {}
+                cat_node: dict[str, Any] = {"Q": int(summary.get("total", 0)), "C": int(summary.get("correct", 0)), "D": {}}
+                for d_k, d_st in per.items():
+                    dq = int(d_st.get("asked", 0))
+                    if dq <= 0:
+                        continue
+                    dc = int(d_st.get("correct", 0))
+                    node: dict[str, Any] = {"Q": dq}
+                    if dc > 0:
+                        node["C"] = dc
+                    if detail == "rich":
+                        meta = d_st.get("meta", {}) or {}
+                        ac = {k: int(v) for k, v in (meta.get("assist_counts", {}) or {}).items() if int(v) > 0}
+                        if ac:
+                            node["A"] = ac
+                        tms = int(meta.get("time_ms_total", 0) or 0)
+                        if tms > 0:
+                            node["T"] = tms
+                    cat_node["D"][str(d_k)] = node
+                cats[category] = cat_node
+                persist_compact_session(path, scale=self.ctx.scale_type, key=self.ctx.key, categories=cats, detail=detail)
+        except Exception:
+            pass
         return summary
 
     def stop(self) -> None:
