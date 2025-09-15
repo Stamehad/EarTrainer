@@ -496,8 +496,8 @@ class App(tk.Tk):
                     try:
                         from pathlib import Path as _P
                         from uuid import uuid4 as _uuid4
-                        from storage.schema import SessionDegreeRow as _Row
-                        from storage.store import init_store as _init, validate_records as _validate, append_session_degree_stats as _append
+                        from ..storage.schema import SessionDegreeRow as _Row
+                        from ..storage.store import init_store as _init, validate_records as _validate, append_session_degree_stats as _append
                         sid = str(_uuid4())
                         rows: list[_Row] = []
                         # Convert category labels: note -> single_note
