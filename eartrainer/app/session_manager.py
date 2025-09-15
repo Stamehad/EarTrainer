@@ -15,7 +15,10 @@ from ..audio.drone import DroneManager
 from ..theory.scale import Scale
 from .drill_registry import list_drills, get_drill, make_drill
 from .explain import trace as xtrace
-from ..results.persist import persist_compact_session
+from pathlib import Path
+from uuid import uuid4
+from storage.schema import SessionDegreeRow
+from storage.store import init_store as storage_init_store, validate_records as storage_validate_records, append_session_degree_stats as storage_append
 
 
 @dataclass(frozen=True)
@@ -110,35 +113,43 @@ class SessionManager:
         xtrace("session_ended", summary)
         # Persist results to JSON if configured
         try:
-            path = str(self.cfg.get("stats", {}).get("output_path") or "./session_stats.json")
-            detail = str(self.cfg.get("stats", {}).get("detail", "basic")).strip().lower()
-            drill = self.ctx.drill_id
-            # Map drills to categories
-            category = "note" if drill == "note" else ("chord" if drill in ("chord", "chord_relative") else drill)
+            # Write Parquet session-degree rows for this drill unless disabled (set mode aggregates separately)
             if not bool(self.ctx.params.get("stats_disable", False)):
-                # Build compact category map for this single drill
-                cats: dict[str, dict] = {}
+                # Map drill id to category label
+                drill = self.ctx.drill_id
+                category = "single_note" if drill == "note" else ("chord" if drill in ("chord", "chord_relative") else drill)
+                sid = str(uuid4())
+                rows: list[SessionDegreeRow] = []
                 per = summary.get("per_degree", {}) or {}
-                cat_node: dict[str, Any] = {"Q": int(summary.get("total", 0)), "C": int(summary.get("correct", 0)), "D": {}}
                 for d_k, d_st in per.items():
-                    dq = int(d_st.get("asked", 0))
-                    if dq <= 0:
+                    asked = int(d_st.get("asked", 0))
+                    if asked <= 0:
                         continue
-                    dc = int(d_st.get("correct", 0))
-                    node: dict[str, Any] = {"Q": dq}
-                    if dc > 0:
-                        node["C"] = dc
-                    if detail == "rich":
-                        meta = d_st.get("meta", {}) or {}
-                        ac = {k: int(v) for k, v in (meta.get("assist_counts", {}) or {}).items() if int(v) > 0}
-                        if ac:
-                            node["A"] = ac
-                        tms = int(meta.get("time_ms_total", 0) or 0)
-                        if tms > 0:
-                            node["T"] = tms
-                    cat_node["D"][str(d_k)] = node
-                cats[category] = cat_node
-                persist_compact_session(path, scale=self.ctx.scale_type, key=self.ctx.key, categories=cats, detail=detail)
+                    corr = int(d_st.get("correct", 0))
+                    meta = d_st.get("meta", {}) or {}
+                    ac = meta.get("assist_counts", {}) or {}
+                    tms = int(meta.get("time_ms_total", 0) or 0)
+                    rows.append(
+                        SessionDegreeRow(
+                            session_id=sid,
+                            session_start=self.ctx.started_at,
+                            scale=self.ctx.scale_type,
+                            category=category,
+                            degree=int(d_k) if str(d_k).isdigit() else 0,
+                            Q=asked,
+                            C=corr,
+                            T_ms=tms,
+                            assist_c=int(ac.get("c", 0)),
+                            assist_s=int(ac.get("s", 0)),
+                            assist_r=int(ac.get("r", 0)),
+                            assist_p=int(ac.get("p", 0)),
+                            assist_t=int(ac.get("t", 0)),
+                        )
+                    )
+                if rows:
+                    storage_init_store(Path("storage/data"))
+                    df_rows = storage_validate_records(rows)
+                    storage_append(df_rows, Path("storage/data"))
         except Exception:
             pass
         return summary

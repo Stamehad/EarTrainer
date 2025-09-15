@@ -108,7 +108,7 @@ def validate_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     drill.setdefault("include_chromatic", False)
     drill.setdefault("test_note_delay_ms", 300)
 
-    stats.setdefault("output_path", "./session_stats.json")
+    # Legacy JSON stats have been removed; only UI flags remain
     stats.setdefault("show_per_question_feedback", True)
     stats.setdefault("show_summary", True)
 
