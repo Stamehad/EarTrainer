@@ -7,26 +7,54 @@ sets:
       - drill: "note"
         questions: 50
       - drill: "chord_relative"
-        questions: 50
-      - drill: "chord"
         questions: 20
-        degrees_in_scope: ["1", "4", "5"]  # major triads in major scale
-        allow_consecutive_repeat: false
-      - drill: "chord"
+        degrees_in_scope: ["4", "5"]  # major triads in major scale
+        orientation: "from_root" # "to_root", "both"
+        repeat_each: 2
+      - drill: "chord_relative"
         questions: 20
-        degrees_in_scope: ["2", "3", "6"]  # minor triads in major scale
-        allow_consecutive_repeat: true
-      - drill: "chord"
+        degrees_in_scope: ["2", "3", "6"]  # major triads in major scale
+        orientation: "from_root"
+        repeat_each: 2
+      - drill: "chord_relative"
         questions: 20
-        degrees_in_scope: ["1", "3", "5"]  # minor triads in major scale
-        allow_consecutive_repeat: true
-      - drill: "chord"
+        degrees_in_scope: ["4", "5"]  # major triads in major scale
+        orientation: "to_root" 
+        repeat_each: 2
+      - drill: "chord_relative"
         questions: 20
-        degrees_in_scope: ["2", "4", "6"]  # minor triads in major scale
-        allow_consecutive_repeat: true
-      - drill: "chord"
-        questions: 50
-        degrees_in_scope: ["1", "2", "3", "4", "5", "6", "7"]
+        degrees_in_scope: ["2", "3", "6"]  # major triads in major scale
+        orientation: "to_root"
+        repeat_each: 2
+      - drill: "chord_relative"
+        questions: 20
+        degrees_in_scope: ["4", "5"]  # major triads in major scale
+        orientation: "both"
+        repeat_each: 2
+      - drill: "chord_relative"
+        questions: 20
+        degrees_in_scope: ["2", "3", "6"]  # major triads in major scale
+        orientation: "both"
+        repeat_each: 2
+      # - drill: "chord"
+      #   questions: 20
+      #   degrees_in_scope: ["1", "4", "5"]  # major triads in major scale
+      #   allow_consecutive_repeat: false
+      # - drill: "chord"
+      #   questions: 20
+      #   degrees_in_scope: ["2", "3", "6"]  # minor triads in major scale
+      #   allow_consecutive_repeat: true
+      # - drill: "chord"
+      #   questions: 20
+      #   degrees_in_scope: ["1", "3", "5"]  # minor triads in major scale
+      #   allow_consecutive_repeat: true
+      # - drill: "chord"
+      #   questions: 20
+      #   degrees_in_scope: ["2", "4", "6"]  # minor triads in major scale
+      #   allow_consecutive_repeat: true
+      # - drill: "chord"
+      #   questions: 50
+      #   degrees_in_scope: ["1", "2", "3", "4", "5", "6", "7"]
 
   notes_then_chords:
     name: "Notes(5) → Chords(5)"

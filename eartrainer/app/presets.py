@@ -58,7 +58,8 @@ CHORD_RELATIVE_PRESETS = {
         "orientation": "both",
         "weight_from_root": 1.0,
         "weight_to_root": 1.0,
-        "inter_chord_gap_ms": 300,
+        "inter_chord_gap_ms": 350,
+        "repeat_each": 1,
     },
     "default": {
         "questions": 20,
@@ -67,7 +68,8 @@ CHORD_RELATIVE_PRESETS = {
         "orientation": "both",
         "weight_from_root": 1.0,
         "weight_to_root": 1.0,
-        "inter_chord_gap_ms": 250,
+        "inter_chord_gap_ms": 350,
+        "repeat_each": 1,
     },
     "advanced": {
         "questions": 30,
@@ -76,6 +78,7 @@ CHORD_RELATIVE_PRESETS = {
         "orientation": "both",
         "weight_from_root": 1.0,
         "weight_to_root": 1.0,
-        "inter_chord_gap_ms": 200,
+        "inter_chord_gap_ms": 300,
+        "repeat_each": 2,
     },
 }
