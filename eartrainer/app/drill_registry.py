@@ -99,7 +99,8 @@ def make_drill(
             orientation=str(params.get("orientation", "both")),
             weight_from_root=float(params.get("weight_from_root", 1.0)),
             weight_to_root=float(params.get("weight_to_root", 1.0)),
-            inter_chord_gap_ms=int(params.get("inter_chord_gap_ms", 250)),
+            inter_chord_gap_ms=int(params.get("inter_chord_gap_ms", 350)),
+            repeat_each=int(params.get("repeat_each", 1)),
         )
         return dr
     raise KeyError(f"Unsupported drill for factory: {drill_id}")
@@ -138,7 +139,8 @@ def _chord_relative_meta() -> DrillMeta:
                 "orientation": {"type": "string", "enum": ["from_root", "to_root", "both"], "default": "both"},
                 "weight_from_root": {"type": "number", "default": 1.0},
                 "weight_to_root": {"type": "number", "default": 1.0},
-                "inter_chord_gap_ms": {"type": "integer", "default": 250},
+                "inter_chord_gap_ms": {"type": "integer", "default": 350},
+                "repeat_each": {"type": "integer", "minimum": 1, "default": 1},
             },
             "required": ["questions"],
         },

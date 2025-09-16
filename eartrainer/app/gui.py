@@ -41,6 +41,9 @@ class App(tk.Tk):
         # Degrees selection and chord-repeat option
         self.degrees_var = tk.StringVar(value="1,2,3,4,5,6,7")
         self.allow_repeat_var = tk.BooleanVar(value=False)
+        # Chord-relative playback tuning (gap between chords, and repeats)
+        self.gap_ms_var = tk.IntVar(value=350)
+        self.repeat_each_var = tk.IntVar(value=1)
         # Mode and training sets (YAML-backed)
         self.mode_var = tk.StringVar(value="set")
         # Training sets (YAML-backed)
@@ -432,6 +435,15 @@ class App(tk.Tk):
                                 overrides["allow_consecutive_repeat"] = bool(step.get("allow_consecutive_repeat"))
                             else:
                                 overrides["allow_consecutive_repeat"] = bool(self.allow_repeat_var.get())
+                        if d_id == "chord_relative":
+                            overrides["allow_consecutive_repeat"] = bool(self.allow_repeat_var.get())
+                            overrides["inter_chord_gap_ms"] = int(self.gap_ms_var.get() or 350)
+                            overrides["repeat_each"] = max(1, int(self.repeat_each_var.get() or 1))
+                            if "orientation" in step:
+                                try:
+                                    overrides["orientation"] = str(step.get("orientation")).strip()
+                                except Exception:
+                                    pass
                         # Announce sub-drill start with degree subset if not all
                         if d_id == "note":
                             label = "Starting drill: scale degrees"
@@ -539,6 +551,9 @@ class App(tk.Tk):
                     overrides["degrees_in_scope"] = _parse_degrees(self.degrees_var.get())
                     if drill in ("chord", "chord_relative"):
                         overrides["allow_consecutive_repeat"] = bool(self.allow_repeat_var.get())
+                    if drill == "chord_relative":
+                        overrides["inter_chord_gap_ms"] = int(self.gap_ms_var.get() or 350)
+                        overrides["repeat_each"] = max(1, int(self.repeat_each_var.get() or 1))
                     sm.start_session(drill, "default", overrides)
                     summary = sm.run(ui)
                     self.log("")
@@ -605,7 +620,11 @@ class App(tk.Tk):
         ttk.Checkbutton(win, text="Flicker on wrong", variable=self.flicker_var).grid(row=0, column=0, sticky=tk.W, **pad)
         ttk.Checkbutton(win, text="Drone enabled", variable=self.drone_var).grid(row=1, column=0, sticky=tk.W, **pad)
         ttk.Checkbutton(win, text="Allow repeat (chord drills)", variable=self.allow_repeat_var).grid(row=2, column=0, sticky=tk.W, **pad)
-        ttk.Button(win, text="Close", command=win.destroy).grid(row=3, column=0, sticky=tk.E, **pad)
+        ttk.Label(win, text="Chord gap (ms)").grid(row=3, column=0, sticky=tk.W, **pad)
+        ttk.Entry(win, textvariable=self.gap_ms_var, width=8).grid(row=3, column=1, sticky=tk.W, **pad)
+        ttk.Label(win, text="Repeat each chord (×)").grid(row=4, column=0, sticky=tk.W, **pad)
+        ttk.Entry(win, textvariable=self.repeat_each_var, width=8).grid(row=4, column=1, sticky=tk.W, **pad)
+        ttk.Button(win, text="Close", command=win.destroy).grid(row=5, column=0, sticky=tk.E, **pad)
 
 
 def main() -> int:

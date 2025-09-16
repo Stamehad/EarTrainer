@@ -30,9 +30,10 @@ class TwoChordRelativeDrill(BaseDrill):
         self._weight_from = 1.0
         self._weight_to = 1.0
         self._gap_ms = 250
+        self._repeat_each = 1  # times to play each chord in the pair
 
     # Hooks to set optional parameters via context.params in factory
-    def configure(self, *, orientation: str = "both", weight_from_root: float = 1.0, weight_to_root: float = 1.0, inter_chord_gap_ms: int = 250) -> None:
+    def configure(self, *, orientation: str = "both", weight_from_root: float = 1.0, weight_to_root: float = 1.0, inter_chord_gap_ms: int = 250, repeat_each: int = 1) -> None:
         t = (orientation or "both").strip().lower()
         if t not in ("from_root", "to_root", "both"):
             t = "both"
@@ -49,6 +50,10 @@ class TwoChordRelativeDrill(BaseDrill):
             self._gap_ms = int(inter_chord_gap_ms)
         except Exception:
             self._gap_ms = 250
+        try:
+            self._repeat_each = max(1, int(repeat_each))
+        except Exception:
+            self._repeat_each = 1
 
     def _refill_bag(self) -> None:
         # Exclude 1 from target set
@@ -124,20 +129,27 @@ class TwoChordRelativeDrill(BaseDrill):
         else:
             seq = [("target", target_voicing), ("root", root_voicing)]
 
-        # Play sequence
-        for idx, (_kind, v) in enumerate(seq):
+        # Build an onset list with equal spacing between all onsets
+        onset_voicings: List[Voicing] = []
+        if orient == "from_root":
+            onset_voicings.extend([root_voicing] * self._repeat_each)
+            onset_voicings.extend([target_voicing] * self._repeat_each)
+        else:
+            onset_voicings.extend([target_voicing] * self._repeat_each)
+            onset_voicings.extend([root_voicing] * self._repeat_each)
+
+        for i, v in enumerate(onset_voicings):
             self.synth.play_chord(v.midi_notes, velocity=90, dur_ms=800)
-            if idx == 0:
+            if i < len(onset_voicings) - 1:
                 self.synth.sleep_ms(self._gap_ms)
 
         # Prepare replay function
         def _replay() -> None:
-            for idx, (_k, v) in enumerate(seq):
+            for i, v in enumerate(onset_voicings):
                 self.synth.play_chord(v.midi_notes, velocity=90, dur_ms=800)
-                if idx == 0:
+                if i < len(onset_voicings) - 1:
                     self.synth.sleep_ms(self._gap_ms)
 
         self._last_target_voicing_label = target_voicing.template_label
 
         return {"truth_degree": target_str, "replay": _replay}
-
