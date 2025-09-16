@@ -3,6 +3,7 @@ from __future__ import annotations
 """Base drill abstractions and context/results models."""
 
 from dataclasses import dataclass, field
+from contextlib import contextmanager
 import time
 from typing import Callable, Dict, List, Protocol
 
@@ -147,6 +148,16 @@ class BaseDrill:
             # assistance counters for this question
             assist_counts = {"r": 0, "s": 0, "c": 0, "p": 0, "t": 0}
             t_start = time.monotonic()
+            paused_ms = 0.0
+
+            @contextmanager
+            def pause_timer() -> None:
+                nonlocal paused_ms
+                _t0 = time.monotonic()
+                try:
+                    yield
+                finally:
+                    paused_ms += (time.monotonic() - _t0) * 1000.0
 
             while True:
                 ans = ask("Enter scale degree (1–7), 'c' cadence, 's' scale, 'r' replay note, 'p' pathway, 't' tonic: ")
@@ -156,90 +167,95 @@ class BaseDrill:
                 if ans.strip().lower() == "r":
                     assist_counts["r"] += 1
                     # Prefer question-provided replay callable for complex stimuli
-                    if callable(q.get("replay")):
-                        activity("replay_custom")
-                        q["replay"]()
-                        xtrace("replay_custom", {"index": i})
-                    elif "midi" in q:
-                        activity("replay_note")
-                        midi_obj = q["midi"]
-                        if isinstance(midi_obj, list):
-                            # Assume list of MIDI integers for chord
-                            self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
-                        else:
-                            self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
-                        xtrace("replay_note", {"index": i})
+                    with pause_timer():
+                        if callable(q.get("replay")):
+                            activity("replay_custom")
+                            q["replay"]()
+                            xtrace("replay_custom", {"index": i})
+                        elif "midi" in q:
+                            activity("replay_note")
+                            midi_obj = q["midi"]
+                            if isinstance(midi_obj, list):
+                                # Assume list of MIDI integers for chord
+                                self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
+                            else:
+                                self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
+                            xtrace("replay_note", {"index": i})
                     continue
                 if ans.strip().lower() == "s":
                     assist_counts["s"] += 1
-                    duck()
-                    self._play_scale_sequence()
-                    unduck()
-                    self.synth.sleep_ms(self.ctx.test_note_delay_ms)
-                    if callable(q.get("replay")):
-                        q["replay"]()
-                    elif "midi" in q:
-                        midi_obj = q["midi"]
-                        if isinstance(midi_obj, list):
-                            self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
-                        else:
-                            self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
-                    activity("replay_scale")
-                    xtrace("replay_scale", {"index": i})
+                    with pause_timer():
+                        duck()
+                        self._play_scale_sequence()
+                        unduck()
+                        self.synth.sleep_ms(self.ctx.test_note_delay_ms)
+                        if callable(q.get("replay")):
+                            q["replay"]()
+                        elif "midi" in q:
+                            midi_obj = q["midi"]
+                            if isinstance(midi_obj, list):
+                                self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
+                            else:
+                                self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
+                        activity("replay_scale")
+                        xtrace("replay_scale", {"index": i})
                     continue
                 if ans.strip().lower() == "c":
                     assist_counts["c"] += 1
-                    duck()
-                    self.play_reference()
-                    unduck()
-                    self.synth.sleep_ms(self.ctx.test_note_delay_ms)
-                    if callable(q.get("replay")):
-                        q["replay"]()
-                    elif "midi" in q:
-                        midi_obj = q["midi"]
-                        if isinstance(midi_obj, list):
-                            self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
-                        else:
-                            self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
-                    activity("replay_cadence")
-                    xtrace("replay_cadence", {"index": i})
+                    with pause_timer():
+                        duck()
+                        self.play_reference()
+                        unduck()
+                        self.synth.sleep_ms(self.ctx.test_note_delay_ms)
+                        if callable(q.get("replay")):
+                            q["replay"]()
+                        elif "midi" in q:
+                            midi_obj = q["midi"]
+                            if isinstance(midi_obj, list):
+                                self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
+                            else:
+                                self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
+                        activity("replay_cadence")
+                        xtrace("replay_cadence", {"index": i})
                     continue
                 if ans.strip().lower() == "p":
                     assist_counts["p"] += 1
-                    duck()
-                    self._play_pathway_sequence(truth)
-                    unduck()
-                    self.synth.sleep_ms(self.ctx.test_note_delay_ms)
-                    if callable(q.get("replay")):
-                        q["replay"]()
-                    elif "midi" in q:
-                        midi_obj = q["midi"]
-                        if isinstance(midi_obj, list):
-                            self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
-                        else:
-                            self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
-                    activity("replay_pathway")
-                    xtrace("replay_pathway", {"index": i, "degree": truth})
+                    with pause_timer():
+                        duck()
+                        self._play_pathway_sequence(truth)
+                        unduck()
+                        self.synth.sleep_ms(self.ctx.test_note_delay_ms)
+                        if callable(q.get("replay")):
+                            q["replay"]()
+                        elif "midi" in q:
+                            midi_obj = q["midi"]
+                            if isinstance(midi_obj, list):
+                                self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
+                            else:
+                                self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
+                        activity("replay_pathway")
+                        xtrace("replay_pathway", {"index": i, "degree": truth})
                     continue
                 if ans.strip().lower() == "t":
                     assist_counts["t"] += 1
-                    # Play tonic (C4 by default transposed to key) for ~2 seconds
-                    duck()
-                    root = transpose_key(self.ctx.key_root)
-                    tonic = note_name_to_midi(root, 4)
-                    self.synth.note_on(tonic, velocity=95, dur_ms=2000)
-                    unduck()
-                    self.synth.sleep_ms(self.ctx.test_note_delay_ms)
-                    if callable(q.get("replay")):
-                        q["replay"]()
-                    elif "midi" in q:
-                        midi_obj = q["midi"]
-                        if isinstance(midi_obj, list):
-                            self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
-                        else:
-                            self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
-                    activity("play_tonic")
-                    xtrace("play_tonic", {"index": i})
+                    with pause_timer():
+                        # Play tonic (C4 by default transposed to key) for ~2 seconds
+                        duck()
+                        root = transpose_key(self.ctx.key_root)
+                        tonic = note_name_to_midi(root, 4)
+                        self.synth.note_on(tonic, velocity=95, dur_ms=2000)
+                        unduck()
+                        self.synth.sleep_ms(self.ctx.test_note_delay_ms)
+                        if callable(q.get("replay")):
+                            q["replay"]()
+                        elif "midi" in q:
+                            midi_obj = q["midi"]
+                            if isinstance(midi_obj, list):
+                                self.synth.play_chord([int(m) for m in midi_obj], velocity=90, dur_ms=800)
+                            else:
+                                self.synth.note_on(int(midi_obj), velocity=100, dur_ms=600)
+                        activity("play_tonic")
+                        xtrace("play_tonic", {"index": i})
                     continue
                 # grade if not replay request
                 is_correct = self.grade(ans, truth)
@@ -255,8 +271,9 @@ class BaseDrill:
                 bucket = per_degree.setdefault(truth, {"asked": 0, "correct": 0})
                 bucket["asked"] += 1
                 bucket["correct"] += 1 if is_correct else 0
-                # Augment per-degree with assistance counts and timing
-                t_elapsed_ms = int((time.monotonic() - t_start) * 1000)
+                # Augment per-degree with assistance counts and net timing (exclude assistance playback)
+                gross_ms = (time.monotonic() - t_start) * 1000.0
+                t_elapsed_ms = max(0, int(round(gross_ms - paused_ms)))
                 meta = bucket.setdefault("meta", {})
                 # assistance tuple order (r,s,c,p,t)
                 ac = meta.setdefault("assist_counts", {"r": 0, "s": 0, "c": 0, "p": 0, "t": 0})
