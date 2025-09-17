@@ -9,31 +9,37 @@ sets:
       - drill: "chord_relative"
         questions: 20
         degrees_in_scope: ["4", "5"]  # major triads in major scale
+        allow_consecutive_repeat: true
         orientation: "from_root" # "to_root", "both"
         repeat_each: 2
       - drill: "chord_relative"
         questions: 20
         degrees_in_scope: ["2", "3", "6"]  # major triads in major scale
+        allow_consecutive_repeat: true
         orientation: "from_root"
         repeat_each: 2
       - drill: "chord_relative"
         questions: 20
         degrees_in_scope: ["4", "5"]  # major triads in major scale
+        allow_consecutive_repeat: true
         orientation: "to_root" 
         repeat_each: 2
       - drill: "chord_relative"
         questions: 20
         degrees_in_scope: ["2", "3", "6"]  # major triads in major scale
+        allow_consecutive_repeat: true
         orientation: "to_root"
         repeat_each: 2
       - drill: "chord_relative"
         questions: 20
         degrees_in_scope: ["4", "5"]  # major triads in major scale
+        allow_consecutive_repeat: true
         orientation: "both"
         repeat_each: 2
       - drill: "chord_relative"
         questions: 20
         degrees_in_scope: ["2", "3", "6"]  # major triads in major scale
+        allow_consecutive_repeat: true
         orientation: "both"
         repeat_each: 2
       # - drill: "chord"
@@ -55,6 +61,46 @@ sets:
       # - drill: "chord"
       #   questions: 50
       #   degrees_in_scope: ["1", "2", "3", "4", "5", "6", "7"]
+
+  MySet2:
+    name: "Chord subsets: maj triads, then min triads"
+    description: "Practice selected chord degrees using subsets and optional repeats"
+    steps:
+      - drill: "note"
+        questions: 50
+      - drill: "chord_relative"
+        questions: 20
+        degrees_in_scope: ["2", "3", "4", "5", "6", "7"]  # major triads in major scale
+        allow_consecutive_repeat: true
+        orientation: "from_root" # "to_root", "both"
+        repeat_each: 2
+      - drill: "chord_relative"
+        questions: 20
+        degrees_in_scope: ["2", "3", "4", "5", "6", "7"]  # major triads in major scale
+        allow_consecutive_repeat: true
+        orientation: "from_root" # "to_root", "both"
+      - drill: "chord_relative"
+        questions: 20
+        degrees_in_scope: ["2", "3", "4", "5", "6", "7"]  # major triads in major scale
+        allow_consecutive_repeat: true
+        orientation: "to_root" 
+        repeat_each: 2
+      - drill: "chord_relative"
+        questions: 20
+        degrees_in_scope: ["2", "3", "4", "5", "6", "7"]  # major triads in major scale
+        allow_consecutive_repeat: true
+        orientation: "to_root" 
+      - drill: "chord_relative"
+        questions: 20
+        degrees_in_scope: ["2", "3", "4", "5", "6", "7"]  # major triads in major scale
+        allow_consecutive_repeat: true
+        orientation: "both"
+        repeat_each: 2
+      - drill: "chord_relative"
+        questions: 20
+        degrees_in_scope: ["2", "3", "4", "5", "6", "7"]  # major triads in major scale
+        allow_consecutive_repeat: true
+        orientation: "both"
 
   notes_then_chords:
     name: "Notes(5) → Chords(5)"

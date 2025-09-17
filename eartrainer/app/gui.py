@@ -436,9 +436,29 @@ class App(tk.Tk):
                             else:
                                 overrides["allow_consecutive_repeat"] = bool(self.allow_repeat_var.get())
                         if d_id == "chord_relative":
-                            overrides["allow_consecutive_repeat"] = bool(self.allow_repeat_var.get())
-                            overrides["inter_chord_gap_ms"] = int(self.gap_ms_var.get() or 350)
-                            overrides["repeat_each"] = max(1, int(self.repeat_each_var.get() or 1))
+                            # allow_consecutive_repeat: prefer step override, else GUI option
+                            if "allow_consecutive_repeat" in step:
+                                try:
+                                    overrides["allow_consecutive_repeat"] = bool(step.get("allow_consecutive_repeat"))
+                                except Exception:
+                                    overrides["allow_consecutive_repeat"] = bool(self.allow_repeat_var.get())
+                            else:
+                                overrides["allow_consecutive_repeat"] = bool(self.allow_repeat_var.get())
+                            # Allow per-step override first, fallback to GUI Options values
+                            if "inter_chord_gap_ms" in step:
+                                try:
+                                    overrides["inter_chord_gap_ms"] = int(step.get("inter_chord_gap_ms"))
+                                except Exception:
+                                    overrides["inter_chord_gap_ms"] = int(self.gap_ms_var.get() or 350)
+                            else:
+                                overrides["inter_chord_gap_ms"] = int(self.gap_ms_var.get() or 350)
+                            if "repeat_each" in step:
+                                try:
+                                    overrides["repeat_each"] = max(1, int(step.get("repeat_each")))
+                                except Exception:
+                                    overrides["repeat_each"] = max(1, int(self.repeat_each_var.get() or 1))
+                            else:
+                                overrides["repeat_each"] = max(1, int(self.repeat_each_var.get() or 1))
                             if "orientation" in step:
                                 try:
                                     overrides["orientation"] = str(step.get("orientation")).strip()
