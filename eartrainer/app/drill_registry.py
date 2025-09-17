@@ -14,6 +14,7 @@ from ..drills.chord_id import ChordDegreeDrill
 from ..drills.base_drill import DrillContext
 from ..drills.chord_relative import TwoChordRelativeDrill
 from ..audio.synthesis import Synth
+from ..theory.keys import transpose_key, note_name_to_midi
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,8 @@ def _note_drill_meta() -> DrillMeta:
                         "max_note": {"type": "string"},
                     },
                 },
+                "relative_octaves_down": {"type": "integer", "minimum": 0, "default": 1},
+                "relative_octaves_up": {"type": "integer", "minimum": 0, "default": 1},
             },
             "required": ["questions"],
         },
@@ -77,14 +80,34 @@ def make_drill(
 
     For now supports only the existing NoteDegreeDrill.
     """
+    # Derive relative note range around tonic if not explicitly provided
+    min_midi = params.get("min_midi")
+    max_midi = params.get("max_midi")
+    if drill_id == "note" and (min_midi is None or max_midi is None):
+        try:
+            down = max(0, int(params.get("relative_octaves_down", 1)))
+        except Exception:
+            down = 1
+        try:
+            up = max(0, int(params.get("relative_octaves_up", 1)))
+        except Exception:
+            up = 1
+        try:
+            root_name = transpose_key(scale["key"])  # tonic name in current key
+            tonic_midi = note_name_to_midi(root_name, 4)
+            min_midi = tonic_midi - 12 * down
+            max_midi = tonic_midi + 12 * up
+        except Exception:
+            pass
+
     ctx = DrillContext(
         key_root=scale["key"],
         scale_type=scale["scale_type"],
         reference_mode="cadence",
         degrees_in_scope=list(params.get("degrees_in_scope", ["1","2","3","4","5","6","7"])),
         include_chromatic=bool(params.get("include_chromatic", False)),
-        min_midi=params.get("min_midi"),
-        max_midi=params.get("max_midi"),
+        min_midi=min_midi,
+        max_midi=max_midi,
         test_note_delay_ms=int(params.get("test_note_delay_ms", 300)),
         allow_consecutive_degree_repeat=bool(params.get("allow_consecutive_repeat", False)),
     )

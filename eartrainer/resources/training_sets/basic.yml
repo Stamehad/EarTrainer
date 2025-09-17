@@ -5,7 +5,9 @@ sets:
     description: "Practice selected chord degrees using subsets and optional repeats"
     steps:
       - drill: "note"
-        questions: 50
+        questions: 20
+        #relative_octaves_down: 1
+        #relative_octaves_up: 1
       - drill: "chord_relative"
         questions: 20
         degrees_in_scope: ["4", "5"]  # major triads in major scale

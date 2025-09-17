@@ -41,6 +41,9 @@ class App(tk.Tk):
         # Degrees selection and chord-repeat option
         self.degrees_var = tk.StringVar(value="1,2,3,4,5,6,7")
         self.allow_repeat_var = tk.BooleanVar(value=False)
+        # Note drill: relative range around tonic (octaves down/up)
+        self.note_rel_down_var = tk.IntVar(value=1)
+        self.note_rel_up_var = tk.IntVar(value=1)
         # Chord-relative playback tuning (gap between chords, and repeats)
         self.gap_ms_var = tk.IntVar(value=350)
         self.repeat_each_var = tk.IntVar(value=1)
@@ -176,7 +179,9 @@ class App(tk.Tk):
         status.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=(0, 8))
         self.score_var = tk.StringVar(value="Score: 0/0")
         ttk.Label(status, textvariable=self.score_var, anchor=tk.W).pack(side=tk.LEFT)
-        ttk.Button(status, text="⚙️", width=2, command=self.open_options).pack(side=tk.RIGHT)
+        # Keep a reference to the Options button so we can anchor the dialog near it
+        self._options_btn = ttk.Button(status, text="⚙️", width=2, command=self.open_options)
+        self._options_btn.pack(side=tk.RIGHT)
         ttk.Button(status, text="Stop", command=self.request_stop).pack(side=tk.RIGHT, padx=8)
 
     def log(self, msg: str) -> None:
@@ -429,6 +434,18 @@ class App(tk.Tk):
                             overrides["degrees_in_scope"] = degs if degs else _parse_degrees(self.degrees_var.get())
                         else:
                             overrides["degrees_in_scope"] = _parse_degrees(self.degrees_var.get())
+                        # Note-only range (fallback to Options if not provided in params)
+                        if d_id == "note":
+                            if "relative_octaves_down" not in overrides:
+                                try:
+                                    overrides["relative_octaves_down"] = max(0, int(self.note_rel_down_var.get() or 1))
+                                except Exception:
+                                    overrides["relative_octaves_down"] = 1
+                            if "relative_octaves_up" not in overrides:
+                                try:
+                                    overrides["relative_octaves_up"] = max(0, int(self.note_rel_up_var.get() or 1))
+                                except Exception:
+                                    overrides["relative_octaves_up"] = 1
                         # chord-only flags
                         if d_id == "chord":
                             if "allow_consecutive_repeat" in step:
@@ -569,6 +586,15 @@ class App(tk.Tk):
                 else:
                     overrides = {"questions": questions, "key": key, "scale_type": scale_type}
                     overrides["degrees_in_scope"] = _parse_degrees(self.degrees_var.get())
+                    if drill == "note":
+                        try:
+                            overrides["relative_octaves_down"] = max(0, int(self.note_rel_down_var.get() or 1))
+                        except Exception:
+                            overrides["relative_octaves_down"] = 1
+                        try:
+                            overrides["relative_octaves_up"] = max(0, int(self.note_rel_up_var.get() or 1))
+                        except Exception:
+                            overrides["relative_octaves_up"] = 1
                     if drill in ("chord", "chord_relative"):
                         overrides["allow_consecutive_repeat"] = bool(self.allow_repeat_var.get())
                     if drill == "chord_relative":
@@ -635,7 +661,10 @@ class App(tk.Tk):
         win = tk.Toplevel(self)
         win.title("Options")
         win.transient(self)
-        win.resizable(False, False)
+        # Prepare geometry before showing to avoid a visible jump
+        win.withdraw()
+        # Allow resizing vertically in case system default cuts it off
+        win.resizable(True, True)
         pad = {"padx": 10, "pady": 8}
         ttk.Checkbutton(win, text="Flicker on wrong", variable=self.flicker_var).grid(row=0, column=0, sticky=tk.W, **pad)
         ttk.Checkbutton(win, text="Drone enabled", variable=self.drone_var).grid(row=1, column=0, sticky=tk.W, **pad)
@@ -644,7 +673,43 @@ class App(tk.Tk):
         ttk.Entry(win, textvariable=self.gap_ms_var, width=8).grid(row=3, column=1, sticky=tk.W, **pad)
         ttk.Label(win, text="Repeat each chord (×)").grid(row=4, column=0, sticky=tk.W, **pad)
         ttk.Entry(win, textvariable=self.repeat_each_var, width=8).grid(row=4, column=1, sticky=tk.W, **pad)
-        ttk.Button(win, text="Close", command=win.destroy).grid(row=5, column=0, sticky=tk.E, **pad)
+        ttk.Separator(win, orient=tk.HORIZONTAL).grid(row=5, column=0, columnspan=2, sticky=tk.EW, **pad)
+        ttk.Label(win, text="Note range down (octaves)").grid(row=6, column=0, sticky=tk.W, **pad)
+        tk.Spinbox(win, from_=0, to=6, width=6, textvariable=self.note_rel_down_var).grid(row=6, column=1, sticky=tk.W, **pad)
+        ttk.Label(win, text="Note range up (octaves)").grid(row=7, column=0, sticky=tk.W, **pad)
+        tk.Spinbox(win, from_=0, to=6, width=6, textvariable=self.note_rel_up_var).grid(row=7, column=1, sticky=tk.W, **pad)
+        ttk.Button(win, text="Close", command=win.destroy).grid(row=8, column=0, sticky=tk.E, **pad)
+
+        # Ensure the window is sized to fit all controls and position it anchored near the Options button
+        try:
+            win.update_idletasks()
+            req_w = max(380, win.winfo_reqwidth())
+            req_h = win.winfo_reqheight() + 40
+            win.minsize(req_w, req_h)
+            sw = self.winfo_screenwidth()
+            sh = self.winfo_screenheight()
+            # Default anchor to mouse pointer, adjusted upwards
+            px = max(0, self.winfo_pointerx() - req_w + 40)
+            py = max(0, self.winfo_pointery() - req_h - 20)
+            # If we have a reference to the Options button, anchor to it (open upward, right-aligned)
+            try:
+                bx = self._options_btn.winfo_rootx()
+                by = self._options_btn.winfo_rooty()
+                bw = self._options_btn.winfo_width()
+                # Place the dialog above the button, aligning right edges
+                px = bx + bw - req_w
+                py = by - req_h - 8
+            except Exception:
+                pass
+            # Clamp on screen
+            px = min(max(0, px), max(0, sw - req_w))
+            py = min(max(0, py), max(0, sh - req_h))
+            win.geometry(f"{req_w}x{req_h}+{int(px)}+{int(py)}")
+        except Exception:
+            pass
+        finally:
+            # Show after geometry is finalized to avoid a visible jump
+            win.deiconify()
 
 
 def main() -> int:
