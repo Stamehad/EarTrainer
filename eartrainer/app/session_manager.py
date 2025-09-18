@@ -115,9 +115,16 @@ class SessionManager:
         try:
             # Write Parquet session-degree rows for this drill unless disabled (set mode aggregates separately)
             if not bool(self.ctx.params.get("stats_disable", False)):
-                # Map drill id to category label
+                # Map drill id to storage category
                 drill = self.ctx.drill_id
-                category = "single_note" if drill == "note" else ("chord" if drill in ("chord", "chord_relative") else drill)
+                if drill == "note":
+                    category = "single_note"
+                elif drill in ("chord", "chord_relative"):
+                    category = "chord"
+                elif drill in ("harmonic_interval", "melodic"):
+                    category = "interval"
+                else:
+                    category = drill
                 sid = str(uuid4())
                 rows: list[SessionDegreeRow] = []
                 per = summary.get("per_degree", {}) or {}
