@@ -77,23 +77,37 @@ class MelodicDictationDrill(BaseDrill):
             return str(start_deg), midi
 
         # Otherwise, sample a uniform diatonic step and realize it.
+        last_attempt: tuple[int, List[int]] | None = None
         for _ in range(MAX_TRIES):
             k = rng.randint(-7, 7)  # uniform over [-7,7]
             next_deg = ((int(prev_deg) - 1 + k) % 7) + 1
             cands = self._degree_to_candidates(next_deg)
-            if cands:
-                return str(next_deg), rng.choice(cands)
-        # Fallback: choose the candidate for the last tried degree closest in semitones
-        # (keep direction uniformity best-effort under tight ranges)
-        k = 0
-        next_deg = ((int(prev_deg) - 1 + k) % 7) + 1
-        cands = self._degree_to_candidates(next_deg)
-        if not cands:
-            # extreme fallback to starting octave 4 mapping
-            cands = self._degree_to_candidates(next_deg)
-        if cands:
-            cands2 = sorted(cands, key=lambda m: abs(m - prev_midi))
-            return str(next_deg), cands2[0]
+            if not cands:
+                continue
+
+            bounded = [m for m in cands if abs(m - prev_midi) <= self._max_interval_semitones]
+            if not bounded:
+                last_attempt = (next_deg, cands)
+                continue
+
+            direction = 0 if k == 0 else (1 if k > 0 else -1)
+            if direction > 0:
+                directional = [m for m in bounded if m >= prev_midi]
+            elif direction < 0:
+                directional = [m for m in bounded if m <= prev_midi]
+            else:
+                directional = bounded
+            candidates = directional or bounded
+
+            last_attempt = (next_deg, candidates)
+            return str(next_deg), rng.choice(candidates)
+
+        # Fallback: choose the closest candidate from the best attempt we saw
+        if last_attempt:
+            next_deg, cands = last_attempt
+            closest = min(cands, key=lambda m: abs(m - prev_midi))
+            return str(next_deg), closest
+
         # Last resort (should be unreachable): repeat previous note
         return str(prev_deg), prev_midi
 
