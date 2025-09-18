@@ -23,7 +23,7 @@ from .training_sets import list_sets as ts_list_sets, get_set as ts_get_set
 
 KEYS = ["Random", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 SCALES = ["major", "natural_minor"]
-DRILLS = ["note", "chord", "chord_relative"]
+DRILLS = ["note", "chord", "chord_relative", "melodic", "harmonic_interval"]
 
 
 class App(tk.Tk):
@@ -252,17 +252,21 @@ class App(tk.Tk):
             m = msg.rstrip()
             # Track current question label (but do not log yet)
             if m.startswith("Q") and ":" in m:
-                # Rewrite Qx/N numbering in sequence mode, store label only
-                if self._seq_mode:
-                    self._seq_current += 1
-                    self._current_q_label = f"Q{self._seq_current}/{self._seq_total}"
-                else:
-                    # Extract the prefix before ':'
-                    try:
-                        self._current_q_label = m.split(":", 1)[0]
-                    except Exception:
-                        self._current_q_label = "Q?"
-                return
+                # Only treat the initial listen line as label; log other Q-lines normally
+                try:
+                    _prefix, rest = m.split(":", 1)
+                except ValueError:
+                    rest = ""
+                if "listen" in rest:
+                    if self._seq_mode:
+                        self._seq_current += 1
+                        self._current_q_label = f"Q{self._seq_current}/{self._seq_total}"
+                    else:
+                        try:
+                            self._current_q_label = m.split(":", 1)[0]
+                        except Exception:
+                            self._current_q_label = "Q?"
+                    return
 
             # One-line per-question output
             if m.startswith("Incorrect. Answer was "):
@@ -283,6 +287,11 @@ class App(tk.Tk):
                 pretty = f"{self._current_q_label or 'Q?'}: ✅"
                 self.score_var.set(f"Score: {self._correct}/{self._asked}")
                 self.log(pretty)
+                return
+
+            # Prefix interval feedback with current Q label for consistency
+            if m.startswith("Interval: ") and (self._current_q_label or ""): 
+                self.log(f"{self._current_q_label or 'Q?'} {m}")
                 return
 
             # Fallback: log any other messages unchanged
@@ -481,11 +490,24 @@ class App(tk.Tk):
                                     overrides["orientation"] = str(step.get("orientation")).strip()
                                 except Exception:
                                     pass
+                        # melodic-only params: allow top-level keys to override without requiring params{}
+                        if d_id == "melodic":
+                            # Avoid shadowing outer variable name 'key' used for musical key
+                            for param_key in ("length", "inter_note_gap_ms", "max_interval_semitones", "relative_octaves_down", "relative_octaves_up"):
+                                if param_key in step and param_key not in overrides:
+                                    try:
+                                        overrides[param_key] = int(step.get(param_key))
+                                    except Exception:
+                                        pass
                         # Announce sub-drill start with degree subset if not all
                         if d_id == "note":
                             label = "Starting drill: scale degrees"
                         elif d_id == "chord_relative":
                             label = "Starting drill: chords relative"
+                        elif d_id == "harmonic_interval":
+                            label = "Starting drill: intervals (harmonic)"
+                        elif d_id == "melodic":
+                            label = "Starting drill: melodic dictation"
                         else:
                             label = "Starting drill: chords"
                         degs_for_label = list(overrides.get("degrees_in_scope") or [])
@@ -549,9 +571,16 @@ class App(tk.Tk):
                         from ..storage.store import init_store as _init, validate_records as _validate, append_session_degree_stats as _append
                         sid = str(_uuid4())
                         rows: list[_Row] = []
-                        # Convert category labels: note -> single_note
+                        # Convert category labels for storage
                         for cat_key, cat_data in (cats_aggr or {}).items():
-                            category = "single_note" if cat_key == "note" else cat_key
+                            if cat_key == "note":
+                                category = "single_note"
+                            elif cat_key in ("chord", "chord_relative"):
+                                category = "chord"
+                            elif cat_key in ("harmonic_interval", "melodic"):
+                                category = "interval"
+                            else:
+                                category = cat_key
                             degs = cat_data.get("D", {}) or {}
                             for d_k, node in degs.items():
                                 q = int(node.get("Q", 0))
@@ -631,6 +660,10 @@ class App(tk.Tk):
                 label = "Starting drill: scale degrees"
             elif drill == "chord_relative":
                 label = "Starting drill: chords relative"
+            elif drill == "harmonic_interval":
+                label = "Starting drill: intervals (harmonic)"
+            elif drill == "melodic":
+                label = "Starting drill: melodic dictation"
             else:
                 label = "Starting drill: chords"
             degs_for_label = _parse_degrees(self.degrees_var.get())

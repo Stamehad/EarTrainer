@@ -13,6 +13,8 @@ from ..drills.note_drill import NoteDegreeDrill
 from ..drills.chord_id import ChordDegreeDrill
 from ..drills.base_drill import DrillContext
 from ..drills.chord_relative import TwoChordRelativeDrill
+from ..drills.melody import MelodicDictationDrill
+from ..drills.interval_harmonic import HarmonicIntervalDrill
 from ..audio.synthesis import Synth
 from ..theory.keys import transpose_key, note_name_to_midi
 
@@ -56,7 +58,7 @@ def _note_drill_meta() -> DrillMeta:
 
 
 def list_drills() -> List[DrillMeta]:
-    return [_note_drill_meta(), _chord_drill_meta(), _chord_relative_meta()]
+    return [_note_drill_meta(), _chord_drill_meta(), _chord_relative_meta(), _melodic_meta(), _harmonic_interval_meta()]
 
 
 def get_drill(drill_id: str) -> DrillMeta:
@@ -126,6 +128,18 @@ def make_drill(
             repeat_each=int(params.get("repeat_each", 1)),
         )
         return dr
+    if drill_id == "melodic":
+        dr = MelodicDictationDrill(ctx, synth)
+        dr.configure(
+            length=int(params.get("length", 3)),
+            inter_note_gap_ms=int(params.get("inter_note_gap_ms", 250)),
+            max_interval_semitones=int(params.get("max_interval_semitones", 12)),
+        )
+        return dr
+    if drill_id == "harmonic_interval":
+        dr = HarmonicIntervalDrill(ctx, synth)
+        dr.configure(max_interval_semitones=int(params.get("max_interval_semitones", 12)))
+        return dr
     raise KeyError(f"Unsupported drill for factory: {drill_id}")
 
 def _chord_drill_meta() -> DrillMeta:
@@ -168,4 +182,64 @@ def _chord_relative_meta() -> DrillMeta:
             "required": ["questions"],
         },
         presets=CHORD_RELATIVE_PRESETS,
+    )
+
+
+def _melodic_meta() -> DrillMeta:
+    return DrillMeta(
+        id="melodic",
+        name="Melodic Dictation",
+        description="Hear a sequence of notes (degrees) and enter them in order.",
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "questions": {"type": "integer", "minimum": 1, "default": 10},
+                "degrees_in_scope": {"type": "array", "items": {"type": "string"}},
+                "length": {"type": "integer", "minimum": 2, "default": 3},
+                "inter_note_gap_ms": {"type": "integer", "default": 250},
+                "max_interval_semitones": {"type": "integer", "minimum": 1, "default": 12},
+                "relative_octaves_down": {"type": "integer", "minimum": 0, "default": 1},
+                "relative_octaves_up": {"type": "integer", "minimum": 0, "default": 1},
+            },
+            "required": ["questions"],
+        },
+        presets={
+            "default": {
+                "questions": 10,
+                "degrees_in_scope": ["1","2","3","4","5","6","7"],
+                "length": 3,
+                "inter_note_gap_ms": 250,
+                "max_interval_semitones": 12,
+                "relative_octaves_down": 1,
+                "relative_octaves_up": 1,
+            }
+        },
+    )
+
+
+def _harmonic_interval_meta() -> DrillMeta:
+    return DrillMeta(
+        id="harmonic_interval",
+        name="Harmonic Intervals",
+        description="Identify two simultaneous degrees (lower then upper).",
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "questions": {"type": "integer", "minimum": 1, "default": 10},
+                "degrees_in_scope": {"type": "array", "items": {"type": "string"}},
+                "max_interval_semitones": {"type": "integer", "minimum": 1, "default": 12},
+                "relative_octaves_down": {"type": "integer", "minimum": 0, "default": 1},
+                "relative_octaves_up": {"type": "integer", "minimum": 0, "default": 1},
+            },
+            "required": ["questions"],
+        },
+        presets={
+            "default": {
+                "questions": 12,
+                "degrees_in_scope": ["1","2","3","4","5","6","7"],
+                "max_interval_semitones": 12,
+                "relative_octaves_down": 1,
+                "relative_octaves_up": 1,
+            }
+        },
     )

@@ -6,8 +6,8 @@ sets:
     steps:
       - drill: "note"
         questions: 20
-        #relative_octaves_down: 1
-        #relative_octaves_up: 1
+        relative_octaves_down: 1
+        relative_octaves_up: 1
       - drill: "chord_relative"
         questions: 20
         degrees_in_scope: ["4", "5"]  # major triads in major scale
@@ -110,6 +110,12 @@ sets:
     rest_ms: 0
     steps:
       - drill: "note"
+        questions: 5
+      - drill: "melodic"
+        length: 2
+        inter_note_gap_ms: 300
+        questions: 5
+      - drill: "harmonic_interval"
         questions: 5
       - drill: "chord"
         questions: 5
