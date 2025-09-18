@@ -38,7 +38,7 @@ class SamplerConfig:
     base_interval_weights: Dict[int, float] = field(
         default_factory=lambda: {
             -7: 0.05, -6: 0.06, -5: 0.12, -4: 0.18, -3: 0.22, -2: 0.45, -1: 1.00,
-             0: 0.25,  # allow unisons but not too many
+             0: 0.10,  # allow unisons but keep rarer
              1: 1.00,  2: 0.45,  3: 0.22,  4: 0.18,  5: 0.12,  6: 0.06,  7: 0.05
         }
     )
@@ -48,7 +48,7 @@ class SamplerConfig:
     same_dir_after_big_leap_penalty: float = 0.35
     same_dir_run_cap_after: int = 4            # after N same-direction moves, penalize continuing
     same_dir_run_penalty: float = 0.3
-    unison_run_decay: float = 0.45             # repeated unisons decay by ρ^r
+    unison_run_decay: float = 0.35             # repeated unisons decay by ρ^r
     boundary_reflect_boost: float = 2.0        # boost inward motion near range edge
 
     # Tessitura / “center of mass” octave; None = infer from ctx on the fly
@@ -190,36 +190,77 @@ class MusicalMelodySampler:
             next_deg = ((last_deg - 1 + k) % 7) + 1
 
             # Choose a MIDI candidate for that degree in range while respecting max interval
-            next_midi = self._choose_register_for_degree(next_deg, prev_midi=midis[-1])
+            direction = 0 if k == 0 else (1 if k > 0 else -1)
+            next_midi = self._choose_register_for_degree(next_deg, prev_midi=midis[-1], direction=direction)
 
             # Update context
             truth_degrees.append(str(next_deg))
             midis.append(next_midi)
 
-            k_realized = _diatonic_interval_steps(midis[-2], midis[-1], self.ctx)
-            if k_realized == 0:
+            # Use the sampled diatonic step k to drive state (don’t infer from MIDI PCs)
+            if k == 0:
                 unison_run += 1
             else:
                 unison_run = 0
 
-            if prev_interval_steps is not None and (k_realized * prev_interval_steps) > 0:
+            if prev_interval_steps is not None and (k * prev_interval_steps) > 0:
                 same_dir_run += 1
             else:
                 same_dir_run = 1  # reset (counts current move)
 
-            prev_interval_steps = k_realized
+            prev_interval_steps = k
 
         return truth_degrees, midis
 
     # -------- helpers --------
-    def _choose_register_for_degree(self, degree: int, prev_midi: Optional[int]) -> int:
+    def _choose_register_for_degree(
+        self,
+        degree: int,
+        prev_midi: Optional[int],
+        *,
+        direction: Optional[int] = None,
+    ) -> int:
         cands = _degree_to_candidates_in_range(self.ctx, degree)
         cands = _apply_max_interval(prev_midi, cands, self.cfg.max_interval_semitones)
 
-        # Gentle range/tessitura steering: prefer pitches near center octave
+        # If no candidates (shouldn’t happen), fall back to first available mapping
+        if not cands:
+            fallback = _degree_to_candidates_in_range(self.ctx, degree)
+            return fallback[0] if fallback else note_name_to_midi(transpose_key(self.ctx.key_root), 4)
+
+        if prev_midi is not None:
+            choices = list(cands)
+            if direction is not None:
+                if direction > 0:
+                    filtered = [m for m in choices if m >= prev_midi]
+                elif direction < 0:
+                    filtered = [m for m in choices if m <= prev_midi]
+                else:
+                    filtered = choices
+                if filtered:
+                    choices = filtered
+
+            if self.ctx.min_midi is not None and self.ctx.max_midi is not None:
+                near_top = prev_midi >= (self.ctx.max_midi - 2)
+                near_bot = prev_midi <= (self.ctx.min_midi + 2)
+                if (near_top and direction is not None and direction > 0) or (near_bot and direction is not None and direction < 0):
+                    choices = list(cands)  # override direction to move inward
+                if near_top or near_bot:
+                    target = (self.ctx.max_midi - 4) if near_top else (self.ctx.min_midi + 4)
+                    return min(choices, key=lambda m: abs(m - target))
+
+            if self.cfg.center_octave is not None:
+                center_midi = note_name_to_midi(transpose_key(self.ctx.key_root), self.cfg.center_octave)
+                alpha, beta = 0.7, 0.3  # favor continuity
+                def score(m: int) -> float:
+                    return alpha * abs(m - prev_midi) + beta * abs(m - center_midi)
+                return min(choices, key=score)
+            else:
+                return min(choices, key=lambda m: abs(m - prev_midi))
+
+        # No previous note: optionally steer toward center octave; otherwise sample uniformly
         if self.cfg.center_octave is not None:
             center_midi = note_name_to_midi(transpose_key(self.ctx.key_root), self.cfg.center_octave)
-            # weight by inverse distance (simple 1/(1+d) scheme)
             weights = [1.0 / (1.0 + abs(m - center_midi)) for m in cands]
             s = sum(weights) or 1.0
             t = self.rng.random() * s
@@ -230,15 +271,7 @@ class MusicalMelodySampler:
                     return m
             return cands[-1]
         else:
-            # If near boundary, boost inward choices by reflecting probability
-            if prev_midi is not None and (self.ctx.min_midi is not None and self.ctx.max_midi is not None):
-                near_top = prev_midi >= (self.ctx.max_midi - 2)
-                near_bot = prev_midi <= (self.ctx.min_midi + 2)
-                if near_top or near_bot:
-                    # favor inward motion (choose closest inward candidate)
-                    target = (self.ctx.max_midi - 4) if near_top else (self.ctx.min_midi + 4)
-                    return min(cands, key=lambda m: abs(m - target))
-            return self.rng.choice(cands) if cands else _degree_to_candidates_in_range(self.ctx, degree)[0]
+            return self.rng.choice(cands)
 
     def _apply_context_modifiers(
         self,
@@ -272,6 +305,10 @@ class MusicalMelodySampler:
         # Unison run decay (allow unisons but reduce repeated ones)
         if 0 in base and unison_run > 0:
             base[0] *= (self.cfg.unison_run_decay ** unison_run)
+
+        # Additional strong clamp after 2+ consecutive unisons
+        if 0 in base and unison_run >= 2:
+            base[0] *= 0.15
 
         # Range reflection near hard bounds (if we have prev_midi and bounds)
         if prev_midi is not None and (self.ctx.min_midi is not None and self.ctx.max_midi is not None):
