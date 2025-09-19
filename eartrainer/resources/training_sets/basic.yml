@@ -104,6 +104,22 @@ sets:
         allow_consecutive_repeat: true
         orientation: "both"
 
+  MelodySet:
+    name: "Degrees, Melodic intervals and melodies"
+    description: "Practice melodic intervals and melodies"
+    rest_ms: 0
+    steps:
+      - drill: "note"
+        questions: 50
+      - drill: "melodic"
+        length: 2
+        inter_note_gap_ms: 300
+        questions: 50
+      - drill: "melodic"
+        length: 3
+        inter_note_gap_ms: 300
+        questions: 50
+
   notes_then_chords:
     name: "Notes(5) → Chords(5)"
     description: "Single key session: 5 note degrees then 5 triad chords"
