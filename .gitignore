@@ -9,3 +9,7 @@ __pycache__/
 
 reports/
 storage/data/
+
+codemap.md
+ear_training_modules.md
+melody_sampler_demo.ipynb
