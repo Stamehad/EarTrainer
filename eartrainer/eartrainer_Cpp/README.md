@@ -64,7 +64,7 @@ results back into the C++ core.
 
 The acceptance tests in `cpp/tests/test_session_engine.cpp` cover:
 
-1. Deterministic question sequencing for note and interval drills with fixed seeds.
+1. Deterministic question sequencing for note, interval, and melody drills with fixed seeds.
 2. Assistance purity (no RNG advancement).
 3. Idempotent result submission.
 4. RNG advance discipline (only via `next_question`).

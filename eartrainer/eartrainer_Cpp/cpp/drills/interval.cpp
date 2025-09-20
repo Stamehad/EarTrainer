@@ -114,6 +114,9 @@ AbstractSample IntervalSampler::next(const SessionSpec& spec, std::uint64_t& rng
   int semitone_diff = drills::degree_to_offset(top_degree) - drills::degree_to_offset(bottom_degree);
   int top_midi = bottom_midi + semitone_diff;
 
+  bool ascending = rand_int(rng_state, 0, 1) == 1;
+  std::string orientation = ascending ? "ascending" : "descending";
+
   nlohmann::json data = nlohmann::json::object();
   data["bottom_degree"] = bottom_degree;
   data["top_degree"] = top_degree;
@@ -121,6 +124,7 @@ AbstractSample IntervalSampler::next(const SessionSpec& spec, std::uint64_t& rng
   data["bottom_midi"] = bottom_midi;
   data["top_midi"] = top_midi;
   data["semitones"] = semitone_diff;
+  data["orientation"] = orientation;
 
   last_bottom_degree_ = bottom_degree;
   last_bottom_midi_ = bottom_midi;
@@ -154,6 +158,9 @@ DrillModule::DrillOutput IntervalDrill::make_question(const SessionSpec& spec,
   question_payload["top_midi"] = top_midi;
   question_payload["bottom_degree"] = bottom_degree;
   question_payload["top_degree"] = top_degree;
+  question_payload["orientation"] = sample.degrees.contains("orientation")
+                                          ? sample.degrees["orientation"].get<std::string>()
+                                          : std::string("ascending");
 
   nlohmann::json answer_payload = nlohmann::json::object();
   answer_payload["name"] = interval_name(std::abs(semitone_diff));

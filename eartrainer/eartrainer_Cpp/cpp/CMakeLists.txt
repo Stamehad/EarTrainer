@@ -10,6 +10,7 @@ add_library(ear_core STATIC
     src/json_bridge.cpp
     drills/chord.cpp
     drills/interval.cpp
+    drills/melody.cpp
     drills/note.cpp
     assistance/assistance.cpp
     scoring/scoring.cpp

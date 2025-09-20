@@ -112,6 +112,33 @@ int main() {
   }
 
   {
+    auto engine1 = ear::make_engine();
+    auto spec = make_spec("melody", "eager", 789, 3);
+    auto session1 = engine1->create_session(spec);
+    std::vector<std::string> seq1;
+    for (int i = 0; i < spec.n_questions; ++i) {
+      auto next = engine1->next_question(session1);
+      const auto* bundle = std::get_if<ear::QuestionBundle>(&next);
+      suite.require(bundle != nullptr, "melody next_question should return QuestionBundle");
+      seq1.push_back(digest(*bundle));
+      engine1->submit_result(session1, make_report(*bundle));
+    }
+
+    auto engine2 = ear::make_engine();
+    auto session2 = engine2->create_session(spec);
+    std::vector<std::string> seq2;
+    for (int i = 0; i < spec.n_questions; ++i) {
+      auto next = engine2->next_question(session2);
+      const auto* bundle = std::get_if<ear::QuestionBundle>(&next);
+      suite.require(bundle != nullptr, "melody next_question should return QuestionBundle (run 2)");
+      seq2.push_back(digest(*bundle));
+      engine2->submit_result(session2, make_report(*bundle));
+    }
+
+    suite.require(seq1 == seq2, "Determinism failure: melody eager mode sequences differ");
+  }
+
+  {
     auto engine = ear::make_engine();
     auto spec = make_spec("note", "adaptive", 77, 2);
     auto session = engine->create_session(spec);
