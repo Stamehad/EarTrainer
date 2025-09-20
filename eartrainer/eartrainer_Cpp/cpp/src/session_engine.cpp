@@ -2,6 +2,7 @@
 
 #include "../assistance/assistance.hpp"
 #include "../drills/chord.hpp"
+#include "../drills/interval.hpp"
 #include "../drills/note.hpp"
 #include "../drills/drill.hpp"
 #include "../scoring/scoring.hpp"
@@ -30,6 +31,9 @@ std::unique_ptr<Sampler> make_sampler(const std::string& kind) {
   if (kind == "note") {
     return std::make_unique<NoteSampler>();
   }
+  if (kind == "interval") {
+    return std::make_unique<IntervalSampler>();
+  }
   if (kind == "chord" || kind == "chord_melody") {
     return std::make_unique<ChordSampler>();
   }
@@ -39,6 +43,9 @@ std::unique_ptr<Sampler> make_sampler(const std::string& kind) {
 std::unique_ptr<DrillModule> make_drill(const std::string& kind) {
   if (kind == "note") {
     return std::make_unique<NoteDrill>();
+  }
+  if (kind == "interval") {
+    return std::make_unique<IntervalDrill>();
   }
   if (kind == "chord" || kind == "chord_melody") {
     return std::make_unique<ChordDrill>();
@@ -274,6 +281,7 @@ public:
     caps["version"] = "v1";
     nlohmann::json drills = nlohmann::json::array();
     drills.push_back("note");
+    drills.push_back("interval");
     drills.push_back("chord");
     caps["drills"] = drills;
     nlohmann::json assists = nlohmann::json::array();

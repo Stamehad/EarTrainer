@@ -16,7 +16,7 @@ Key components:
 
 - `cpp/include/ear/` – public headers for the SessionEngine API.
 - `cpp/src/` – engine implementation, JSON bridge helpers, pybind bindings.
-- `cpp/drills/` – samplers + drill modules for note and chord drills.
+- `cpp/drills/` – samplers + drill modules for note, interval, and chord drills.
 - `cpp/tests/` – acceptance-style regression tests (no external framework).
 - `python/eartrainer/` – dataclasses, wrapper, and `ui_demo.py` CLI.
 - `resources/voicings/` – reference voicing data used by the C++ chord drill.
@@ -64,7 +64,7 @@ results back into the C++ core.
 
 The acceptance tests in `cpp/tests/test_session_engine.cpp` cover:
 
-1. Deterministic question sequencing for note drills with a fixed seed.
+1. Deterministic question sequencing for note and interval drills with fixed seeds.
 2. Assistance purity (no RNG advancement).
 3. Idempotent result submission.
 4. RNG advance discipline (only via `next_question`).
