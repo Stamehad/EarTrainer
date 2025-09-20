@@ -7,7 +7,13 @@ from eartrainer.session_engine import SessionEngine
 class SessionEngineBridgeTests(unittest.TestCase):
     def test_basic_cycle(self) -> None:
         engine = SessionEngine()
-        spec = SessionSpec(n_questions=1, generation="eager", assistance_policy={"GuideTone": 1}, seed=321)
+        spec = SessionSpec(
+            drill_kind="note",
+            n_questions=1,
+            generation="eager",
+            assistance_policy={"GuideTone": 1},
+            seed=321,
+        )
         session_id = engine.create_session(spec)
 
         next_payload = engine.next_question(session_id)
@@ -39,4 +45,3 @@ class SessionEngineBridgeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

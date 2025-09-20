@@ -9,14 +9,21 @@
 
 namespace ear::drills {
 
-inline int degree_to_offset(int degree) {
-  static const int scale_steps[7] = {0, 2, 4, 5, 7, 9, 11};
-  int octave = (degree - 1) / 7;
-  int idx = (degree - 1) % 7;
+constexpr int kCentralTonicLow = 53;  // F3
+constexpr int kCentralTonicHigh = 64; // E4
+
+inline int normalize_degree_index(int degree) {
+  int idx = degree % 7;
   if (idx < 0) {
     idx += 7;
-    octave -= 1;
   }
+  return idx;
+}
+
+inline int degree_to_offset(int degree) {
+  static const int scale_steps[7] = {0, 2, 4, 5, 7, 9, 11};
+  int idx = normalize_degree_index(degree);
+  int octave = (degree - idx) / 7;
   return octave * 12 + scale_steps[idx];
 }
 
@@ -49,12 +56,23 @@ inline int tonic_from_key(const std::string& key) {
   return 60 + base;
 }
 
+inline int central_tonic_midi(const std::string& key) {
+  int tonic = tonic_from_key(key);
+  while (tonic < kCentralTonicLow) {
+    tonic += 12;
+  }
+  while (tonic > kCentralTonicHigh) {
+    tonic -= 12;
+  }
+  return tonic;
+}
+
 inline int clamp_to_range(int midi, int min, int max) {
   return std::max(min, std::min(max, midi));
 }
 
 inline int degree_to_midi(const SessionSpec& spec, int degree) {
-  int tonic = tonic_from_key(spec.key);
+  int tonic = central_tonic_midi(spec.key);
   int midi = tonic + degree_to_offset(degree);
   while (midi < spec.range_min) {
     midi += 12;
@@ -66,4 +84,3 @@ inline int degree_to_midi(const SessionSpec& spec, int degree) {
 }
 
 } // namespace ear::drills
-

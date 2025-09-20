@@ -9,8 +9,7 @@ add_library(ear_core STATIC
     src/session_engine.cpp
     src/json_bridge.cpp
     drills/chord.cpp
-    drills/interval.cpp
-    drills/melody.cpp
+    drills/note.cpp
     assistance/assistance.cpp
     scoring/scoring.cpp
 )
@@ -41,4 +40,3 @@ if(pybind11_FOUND)
 else()
     message(WARNING "pybind11 not found; skipping _earcore module build")
 endif()
-

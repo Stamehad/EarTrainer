@@ -23,7 +23,13 @@ def _print_prompt(bundle: QuestionBundle) -> None:
 
 def main() -> None:
     engine = SessionEngine()
-    spec = SessionSpec(n_questions=3, generation="adaptive", assistance_policy={"GuideTone": 1, "Replay": 3}, seed=123)
+    spec = SessionSpec(
+        drill_kind="note",
+        n_questions=3,
+        generation="adaptive",
+        assistance_policy={"GuideTone": 1, "Replay": 3},
+        seed=123,
+    )
     session_id = engine.create_session(spec)
     print("Starting ear training demo. Type 'assist KIND' for help or 'quit' to exit.\n")
 
@@ -56,13 +62,18 @@ def main() -> None:
             break
 
         expected_payload = bundle.correct_answer.payload
-        expected_value = next(iter(expected_payload.values())) if isinstance(expected_payload, dict) else expected_payload
+        if isinstance(expected_payload, dict) and expected_payload:
+            answer_key = next(iter(expected_payload.keys()))
+            expected_value = expected_payload[answer_key]
+        else:
+            answer_key = "value"
+            expected_value = expected_payload
         correct = str(user).strip().lower() == str(expected_value).strip().lower()
 
         metrics = ResultMetrics(rt_ms=1200, attempts=1, assists_used={}, first_input_rt_ms=900)
         report = ResultReport(
             question_id=bundle.question_id,
-            final_answer=TypedPayload(type=bundle.correct_answer.type, payload={"value": user}),
+            final_answer=TypedPayload(type=bundle.correct_answer.type, payload={answer_key: user}),
             correct=correct,
             metrics=metrics,
             client_info={"source": "ui_demo"},

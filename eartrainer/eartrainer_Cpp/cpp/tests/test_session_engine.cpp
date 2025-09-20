@@ -59,7 +59,7 @@ int main() {
 
   {
     auto engine1 = ear::make_engine();
-    auto spec = make_spec("interval", "eager", 123, 3);
+    auto spec = make_spec("note", "eager", 123, 3);
     auto session1 = engine1->create_session(spec);
     std::vector<std::string> seq1;
     for (int i = 0; i < spec.n_questions; ++i) {
@@ -86,7 +86,7 @@ int main() {
 
   {
     auto engine = ear::make_engine();
-    auto spec = make_spec("melody", "adaptive", 77, 2);
+    auto spec = make_spec("note", "adaptive", 77, 2);
     auto session = engine->create_session(spec);
 
     auto first_next = engine->next_question(session);
@@ -117,7 +117,7 @@ int main() {
   }
 
   {
-    auto spec = make_spec("interval", "adaptive", 555, 2);
+    auto spec = make_spec("note", "adaptive", 555, 2);
     auto engine_a = ear::make_engine();
     auto session_a = engine_a->create_session(spec);
     auto first_a = std::get<ear::QuestionBundle>(engine_a->next_question(session_a));
@@ -170,4 +170,3 @@ int main() {
   std::cout << "Ear Trainer core tests passed" << std::endl;
   return 0;
 }
-

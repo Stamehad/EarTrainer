@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 @dataclass
 class SessionSpec:
     version: str = "v1"
-    drill_kind: str = "interval"
+    drill_kind: str = "note"
     key: str = "C major"
     range: List[int] = field(default_factory=lambda: [48, 72])
     tempo_bpm: Optional[int] = None
@@ -29,7 +29,7 @@ class SessionSpec:
     def from_json(cls, data: Dict[str, Any]) -> "SessionSpec":
         return cls(
             version=data.get("version", "v1"),
-            drill_kind=data["drill_kind"],
+            drill_kind=data.get("drill_kind", "note"),
             key=data.get("key", "C major"),
             range=list(data.get("range", [48, 72])),
             tempo_bpm=data.get("tempo_bpm"),
@@ -198,4 +198,3 @@ class SessionSummary:
             by_category=list(data.get("by_category", [])),
             results=list(data.get("results", [])),
         )
-
