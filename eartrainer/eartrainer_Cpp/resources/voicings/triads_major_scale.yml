@@ -1,0 +1,28 @@
+triads:
+  major:
+    - offsets: [0, 2, 4, 7]
+      description: "Root position with octave doubling"
+    - offsets: [-3, 0, 2]
+      description: "First inversion with low fifth"
+    - offsets: [2, 4, 7]
+      description: "Second inversion"
+  minor:
+    - offsets: [0, 2, 4, 7]
+      description: "Root position with octave doubling"
+    - offsets: [-3, 0, 2]
+      description: "First inversion with low fifth"
+    - offsets: [2, 4, 7]
+      description: "Second inversion"
+  diminished:
+    - offsets: [0, 2, 4, 7]
+      description: "Root position with octave doubling"
+    - offsets: [-3, 0, 2]
+      description: "First inversion with low fifth"
+    - offsets: [2, 4, 7]
+      description: "Second inversion"
+metadata:
+  tonic_reference: "relative scale degrees (0 = chord root, +/-7 per octave)"
+  scale_context: "major"
+  notes:
+    - "Offsets are added to the sampled chord root degree and converted to MIDI using the diatonic mapper."
+    - "This file mirrors the core C++ voicing map; keep both in sync when adding instruments or qualities."

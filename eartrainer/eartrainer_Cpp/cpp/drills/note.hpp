@@ -12,6 +12,7 @@ public:
 
 private:
   std::optional<int> last_degree_;
+  std::optional<int> last_midi_;
 };
 
 class NoteDrill : public DrillModule {
@@ -20,4 +21,3 @@ public:
 };
 
 } // namespace ear
-

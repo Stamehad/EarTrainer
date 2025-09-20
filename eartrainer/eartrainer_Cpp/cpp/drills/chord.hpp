@@ -10,6 +10,7 @@ public:
 
 private:
   std::optional<int> last_degree_;
+  std::optional<int> last_voicing_;
 };
 
 class ChordDrill : public DrillModule {

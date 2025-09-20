@@ -28,7 +28,7 @@ std::vector<int> base_degrees() {
 
 bool avoid_repetition(const SessionSpec& spec) {
   if (!spec.sampler_params.contains("avoid_repeat")) {
-    return false;
+    return true;
   }
   return spec.sampler_params["avoid_repeat"].get<bool>();
 }
@@ -57,8 +57,29 @@ AbstractSample NoteSampler::next(const SessionSpec& spec, std::uint64_t& rng_sta
   int degree = pick_degree(spec, rng_state, last_degree_);
   last_degree_ = degree;
 
+  int span = 12;
+  if (spec.sampler_params.contains("note_range_semitones")) {
+    span = std::max(1, spec.sampler_params["note_range_semitones"].get<int>());
+  }
+
+  auto candidates = drills::midi_candidates_for_degree(spec, degree, span);
+  int midi = drills::central_tonic_midi(spec.key) + drills::degree_to_offset(degree);
+  if (!candidates.empty()) {
+    if (avoid_repetition(spec) && last_midi_.has_value() && candidates.size() > 1) {
+      candidates.erase(std::remove(candidates.begin(), candidates.end(), last_midi_.value()),
+                       candidates.end());
+      if (candidates.empty()) {
+        candidates = drills::midi_candidates_for_degree(spec, degree, span);
+      }
+    }
+    int choice = rand_int(rng_state, 0, static_cast<int>(candidates.size()) - 1);
+    midi = candidates[static_cast<std::size_t>(choice)];
+  }
+  last_midi_ = midi;
+
   nlohmann::json data = nlohmann::json::object();
   data["degree"] = degree;
+  data["midi"] = midi;
   return AbstractSample{"note", data};
 }
 
@@ -66,7 +87,8 @@ DrillModule::DrillOutput NoteDrill::make_question(const SessionSpec& spec,
                                                   const AbstractSample& sample) {
   int degree = sample.degrees["degree"].get<int>();
   int tonic_midi = drills::central_tonic_midi(spec.key);
-  int midi = drills::degree_to_midi(spec, degree);
+  int midi = sample.degrees.contains("midi") ? sample.degrees["midi"].get<int>()
+                                              : drills::degree_to_midi(spec, degree);
 
   nlohmann::json q_payload = nlohmann::json::object();
   q_payload["degree"] = degree;

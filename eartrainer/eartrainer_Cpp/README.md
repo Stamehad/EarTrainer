@@ -19,6 +19,7 @@ Key components:
 - `cpp/drills/` – samplers + drill modules for note and chord drills.
 - `cpp/tests/` – acceptance-style regression tests (no external framework).
 - `python/eartrainer/` – dataclasses, wrapper, and `ui_demo.py` CLI.
+- `resources/voicings/` – reference voicing data used by the C++ chord drill.
 
 ## Building the C++ core
 

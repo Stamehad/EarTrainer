@@ -4,8 +4,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstdlib>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace ear::drills {
 
@@ -71,16 +75,65 @@ inline int clamp_to_range(int midi, int min, int max) {
   return std::max(min, std::min(max, midi));
 }
 
-inline int degree_to_midi(const SessionSpec& spec, int degree) {
+inline std::pair<int, int> relative_bounds(const SessionSpec& spec, int semitone_span) {
+  int tonic = central_tonic_midi(spec.key);
+  int lower = std::max(0, tonic - semitone_span);
+  int upper = std::min(127, tonic + semitone_span);
+  return {lower, upper};
+}
+
+inline std::vector<int> midi_candidates_for_degree(const SessionSpec& spec, int degree,
+                                                   int semitone_span) {
+  auto bounds = relative_bounds(spec, semitone_span);
+  const int lower = bounds.first;
+  const int upper = bounds.second;
+
   int tonic = central_tonic_midi(spec.key);
   int midi = tonic + degree_to_offset(degree);
-  while (midi < spec.range_min) {
-    midi += 12;
-  }
-  while (midi > spec.range_max) {
+  while (midi > upper) {
     midi -= 12;
   }
-  return clamp_to_range(midi, spec.range_min, spec.range_max);
+  while (midi < lower) {
+    midi += 12;
+  }
+
+  std::vector<int> candidates;
+  for (int candidate = midi; candidate >= lower; candidate -= 12) {
+    candidates.push_back(candidate);
+  }
+  for (int candidate = midi + 12; candidate <= upper; candidate += 12) {
+    candidates.push_back(candidate);
+  }
+
+  std::sort(candidates.begin(), candidates.end());
+  candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+  return candidates;
+}
+
+inline int degree_to_midi(const SessionSpec& spec, int degree) {
+  int span = 12;
+  if (spec.sampler_params.contains("note_range_semitones")) {
+    span = std::max(span, spec.sampler_params["note_range_semitones"].get<int>());
+  }
+  if (spec.sampler_params.contains("chord_range_semitones")) {
+    span = std::max(span, spec.sampler_params["chord_range_semitones"].get<int>());
+  }
+  span = std::max(span, 1);
+
+  auto candidates = midi_candidates_for_degree(spec, degree, span);
+  if (!candidates.empty()) {
+    int base = central_tonic_midi(spec.key) + degree_to_offset(degree);
+    auto it = std::min_element(candidates.begin(), candidates.end(),
+                               [&](int lhs, int rhs) {
+                                 return std::abs(lhs - base) < std::abs(rhs - base);
+                               });
+    return *it;
+  }
+
+  int tonic = central_tonic_midi(spec.key);
+  int midi = tonic + degree_to_offset(degree);
+  midi = clamp_to_range(midi, 0, 127);
+  return midi;
 }
 
 } // namespace ear::drills
