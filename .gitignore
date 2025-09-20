@@ -13,3 +13,26 @@ storage/data/
 codemap.md
 ear_training_modules.md
 melody_sampler_demo.ipynb
+
+# C++ core build artifacts (eartrainer_Cpp)
+/eartrainer/eartrainer_Cpp/build/
+/eartrainer/eartrainer_Cpp/**/CMakeFiles/
+/eartrainer/eartrainer_Cpp/**/CMakeCache.txt
+/eartrainer/eartrainer_Cpp/**/cmake_install.cmake
+/eartrainer/eartrainer_Cpp/**/Makefile
+/eartrainer/eartrainer_Cpp/**/*.o
+/eartrainer/eartrainer_Cpp/**/*.a
+/eartrainer/eartrainer_Cpp/**/*.so
+/eartrainer/eartrainer_Cpp/**/*.dylib
+
+# Python caches and egg-info
+*.egg-info/
+**/.pytest_cache/
+**/__pycache__/
+
+# Jupyter checkpoints
+**/.ipynb_checkpoints/
+
+# IDE settings
+.vscode/
+.idea/

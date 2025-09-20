@@ -1,0 +1,23 @@
+#pragma once
+
+#include "ear/session_engine.hpp"
+
+namespace ear::bridge {
+
+nlohmann::json to_json(const SessionSpec& spec);
+SessionSpec session_spec_from_json(const nlohmann::json& json_spec);
+
+nlohmann::json to_json(const QuestionBundle& bundle);
+QuestionBundle question_bundle_from_json(const nlohmann::json& json_bundle);
+
+nlohmann::json to_json(const AssistBundle& bundle);
+AssistBundle assist_bundle_from_json(const nlohmann::json& json_bundle);
+
+nlohmann::json to_json(const ResultReport& report);
+ResultReport result_report_from_json(const nlohmann::json& json_report);
+
+nlohmann::json to_json(const SessionSummary& summary);
+SessionSummary session_summary_from_json(const nlohmann::json& json_summary);
+
+} // namespace ear::bridge
+

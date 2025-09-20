@@ -1,0 +1,5 @@
+cmake
+pybind11
+pytest
+setuptools
+wheel
