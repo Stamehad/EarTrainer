@@ -13,3 +13,32 @@ storage/data/
 codemap.md
 ear_training_modules.md
 melody_sampler_demo.ipynb
+
+# Keep C++ work-in-progress local on main
+eartrainer/eartrainer_Cpp/
+
+# Drop stale docs folder
+docs/
+
+# Build artifacts (general/CMake)
+**/build/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/cmake_install.cmake
+**/Makefile
+**/*.o
+**/*.a
+**/*.so
+**/*.dylib
+
+# Python caches and test artifacts
+**/.pytest_cache/
+**/__pycache__/
+*.egg-info/
+
+# Jupyter
+**/.ipynb_checkpoints/
+
+# IDE settings
+.vscode/
+.idea/
