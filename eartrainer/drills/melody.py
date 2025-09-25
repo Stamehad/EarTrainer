@@ -156,7 +156,9 @@ class MelodicDictationDrill(BaseDrill):
         unduck = ui_callbacks.get("unduck_drone", lambda *_a, **_k: None)
 
         correct_total = 0
+        asked_total = 0
         per_degree: Dict[str, Dict[str, int]] = {}
+        stopped = False
 
         for i in range(1, num_questions + 1):
             maybe_restart_drone()
@@ -182,6 +184,11 @@ class MelodicDictationDrill(BaseDrill):
                 while True:
                     ans = ask(f"Enter degree {part_idx}/{len(truth_list)} (1–7), or r/s/c/p/t for help: ")
                     a = ans.strip().lower()
+                    # Allow graceful stop mid-drill (GUI Stop maps to 'q')
+                    if a in {"q", "quit", "stop"}:
+                        stopped = True
+                        activity("stopped")
+                        break
                     if a == "r":
                         with pause_timer():
                             midi_obj = q.get("midi")
@@ -239,12 +246,17 @@ class MelodicDictationDrill(BaseDrill):
                     t_elapsed_ms = max(0, int(round(gross_ms - paused_ms)))
                     meta = bucket.setdefault("meta", {})
                     meta["time_ms_total"] = int(meta.get("time_ms_total", 0)) + t_elapsed_ms
+                    asked_total += 1
                     # Reset timers for next part
                     paused_ms = 0.0
                     t_part = time.monotonic()
                     break
 
+                if stopped:
+                    break
             # small delay before next question
+            if stopped:
+                break
             self.synth.sleep_ms(self.ctx.test_note_delay_ms)
-
-        return DrillResult(total=num_questions * self._seq_len, correct=correct_total, per_degree=per_degree)
+        total_out = asked_total if stopped else num_questions * self._seq_len
+        return DrillResult(total=total_out, correct=correct_total, per_degree=per_degree)
