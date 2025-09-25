@@ -119,6 +119,10 @@ sets:
         length: 3
         inter_note_gap_ms: 300
         questions: 50
+      - drill: "melodic"
+        length: 4
+        inter_note_gap_ms: 300
+        questions: 50
 
   notes_then_chords:
     name: "Notes(5) → Chords(5)"
@@ -135,4 +139,15 @@ sets:
         questions: 5
       - drill: "chord"
         questions: 5
+
+  Test:
+    name: "Degrees, Melodic intervals and melodies"
+    description: "Practice melodic intervals and melodies"
+    rest_ms: 0
+    steps:
+      - drill: "melodic"
+        length: 4
+        inter_note_gap_ms: 300
+        questions: 3
+
 
