@@ -12,6 +12,7 @@ add_library(ear_core STATIC
     drills/interval.cpp
     drills/melody.cpp
     drills/note.cpp
+    drills/pathways.cpp
     assistance/assistance.cpp
     scoring/scoring.cpp
 )
