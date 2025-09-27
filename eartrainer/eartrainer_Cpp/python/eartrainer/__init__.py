@@ -12,6 +12,7 @@ from .models import (
     TypedPayload,
 )
 from .session_engine import SessionEngine
+from .midi import SimpleMidiPlayer
 
 __all__ = [
     "AssistBundle",
@@ -24,5 +25,5 @@ __all__ = [
     "SessionSpec",
     "SessionSummary",
     "TypedPayload",
+    "SimpleMidiPlayer",
 ]
-
