@@ -13,6 +13,7 @@ storage/data/
 codemap.md
 ear_training_modules.md
 melody_sampler_demo.ipynb
+temp.md
 
 # C++ core build artifacts (eartrainer_Cpp)
 /eartrainer/eartrainer_Cpp/build/

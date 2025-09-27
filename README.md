@@ -100,3 +100,57 @@ Common tweaks: drill length, allowed degrees, key/scale, drone template/volume, 
 ## About the C++ Core (WIP)
 
 A cross‑platform C++ SessionEngine (with Python bindings) is being developed on a separate local branch to support future integrations (e.g., iOS/Android). It is not part of `main` yet and does not affect the Python CLI/GUI.
+
+## C++ Session Engine (eartrainer_Cpp/cpp) – Summary
+
+The C++ session engine provides a deterministic, embeddable core for generating ear‑training sessions. It separates concerns cleanly: lightweight Samplers produce theoretical “samples” (degrees/intervals/voicings), DrillModules turn those into UI‑ready QuestionBundles with PromptPlans (what to play), and the SessionEngine orchestrates session state, assistance, and summaries. The design is UI‑agnostic (typed JSON payloads), reproducible (seeded RNG), side‑effect free between API calls, and easily bound to Python via pybind11.
+
+- eartrainer/eartrainer_Cpp/cpp/CMakeLists.txt
+  - Build config for the static core library, unit test binary, and optional pybind11 module `_earcore`.
+
+- eartrainer/eartrainer_Cpp/cpp/include/ear/types.hpp
+  - Core data types: `SessionSpec`, `Note`, `PromptPlan`, `TypedPayload`, `QuestionBundle`, `AssistBundle`, `ResultReport` (+ nested `Metrics`), and `SessionSummary`.
+
+- eartrainer/eartrainer_Cpp/cpp/include/ear/session_engine.hpp
+  - Engine interface: `create_session`, `next_question`, `assist`, `submit_result`, `capabilities`; factory `make_engine()` returning a concrete implementation.
+
+- eartrainer/eartrainer_Cpp/cpp/src/session_engine.cpp
+  - Implements `SessionEngine` (session lifecycle, eager/adaptive generation, idempotent submit, capability listing). Key helpers: `make_sampler`, `make_drill`, `ensure_question`, `materialise_all`, `build_summary`.
+
+- eartrainer/eartrainer_Cpp/cpp/src/json_bridge.hpp/.cpp
+  - JSON adapters for all public types. Functions: `to_json`/`*_from_json` for `SessionSpec`, `QuestionBundle`, `AssistBundle`, `ResultReport`, `SessionSummary`; includes `PromptPlan` and `TypedPayload` conversions.
+
+- eartrainer/eartrainer_Cpp/cpp/src/bindings.cpp
+  - pybind11 module `_earcore` exposing `SessionEngine` to Python (`create_session`, `next_question`, `assist`, `submit_result`, `capabilities`). Includes Python↔JSON conversion utilities.
+
+- eartrainer/eartrainer_Cpp/cpp/src/rng.hpp
+  - Simple xorshift RNG utilities: `advance_rng`, `rand_int`, `rand_unit` used for deterministic sampling.
+
+- eartrainer/eartrainer_Cpp/cpp/drills/drill.hpp
+  - Abstractions: `Sampler::next` generates `AbstractSample`; `DrillModule::make_question` returns `DrillOutput` (typed question, correct answer, optional `PromptPlan`, `ui_hints`).
+
+- eartrainer/eartrainer_Cpp/cpp/drills/common.hpp
+  - Music theory helpers and MIDI mapping: `normalize_degree_index`, `degree_to_offset`, `tonic_from_key`, `central_tonic_midi`, range helpers, `midi_candidates_for_degree`, `degree_to_midi`.
+
+- eartrainer/eartrainer_Cpp/cpp/drills/note.hpp/.cpp
+  - `NoteSampler` (degree/midi selection with repeat‑avoidance and allowed filters) and `NoteDrill` (single‑note prompt, answer kind `degree`, assists include `Replay`). Main methods: `NoteSampler::next`, `NoteDrill::make_question`.
+
+- eartrainer/eartrainer_Cpp/cpp/drills/interval.hpp/.cpp
+  - `IntervalSampler` (pick bottom degree and size with optional filters; compute MIDI and orientation) and `IntervalDrill` (two‑note prompt; answer kind `interval_class`; assists `Replay`, `GuideTone`). Main: `IntervalSampler::next`, `IntervalDrill::make_question`.
+
+- eartrainer/eartrainer_Cpp/cpp/drills/melody.hpp/.cpp
+  - `MelodySampler` (weighted diatonic step model with musical modifiers and recent‑sequence suppression) and `MelodyDrill` (count‑in and multi‑note prompt; answer kind `melody_notes`; assists `Replay`, `TempoDown`). Main: `MelodySampler::next`, `MelodyDrill::make_question`.
+
+- eartrainer/eartrainer_Cpp/cpp/drills/chord.hpp/.cpp
+  - `ChordSampler` (select degree/quality/voicing with simple policies) and `ChordDrill` (bass + right‑hand voicing realization near target registers; answer kind `chord_degree`; assists `Replay`, `GuideTone`). Main: `ChordSampler::next`, `ChordDrill::make_question`.
+
+- eartrainer/eartrainer_Cpp/cpp/assistance/assistance.hpp/.cpp
+  - Assistance generation: returns `AssistBundle` for `Replay`, `GuideTone`, `TempoDown`, `PathwayHint`, optionally altering `PromptPlan` and adding `ui_delta` messages. Main: `assistance::make_assist`.
+
+- eartrainer/eartrainer_Cpp/cpp/scoring/scoring.hpp/.cpp
+  - Scoring utilities used for summaries: `score_question`, `aggregate_accuracy`, `average_response_time` with simple latency/assist penalties.
+
+- eartrainer/eartrainer_Cpp/cpp/tests/test_session_engine.cpp
+  - Minimal tests: determinism under seeded eager generation, assist/submit idempotence, RNG side‑effect checks, and JSON round‑trip of public types.
+
+Note: The directory `include/nlohmann/json.hpp` contains the vendored JSON library used for all typed JSON payloads.
