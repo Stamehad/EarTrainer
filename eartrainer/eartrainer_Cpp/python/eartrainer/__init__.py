@@ -2,8 +2,8 @@
 
 from .models import (
     AssistBundle,
-    Note,
-    PromptPlan,
+    MidiClip,
+    Prompt,
     QuestionBundle,
     ResultMetrics,
     ResultReport,
@@ -16,8 +16,8 @@ from .midi import SimpleMidiPlayer
 
 __all__ = [
     "AssistBundle",
-    "Note",
-    "PromptPlan",
+    "MidiClip",
+    "Prompt",
     "QuestionBundle",
     "ResultMetrics",
     "ResultReport",

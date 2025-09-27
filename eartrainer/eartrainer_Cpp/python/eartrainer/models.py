@@ -56,48 +56,74 @@ class TypedPayload:
 
 
 @dataclass
-class Note:
-    pitch: int
-    dur_ms: int
+class MidiEvent:
+    t: int
+    type: str
+    note: Optional[int] = None
     vel: Optional[int] = None
-    tie: Optional[bool] = None
-
-    def to_json(self) -> Dict[str, Any]:
-        return {"pitch": self.pitch, "dur_ms": self.dur_ms, "vel": self.vel, "tie": self.tie}
+    control: Optional[int] = None
+    value: Optional[int] = None
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> "Note":
+    def from_json(cls, data: Dict[str, Any]) -> "MidiEvent":
         return cls(
-            pitch=int(data["pitch"]),
-            dur_ms=int(data["dur_ms"]),
+            t=int(data["t"]),
+            type=str(data["type"]),
+            note=data.get("note"),
             vel=data.get("vel"),
-            tie=data.get("tie"),
+            control=data.get("control"),
+            value=data.get("value"),
         )
 
 
 @dataclass
-class PromptPlan:
-    modality: str
-    notes: List[Note]
-    tempo_bpm: Optional[int] = None
-    count_in: Optional[bool] = None
-
-    def to_json(self) -> Dict[str, Any]:
-        return {
-            "modality": self.modality,
-            "notes": [note.to_json() for note in self.notes],
-            "tempo_bpm": self.tempo_bpm,
-            "count_in": self.count_in,
-        }
+class MidiTrack:
+    name: str
+    channel: int
+    program: int
+    events: List[MidiEvent]
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> "PromptPlan":
+    def from_json(cls, data: Dict[str, Any]) -> "MidiTrack":
         return cls(
-            modality=data["modality"],
-            notes=[Note.from_json(n) for n in data.get("notes", [])],
-            tempo_bpm=data.get("tempo_bpm"),
-            count_in=data.get("count_in"),
+            name=str(data.get("name", "track")),
+            channel=int(data.get("channel", 0)),
+            program=int(data.get("program", 0)),
+            events=[MidiEvent.from_json(ev) for ev in data.get("events", [])],
         )
+
+
+@dataclass
+class MidiClip:
+    ppq: int
+    tempo_bpm: int
+    length_ticks: int
+    tracks: List[MidiTrack]
+    format: str = "midi-clip/v1"
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "MidiClip":
+        return cls(
+            ppq=int(data.get("ppq", 480)),
+            tempo_bpm=int(data.get("tempo_bpm", 90)),
+            length_ticks=int(data.get("length_ticks", 0)),
+            tracks=[MidiTrack.from_json(t) for t in data.get("tracks", [])],
+            format=str(data.get("format", "midi-clip/v1")),
+        )
+
+
+@dataclass
+class Prompt:
+    modality: str
+    midi_clip: Optional[MidiClip] = None
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "Prompt":
+        modality = str(data.get("modality", ""))
+        clip = None
+        if modality == "midi-clip":
+            clip = MidiClip.from_json(data.get("midi_clip", {}))
+        return cls(modality=modality, midi_clip=clip)
 
 
 @dataclass
@@ -105,7 +131,7 @@ class QuestionBundle:
     question_id: str
     question: TypedPayload
     correct_answer: TypedPayload
-    prompt: Optional[PromptPlan]
+    prompt: Optional[Prompt]
     ui_hints: Dict[str, Any]
 
     def to_json(self) -> Dict[str, Any]:
@@ -120,7 +146,7 @@ class QuestionBundle:
     @classmethod
     def from_json(cls, data: Dict[str, Any]) -> "QuestionBundle":
         prompt_data = data.get("prompt")
-        prompt = PromptPlan.from_json(prompt_data) if isinstance(prompt_data, dict) else None
+        prompt = Prompt.from_json(prompt_data) if isinstance(prompt_data, dict) else None
         return cls(
             question_id=data["question_id"],
             question=TypedPayload.from_json(data["question"]),
@@ -134,7 +160,7 @@ class QuestionBundle:
 class AssistBundle:
     question_id: str
     kind: str
-    prompt: Optional[PromptPlan]
+    prompt: Optional[Prompt]
     ui_delta: Dict[str, Any]
 
     @classmethod
@@ -143,7 +169,7 @@ class AssistBundle:
         return cls(
             question_id=data["question_id"],
             kind=data["kind"],
-            prompt=PromptPlan.from_json(prompt) if isinstance(prompt, dict) else None,
+            prompt=Prompt.from_json(prompt) if isinstance(prompt, dict) else None,
             ui_delta=dict(data.get("ui_delta", {})),
         )
 

@@ -171,8 +171,18 @@ DrillModule::DrillOutput IntervalDrill::make_question(const SessionSpec& spec,
   plan.modality = "midi";
   plan.tempo_bpm = spec.tempo_bpm;
   plan.count_in = false;
-  plan.notes.push_back({bottom_midi, 600, std::nullopt, std::nullopt});
-  plan.notes.push_back({top_midi, 600, std::nullopt, std::nullopt});
+  // Ensure the prompt sequence reflects conceptual orientation so a simple player
+  // produces the intended direction without additional UI logic.
+  std::string orientation = sample.degrees.contains("orientation")
+                                ? sample.degrees["orientation"].get<std::string>()
+                                : std::string("ascending");
+  if (orientation == "descending") {
+    plan.notes.push_back({top_midi, 600, std::nullopt, std::nullopt});
+    plan.notes.push_back({bottom_midi, 600, std::nullopt, std::nullopt});
+  } else {
+    plan.notes.push_back({bottom_midi, 600, std::nullopt, std::nullopt});
+    plan.notes.push_back({top_midi, 600, std::nullopt, std::nullopt});
+  }
 
   nlohmann::json hints = nlohmann::json::object();
   hints["answer_kind"] = "interval_class";

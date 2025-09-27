@@ -5,62 +5,129 @@
 namespace ear::bridge {
 namespace {
 
+// Convert the legacy PromptPlan (sequential notes with dur_ms) into a
+// "midi-clip" JSON object ready for direct playback.
+// Shape:
+// {
+//   "modality": "midi-clip",
+//   "midi_clip": {
+//     "format": "midi-clip/v1",
+//     "ppq": 480,
+//     "tempo_bpm": 90,
+//     "length_ticks": 960,
+//     "tracks": [{ "name":"prompt", "channel":0, "program":0,
+//                   "events":[{"t":0,"type":"note_on","note":60,"vel":90},
+//                              {"t":480,"type":"note_off","note":60}, ...]}]
+//   }
+// }
 nlohmann::json to_json(const PromptPlan& plan) {
+  const int tempo = plan.tempo_bpm.has_value() ? plan.tempo_bpm.value() : 90;
+  const int ppq = 480;
+  const double ticks_per_ms = (tempo * ppq) / 60000.0; // ticks = dur_ms * ticks_per_ms
+
+  nlohmann::json clip = nlohmann::json::object();
+  clip["format"] = "midi-clip/v1";
+  clip["ppq"] = ppq;
+  clip["tempo_bpm"] = tempo;
+
+  nlohmann::json track = nlohmann::json::object();
+  track["name"] = "prompt";
+  track["channel"] = 0;
+  track["program"] = 0; // GM Acoustic Grand
+  nlohmann::json events = nlohmann::json::array();
+
+  int t = 0; // timeline in ticks
+  std::vector<int> held;
+
+  if (plan.modality == "midi_block") {
+    // Simultaneous note_on at t=0; individual offs based on dur_ms
+    for (const auto& n : plan.notes) {
+      int dur_ticks = static_cast<int>(std::lround(n.dur_ms * ticks_per_ms));
+      if (n.pitch < 0 || dur_ticks <= 0) {
+        continue;
+      }
+      int vel = n.vel.has_value() ? n.vel.value() : 90;
+      nlohmann::json on = nlohmann::json::object();
+      on["t"] = 0;
+      on["type"] = "note_on";
+      on["note"] = n.pitch;
+      on["vel"] = std::max(0, std::min(127, vel));
+      events.push_back(on);
+
+      nlohmann::json off = nlohmann::json::object();
+      off["t"] = std::max(1, dur_ticks);
+      off["type"] = "note_off";
+      off["note"] = n.pitch;
+      events.push_back(off);
+    }
+    t = 0;
+    // length ticks = max off time
+    int max_off = 0;
+    for (std::size_t i = 0; i < events.size(); ++i) {
+      const auto& ev = events[i];
+      if (ev["type"].get<std::string>() == "note_off") {
+        max_off = std::max(max_off, ev["t"].get<int>());
+      }
+    }
+    t = max_off;
+  } else {
+    for (const auto& n : plan.notes) {
+      int dur_ticks = static_cast<int>(std::lround(n.dur_ms * ticks_per_ms));
+      if (n.pitch < 0 || dur_ticks <= 0) {
+        t += std::max(0, dur_ticks);
+        continue;
+      }
+      int vel = n.vel.has_value() ? n.vel.value() : 90;
+      nlohmann::json on = nlohmann::json::object();
+      on["t"] = t;
+      on["type"] = "note_on";
+      on["note"] = n.pitch;
+      on["vel"] = std::max(0, std::min(127, vel));
+      events.push_back(on);
+
+      bool tie_forward = n.tie.has_value() && n.tie.value();
+      if (!tie_forward) {
+        nlohmann::json off = nlohmann::json::object();
+        off["t"] = t + std::max(1, dur_ticks);
+        off["type"] = "note_off";
+        off["note"] = n.pitch;
+        events.push_back(off);
+      } else {
+        held.push_back(n.pitch);
+      }
+      t += std::max(1, dur_ticks);
+    }
+    // Ensure all held notes are released at the end
+    for (int pitch : held) {
+      nlohmann::json off = nlohmann::json::object();
+      off["t"] = t;
+      off["type"] = "note_off";
+      off["note"] = pitch;
+      events.push_back(off);
+    }
+  }
+
+  track["events"] = events;
+  clip["length_ticks"] = t;
+  nlohmann::json tracks = nlohmann::json::array();
+  tracks.push_back(track);
+  clip["tracks"] = tracks;
+
   nlohmann::json json_plan = nlohmann::json::object();
-  json_plan["modality"] = plan.modality;
-  nlohmann::json notes = nlohmann::json::array();
-  for (const auto& note : plan.notes) {
-    nlohmann::json note_json = nlohmann::json::object();
-    note_json["pitch"] = note.pitch;
-    note_json["dur_ms"] = note.dur_ms;
-    if (note.vel.has_value()) {
-      note_json["vel"] = note.vel.value();
-    } else {
-      note_json["vel"] = nullptr;
-    }
-    if (note.tie.has_value()) {
-      note_json["tie"] = note.tie.value();
-    } else {
-      note_json["tie"] = nullptr;
-    }
-    notes.push_back(note_json);
-  }
-  json_plan["notes"] = notes;
-  if (plan.tempo_bpm.has_value()) {
-    json_plan["tempo_bpm"] = plan.tempo_bpm.value();
-  } else {
-    json_plan["tempo_bpm"] = nullptr;
-  }
-  if (plan.count_in.has_value()) {
-    json_plan["count_in"] = plan.count_in.value();
-  } else {
-    json_plan["count_in"] = nullptr;
-  }
+  json_plan["modality"] = "midi-clip";
+  json_plan["midi_clip"] = clip;
   return json_plan;
 }
 
 PromptPlan prompt_from_json(const nlohmann::json& json_plan) {
+  // Legacy loader retained only for round-trips if needed. Not used by Python UI.
   PromptPlan plan;
-  plan.modality = json_plan["modality"].get<std::string>();
-  const auto& notes = json_plan["notes"].get_array();
-  for (const auto& note_json : notes) {
-    Note note;
-    note.pitch = note_json["pitch"].get<int>();
-    note.dur_ms = note_json["dur_ms"].get<int>();
-    if (!note_json["vel"].is_null()) {
-      note.vel = note_json["vel"].get<int>();
-    }
-    if (!note_json["tie"].is_null()) {
-      note.tie = note_json["tie"].get<bool>();
-    }
-    plan.notes.push_back(note);
+  if (json_plan.contains("modality")) {
+    plan.modality = json_plan["modality"].get<std::string>();
+  } else {
+    plan.modality = "midi-clip";
   }
-  if (!json_plan["tempo_bpm"].is_null()) {
-    plan.tempo_bpm = json_plan["tempo_bpm"].get<int>();
-  }
-  if (!json_plan["count_in"].is_null()) {
-    plan.count_in = json_plan["count_in"].get<bool>();
-  }
+  // We no longer reconstruct sequential notes from midi-clip here.
   return plan;
 }
 
@@ -243,4 +310,3 @@ SessionSummary session_summary_from_json(const nlohmann::json& json_summary) {
 }
 
 } // namespace ear::bridge
-

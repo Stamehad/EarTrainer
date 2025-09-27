@@ -221,7 +221,9 @@ ChordDrill::make_question(const SessionSpec& spec, const AbstractSample& sample)
   }
 
   PromptPlan plan;
-  plan.modality = "midi";
+  // Emit a block chord prompt: simultaneous note_on events encoded via midi-clip.
+  // We indicate this intent by using a dedicated modality the JSON bridge recognizes.
+  plan.modality = "midi_block";
   plan.tempo_bpm = spec.tempo_bpm;
   plan.count_in = false;
 
@@ -247,7 +249,9 @@ ChordDrill::make_question(const SessionSpec& spec, const AbstractSample& sample)
   nlohmann::json realised_degrees = nlohmann::json::array();
   midi_tones.push_back(bass_midi);
   realised_degrees.push_back(bass_degree);
-  plan.notes.push_back({bass_midi, 500, std::nullopt, std::nullopt});
+  // Duration for the block chord in ms
+  constexpr int kChordDurMs = 900;
+  plan.notes.push_back({bass_midi, kChordDurMs, std::nullopt, std::nullopt});
 
   std::vector<int> base_right_midi;
   base_right_midi.reserve(right_degrees.size());
@@ -283,7 +287,8 @@ ChordDrill::make_question(const SessionSpec& spec, const AbstractSample& sample)
     right_midi.push_back(midi);
     realised_degrees.push_back(right_degrees[i]);
     midi_tones.push_back(midi);
-    plan.notes.push_back({midi, 400, std::nullopt, std::nullopt});
+    // For block chord prompt, all notes share the same onset; durations can be uniform.
+    plan.notes.push_back({midi, kChordDurMs, std::nullopt, std::nullopt});
     previous = midi;
   }
 
