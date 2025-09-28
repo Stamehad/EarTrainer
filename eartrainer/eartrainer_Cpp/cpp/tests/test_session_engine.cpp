@@ -1,8 +1,10 @@
 #include "ear/session_engine.hpp"
 #include "ear/types.hpp"
+#include "scoring/scoring.hpp"
 
 #include "../src/json_bridge.hpp"
 
+#include <cmath>
 #include <iostream>
 #include <variant>
 #include <vector>
@@ -214,6 +216,88 @@ int main() {
       suite.require(ear::bridge::to_json(round_summary) == json_summary,
                     "SessionSummary JSON round-trip failed");
     }
+  }
+
+  {
+    ear::scoring::MelodyScoringConfig cfg;
+    cfg.tempo_min = 60.0;
+    cfg.tempo_max = 180.0;
+    ear::scoring::MelodyScorer scorer{cfg};
+
+    ear::QuestionBundle question;
+    question.question_id = "q-test";
+    nlohmann::json payload = nlohmann::json::object();
+    nlohmann::json midi = nlohmann::json::array();
+    midi.push_back(60);
+    midi.push_back(62);
+    midi.push_back(64);
+    midi.push_back(65);
+    midi.push_back(67);
+    payload["midi"] = midi;
+
+    nlohmann::json degrees = nlohmann::json::array();
+    degrees.push_back(0);
+    degrees.push_back(1);
+    degrees.push_back(2);
+    degrees.push_back(3);
+    degrees.push_back(4);
+    payload["degrees"] = degrees;
+    question.question = ear::TypedPayload{"melody", payload};
+    question.correct_answer = ear::TypedPayload{"melody_notes", payload};
+    ear::PromptPlan prompt;
+    prompt.modality = "midi";
+    prompt.tempo_bpm = 120;
+    prompt.count_in = true;
+    prompt.notes = {
+        ear::Note{60, 400, std::nullopt, std::nullopt},
+        ear::Note{62, 400, std::nullopt, std::nullopt},
+        ear::Note{64, 400, std::nullopt, std::nullopt},
+        ear::Note{65, 400, std::nullopt, std::nullopt},
+        ear::Note{67, 400, std::nullopt, std::nullopt},
+    };
+    question.prompt = prompt;
+    question.ui_hints = nlohmann::json::object();
+
+    ear::ResultReport report;
+    report.question_id = question.question_id;
+    report.correct = true;
+    report.metrics.rt_ms = 2000;
+    report.metrics.attempts = 1;
+    report.metrics.assists_used = {};
+    report.metrics.first_input_rt_ms = 1500;
+
+    const double sn = (5.0 - 1.0) / (cfg.max_notes - 1.0);
+    const double st = (120.0 - cfg.tempo_min.value()) / (cfg.tempo_max.value() - cfg.tempo_min.value());
+    const double qd = 0.5 * sn + 0.5 * st;
+    const double sr = -0.5 * ((2.0 - cfg.response_time_min) /
+                              (cfg.response_time_max - cfg.response_time_min)) + 1.0;
+    const double expected_score = cfg.weight_response_vs_qd * sr +
+                                  (1.0 - cfg.weight_response_vs_qd) * qd;
+
+    const double score = scorer.score_question(question, report);
+    suite.require(std::abs(score - expected_score) < 1e-6,
+                  "score_question should combine Sr and QD for correct answers");
+
+    report.correct = false;
+    suite.require(std::abs(scorer.score_question(question, report)) < 1e-9,
+                  "score_question should return zero for incorrect answers");
+
+    const double target_fitness = cfg.target_success_rate * expected_score;
+    auto menu = scorer.menu_for_fitness(target_fitness, 5);
+    suite.require(!menu.empty(), "menu_for_fitness should produce entries");
+
+    bool matched = false;
+    for (const auto& entry : menu) {
+      if (entry.note_count == 5 && entry.tempo_bpm.has_value()) {
+        if (std::abs(entry.tempo_bpm.value() - 120.0) < 1e-3) {
+          matched = true;
+          suite.require(std::abs(entry.expected_score - target_fitness) < 0.05,
+                        "menu entry expected score should be close to target");
+          break;
+        }
+      }
+    }
+    suite.require(matched, "menu_for_fitness should include a matching drill option");
   }
 
   if (!suite.ok) {

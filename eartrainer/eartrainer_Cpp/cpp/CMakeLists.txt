@@ -30,7 +30,11 @@ target_include_directories(ear_core
 
 add_executable(ear_core_tests tests/test_session_engine.cpp)
 target_link_libraries(ear_core_tests PRIVATE ear_core)
-target_include_directories(ear_core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(ear_core_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/scoring
+)
 
 enable_testing()
 add_test(NAME ear_core_tests COMMAND ear_core_tests)

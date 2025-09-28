@@ -5,8 +5,8 @@ set -euo pipefail
 # Robust builder for the C++ core and Python bridge.
 #
 # Features:
-# - Optional conda activation via ET_CONDA_ENV or CONDA_DEFAULT_ENV
-# - Uses the Python from the active environment for both CMake and pip
+# - Always activates the dedicated conda env (eartrainer_cpp)
+# - Uses the Python from that environment for both CMake and pip
 # - Passes explicit Python executable to CMake to ensure correct binding
 #
 
@@ -17,18 +17,21 @@ BUILD_DIR="$SCRIPT_DIR/build"
 CPP_DIR="$SCRIPT_DIR/cpp"
 PY_DIR="$SCRIPT_DIR/python"
 
-# 1) Try to activate conda env if requested
+# 1) Activate the dedicated conda env for the C++ core (default eartrainer_cpp)
+TARGET_ENV="${ET_CONDA_ENV:-eartrainer_cpp}"
 if command -v conda >/dev/null 2>&1; then
   # shellcheck disable=SC1091
   eval "$(conda shell.bash hook)" || true
-  if [[ -n "${ET_CONDA_ENV:-}" ]]; then
-    echo "[eartrainer] Activating conda env: $ET_CONDA_ENV"
-    conda activate "$ET_CONDA_ENV" || echo "[eartrainer] Warning: failed to activate $ET_CONDA_ENV"
-  elif [[ -n "${CONDA_DEFAULT_ENV:-}" ]]; then
+  if [[ "${CONDA_DEFAULT_ENV:-}" != "$TARGET_ENV" ]]; then
+    echo "[eartrainer] Activating conda env: $TARGET_ENV"
+    if ! conda activate "$TARGET_ENV"; then
+      echo "[eartrainer] Warning: failed to activate $TARGET_ENV; continuing with current shell"
+    fi
+  else
     echo "[eartrainer] Using current conda env: $CONDA_DEFAULT_ENV"
   fi
 else
-  echo "[eartrainer] conda not found on PATH; proceeding without explicit activation"
+  echo "[eartrainer] Warning: conda not found on PATH; assuming environment already prepared"
 fi
 
 # 2) Check for cmake
