@@ -1,2 +1,0 @@
-"""Drills (OO layer stubs)."""
-

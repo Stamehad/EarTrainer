@@ -13,8 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-eartrainer = "eartrainer.app.cli:main"
-eartrainer-gui = "eartrainer.app.gui:main"
+eartrainer-gui = "eartrainer.python.gui.app:main"
 
 [build-system]
 requires = ["setuptools>=61", "wheel"]
