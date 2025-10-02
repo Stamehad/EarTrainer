@@ -300,6 +300,120 @@ int main() {
     suite.require(matched, "menu_for_fitness should include a matching drill option");
   }
 
+  {
+    auto engine = ear::make_engine();
+    auto spec = make_spec("melody", "adaptive", 4242, 2);
+    spec.adaptive = true;
+    spec.sampler_params = nlohmann::json::object();
+    nlohmann::json drills = nlohmann::json::array();
+    drills.push_back("melody");
+    drills.push_back("note");
+    spec.sampler_params["drills"] = drills;
+
+    auto session = engine->create_session(spec);
+
+    auto first_variant = engine->next_question(session);
+    auto* first_bundle = std::get_if<ear::QuestionBundle>(&first_variant);
+    suite.require(first_bundle != nullptr, "Adaptive session should yield first question");
+
+    auto first_report = make_report(*first_bundle);
+    auto first_response = engine->submit_result(session, first_report);
+    suite.require(std::holds_alternative<ear::QuestionBundle>(first_response),
+                  "Adaptive submit should return bundle until session ends");
+
+    auto second_variant = engine->next_question(session);
+    auto* second_bundle = std::get_if<ear::QuestionBundle>(&second_variant);
+    suite.require(second_bundle != nullptr, "Adaptive session should yield second question");
+
+    auto second_report = make_report(*second_bundle);
+    auto second_response = engine->submit_result(session, second_report);
+    auto* summary = std::get_if<ear::SessionSummary>(&second_response);
+    suite.require(summary != nullptr,
+                  "Adaptive session should provide summary after configured questions");
+    suite.require(summary->totals.contains("correct"),
+                  "Summary totals should contain correctness info");
+  }
+
+  {
+    auto engine = ear::make_engine();
+
+    auto spec = make_spec("melody", "adaptive", 9999, 6);
+    spec.adaptive = true;
+    spec.sampler_params = nlohmann::json::object();
+    nlohmann::json drills = nlohmann::json::array();
+    drills.push_back("melody");
+    drills.push_back("note");
+    spec.sampler_params["drills"] = drills;
+    nlohmann::json balanced = nlohmann::json::object();
+    balanced["melody"] = 1.0;
+    balanced["note"] = 1.0;
+    spec.sampler_params["weights"] = balanced;
+
+    auto session = engine->create_session(spec);
+    std::size_t melody_count = 0;
+    std::size_t note_count = 0;
+
+    for (int i = 0; i < spec.n_questions; ++i) {
+      auto next = engine->next_question(session);
+      auto* bundle = std::get_if<ear::QuestionBundle>(&next);
+      suite.require(bundle != nullptr, "Unbiased adaptive session should deliver bundle");
+      if (bundle->question.type == "melody") {
+        ++melody_count;
+      }
+      if (bundle->question.type == "note") {
+        ++note_count;
+      }
+      auto report = make_report(*bundle);
+      engine->submit_result(session, report);
+    }
+
+    suite.require(melody_count > 0 && note_count > 0,
+                  "Balanced weights should sample multiple drill kinds");
+
+    auto debug_json = engine->debug_state(session);
+    suite.require(debug_json.contains("drill_counts"),
+                  "Debug state should expose drill counts");
+    const auto& counts = debug_json["drill_counts"].get_object();
+    suite.require(static_cast<std::size_t>(counts.at("melody").get<int>()) == melody_count,
+                  "Debug counts should match sampled melody count");
+    suite.require(static_cast<std::size_t>(counts.at("note").get<int>()) == note_count,
+                  "Debug counts should match sampled note count");
+  }
+
+  {
+    auto engine = ear::make_engine();
+
+    auto spec = make_spec("melody", "adaptive", 7777, 4);
+    spec.adaptive = true;
+    spec.sampler_params = nlohmann::json::object();
+    nlohmann::json drills = nlohmann::json::array();
+    drills.push_back("melody");
+    drills.push_back("note");
+    spec.sampler_params["drills"] = drills;
+    nlohmann::json biased = nlohmann::json::object();
+    biased["melody"] = 5.0;
+    biased["note"] = 0.0;
+    spec.sampler_params["weights"] = biased;
+
+    auto session = engine->create_session(spec);
+
+    for (int i = 0; i < spec.n_questions; ++i) {
+      auto next = engine->next_question(session);
+      auto* bundle = std::get_if<ear::QuestionBundle>(&next);
+      suite.require(bundle != nullptr, "Biased adaptive session should deliver bundle");
+      suite.require(bundle->question.type == "melody",
+                    "Zero weight drills should not be selected");
+      auto report = make_report(*bundle);
+      engine->submit_result(session, report);
+    }
+
+    auto debug_json = engine->debug_state(session);
+    const auto& counts = debug_json["drill_counts"].get_object();
+    auto it = counts.find("note");
+    suite.require(it == counts.end() || it->second.get<int>() == 0,
+                  "Debug counts should reflect zero-weight drill usage");
+  }
+
   if (!suite.ok) {
     std::cerr << "Ear Trainer core tests FAILED" << std::endl;
     return 1;

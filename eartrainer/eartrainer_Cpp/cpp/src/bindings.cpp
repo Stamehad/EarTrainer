@@ -114,6 +114,10 @@ public:
     return json_to_py(engine_->capabilities());
   }
 
+  py::object debug_state(const std::string& session_id) {
+    return json_to_py(engine_->debug_state(session_id));
+  }
+
 private:
   std::unique_ptr<ear::SessionEngine> engine_;
 };
@@ -127,6 +131,6 @@ PYBIND11_MODULE(_earcore, m) {
       .def("next_question", &PySessionEngine::next_question)
       .def("assist", &PySessionEngine::assist)
       .def("submit_result", &PySessionEngine::submit_result)
-      .def("capabilities", &PySessionEngine::capabilities);
+      .def("capabilities", &PySessionEngine::capabilities)
+      .def("debug_state", &PySessionEngine::debug_state);
 }
-

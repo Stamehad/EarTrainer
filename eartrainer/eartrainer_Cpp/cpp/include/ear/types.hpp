@@ -22,6 +22,7 @@ struct SessionSpec {
   std::unordered_map<std::string, int> assistance_policy;
   nlohmann::json sampler_params;
   std::uint64_t seed;
+  bool adaptive = false;
 };
 
 struct Note {
@@ -78,4 +79,3 @@ struct SessionSummary {
 };
 
 } // namespace ear
-

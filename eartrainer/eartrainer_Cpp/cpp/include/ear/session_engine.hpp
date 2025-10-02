@@ -25,10 +25,11 @@ public:
   virtual Next submit_result(const std::string& session_id,
                              const ResultReport& report) = 0;
 
+  virtual nlohmann::json debug_state(const std::string& session_id) = 0;
+
   virtual nlohmann::json capabilities() const = 0;
 };
 
 std::unique_ptr<SessionEngine> make_engine();
 
 } // namespace ear
-

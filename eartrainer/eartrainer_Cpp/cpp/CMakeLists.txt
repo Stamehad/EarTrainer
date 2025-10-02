@@ -15,6 +15,7 @@ add_library(ear_core STATIC
     drills/pathways.cpp
     assistance/assistance.cpp
     scoring/scoring.cpp
+    controller/drill_hub.cpp
 )
 
 target_include_directories(ear_core
@@ -26,6 +27,7 @@ target_include_directories(ear_core
         ${CMAKE_CURRENT_SOURCE_DIR}/drills
         ${CMAKE_CURRENT_SOURCE_DIR}/assistance
         ${CMAKE_CURRENT_SOURCE_DIR}/scoring
+        ${CMAKE_CURRENT_SOURCE_DIR}/controller
 )
 
 add_executable(ear_core_tests tests/test_session_engine.cpp)
@@ -34,6 +36,7 @@ target_include_directories(ear_core_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/scoring
+    ${CMAKE_CURRENT_SOURCE_DIR}/controller
 )
 
 enable_testing()
