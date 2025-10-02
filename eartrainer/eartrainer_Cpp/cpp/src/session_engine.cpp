@@ -6,11 +6,13 @@
 #include "../drills/melody.hpp"
 #include "../drills/note.hpp"
 #include "../drills/drill.hpp"
+#include "../drills/common.hpp"
 #include "../scoring/scoring.hpp"
 #include "ear/drill_hub.hpp"
 #include "rng.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -90,6 +92,7 @@ struct SessionData {
   std::optional<std::size_t> active_question;
   SessionSummary summary_cache;
   bool summary_ready = false;
+  std::unordered_map<std::string, PromptPlan> session_assists;
 
   bool adaptive = false;
   std::unique_ptr<DrillHub> drill_hub;
@@ -172,6 +175,84 @@ SessionSummary build_summary(const std::string& session_id, const std::string& l
   return summary;
 }
 
+std::string normalize_kind(const std::string& kind) {
+  std::string normalized;
+  normalized.reserve(kind.size());
+  for (char ch : kind) {
+    if (std::isalnum(static_cast<unsigned char>(ch))) {
+      normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    } else if (ch == ' ' || ch == '-' || ch == '_') {
+      normalized.push_back('_');
+    }
+  }
+  if (normalized.empty()) {
+    normalized = "unknown";
+  }
+  return normalized;
+}
+
+PromptPlan make_tonic_prompt(const SessionSpec& spec) {
+  PromptPlan plan;
+  plan.modality = "midi";
+  plan.count_in = false;
+  plan.tempo_bpm = spec.tempo_bpm.has_value() ? spec.tempo_bpm : std::optional<int>(96);
+
+  const int tonic = drills::central_tonic_midi(spec.key);
+  const int min_pitch = std::max(0, spec.range_min);
+  const int max_pitch = std::min(127, spec.range_max > 0 ? spec.range_max : 127);
+  const int clamped = std::max(min_pitch, std::min(max_pitch, tonic));
+
+  plan.notes.push_back({clamped, 900, std::nullopt, std::nullopt});
+  return plan;
+}
+
+PromptPlan make_scale_arpeggio_prompt(const SessionSpec& spec) {
+  PromptPlan plan;
+  plan.modality = "midi";
+  plan.count_in = false;
+  plan.tempo_bpm = spec.tempo_bpm.has_value() ? spec.tempo_bpm : std::optional<int>(96);
+
+  const std::vector<int> pattern = {0, 1, 2, 3, 4, 5, 6, 7, 4, 2, 0};
+  const int min_pitch = std::max(0, spec.range_min);
+  const int max_pitch = std::min(127, spec.range_max > 0 ? spec.range_max : 127);
+
+  for (std::size_t i = 0; i < pattern.size(); ++i) {
+    int degree = pattern[i];
+    int midi = drills::degree_to_midi(spec, degree);
+    midi = std::max(min_pitch, std::min(max_pitch, midi));
+    int dur = (i == pattern.size() - 1) ? 520 : 320;
+    plan.notes.push_back({midi, dur, std::nullopt, std::nullopt});
+  }
+  return plan;
+}
+
+std::unordered_map<std::string, PromptPlan> build_session_assists(const SessionSpec& spec) {
+  std::unordered_map<std::string, PromptPlan> assists;
+  assists.emplace(normalize_kind("ScaleArpeggio"), make_scale_arpeggio_prompt(spec));
+  assists.emplace(normalize_kind("Tonic"), make_tonic_prompt(spec));
+  return assists;
+}
+
+AssistBundle session_assist_bundle(SessionData& session, const std::string& kind,
+                                   const std::string& question_id) {
+  AssistBundle bundle;
+  bundle.question_id = question_id;
+  bundle.kind = kind;
+  bundle.prompt = std::nullopt;
+  bundle.ui_delta = nlohmann::json::object();
+
+  std::string normalized = normalize_kind(kind);
+  auto it = session.session_assists.find(normalized);
+  if (it != session.session_assists.end()) {
+    bundle.prompt = it->second;
+    bundle.ui_delta["message"] = kind;
+  } else {
+    bundle.ui_delta["message"] = "Assist not available";
+  }
+  return bundle;
+}
+
+
 } // namespace
 
 class SessionEngineImpl : public SessionEngine {
@@ -201,6 +282,7 @@ public:
 
     std::string session_id = generate_session_id();
     session.summary_cache.session_id = session_id;
+    session.session_assists = build_session_assists(session.spec);
     sessions_.emplace(session_id, std::move(session));
     return session_id;
   }
@@ -239,6 +321,16 @@ public:
   AssistBundle assist(const std::string& session_id, const std::string& question_id,
                       const std::string& kind) override {
     auto& session = get_session(session_id);
+    auto normalized_kind = normalize_kind(kind);
+    if (session.session_assists.find(normalized_kind) != session.session_assists.end()) {
+      if (!question_id.empty()) {
+        auto id_check = session.id_lookup.find(question_id);
+        if (id_check == session.id_lookup.end()) {
+          throw std::runtime_error("Unknown question id");
+        }
+      }
+      return session_assist_bundle(session, kind, question_id);
+    }
     if (session.adaptive) {
       auto it = session.id_lookup.find(question_id);
       if (it == session.id_lookup.end()) {
@@ -262,6 +354,12 @@ public:
     ensure_question(session, it->second);
     auto bundle = make_bundle(session, state);
     return assistance::make_assist(bundle, kind);
+  }
+
+  AssistBundle session_assist(const std::string& session_id,
+                              const std::string& kind) override {
+    auto& session = get_session(session_id);
+    return session_assist_bundle(session, kind, "");
   }
 
   Next submit_result(const std::string& session_id, const ResultReport& report) override {
@@ -332,6 +430,10 @@ public:
     assists.push_back("TempoDown");
     assists.push_back("PathwayHint");
     caps["assists"] = assists;
+    nlohmann::json session_assists = nlohmann::json::array();
+    session_assists.push_back("ScaleArpeggio");
+    session_assists.push_back("Tonic");
+    caps["session_assists"] = session_assists;
     return caps;
   }
 
@@ -474,6 +576,7 @@ std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) 
 
   std::string session_id = generate_session_id();
   session.summary_cache.session_id = session_id;
+  session.session_assists = build_session_assists(session.spec);
   sessions_.emplace(session_id, std::move(session));
   return session_id;
 }

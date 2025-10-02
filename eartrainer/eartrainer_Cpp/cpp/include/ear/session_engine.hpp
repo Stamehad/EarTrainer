@@ -22,6 +22,9 @@ public:
                               const std::string& question_id,
                               const std::string& kind) = 0;
 
+  virtual AssistBundle session_assist(const std::string& session_id,
+                                      const std::string& kind) = 0;
+
   virtual Next submit_result(const std::string& session_id,
                              const ResultReport& report) = 0;
 

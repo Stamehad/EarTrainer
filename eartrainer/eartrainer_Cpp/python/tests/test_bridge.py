@@ -19,6 +19,10 @@ class SessionEngineBridgeTests(unittest.TestCase):
         next_payload = engine.next_question(session_id)
         self.assertEqual(next_payload.question_id, "q-001")
 
+        tonic = engine.session_assist(session_id, "Tonic")
+        self.assertEqual(tonic.kind, "Tonic")
+        self.assertIsNotNone(tonic.prompt)
+
         assist_bundle = engine.assist(session_id, next_payload.question_id, "GuideTone")
         self.assertEqual(assist_bundle.question_id, next_payload.question_id)
 

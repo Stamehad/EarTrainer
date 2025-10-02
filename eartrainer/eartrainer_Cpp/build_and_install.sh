@@ -53,6 +53,23 @@ echo "[eartrainer] Building ..."
 cmake --build "$BUILD_DIR" -- -j
 
 echo "[eartrainer] Installing Python bridge (editable) ..."
-"$PYTHON_EXE" -m pip install -e "$PY_DIR"
+if "$PYTHON_EXE" -m pip install --no-build-isolation -e "$PY_DIR"; then
+  echo "[eartrainer] Editable install succeeded"
+else
+  echo "[eartrainer] Warning: pip install failed (continuing because local sources are available)"
+fi
+
+# Ensure the freshly built _earcore module is accessible to Python.
+EXT_MODULE=$(find "$BUILD_DIR" -maxdepth 1 -name '_earcore*.so' -print -quit)
+if [[ -n "$EXT_MODULE" ]]; then
+  TARGET_DIR="$PY_DIR/eartrainer"
+  mkdir -p "$TARGET_DIR"
+  cp "$EXT_MODULE" "$TARGET_DIR/"
+  echo "[eartrainer] Copied $(basename "$EXT_MODULE") into $TARGET_DIR"
+  cp "$EXT_MODULE" "$SCRIPT_DIR/$(basename "$EXT_MODULE")"
+  echo "[eartrainer] Copied $(basename "$EXT_MODULE") into $SCRIPT_DIR"
+else
+  echo "[eartrainer] Warning: compiled _earcore module not found in $BUILD_DIR"
+fi
 
 echo "[eartrainer] Done."

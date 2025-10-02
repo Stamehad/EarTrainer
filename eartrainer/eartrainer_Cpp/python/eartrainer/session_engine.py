@@ -7,7 +7,11 @@ from . import models
 try:  # pragma: no cover - import resolution differs between editable/wheel installs
     from .. import _earcore as _core  # type: ignore
 except ImportError:  # pragma: no cover
-    import _earcore as _core  # type: ignore
+    try:
+        from . import _earcore as _core  # type: ignore
+    except ImportError:
+        import importlib
+        _core = importlib.import_module("eartrainer.eartrainer_Cpp._earcore")
 
 
 Next = Union[models.QuestionBundle, models.SessionSummary]
@@ -32,6 +36,10 @@ class SessionEngine:
         payload = self._engine.assist(session_id, question_id, kind)
         return models.AssistBundle.from_json(payload)
 
+    def session_assist(self, session_id: str, kind: str) -> models.AssistBundle:
+        payload = self._engine.session_assist(session_id, kind)
+        return models.AssistBundle.from_json(payload)
+
     def submit_result(self, session_id: str, report: models.ResultReport) -> Next:
         payload = self._engine.submit_result(session_id, report.to_json())
         if "question" in payload:
@@ -43,4 +51,3 @@ class SessionEngine:
 
 
 __all__ = ["SessionEngine", "Next"]
-

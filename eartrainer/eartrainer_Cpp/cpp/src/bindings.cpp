@@ -100,6 +100,11 @@ public:
     return json_to_py(ear::bridge::to_json(assist_bundle));
   }
 
+  py::object session_assist(const std::string& session_id, const std::string& kind) {
+    auto assist_bundle = engine_->session_assist(session_id, kind);
+    return json_to_py(ear::bridge::to_json(assist_bundle));
+  }
+
   py::object submit_result(const std::string& session_id, py::object report_obj) {
     auto report_json = py_to_json(report_obj);
     auto report = ear::bridge::result_report_from_json(report_json);
@@ -130,6 +135,7 @@ PYBIND11_MODULE(_earcore, m) {
       .def("create_session", &PySessionEngine::create_session)
       .def("next_question", &PySessionEngine::next_question)
       .def("assist", &PySessionEngine::assist)
+      .def("session_assist", &PySessionEngine::session_assist)
       .def("submit_result", &PySessionEngine::submit_result)
       .def("capabilities", &PySessionEngine::capabilities)
       .def("debug_state", &PySessionEngine::debug_state);
