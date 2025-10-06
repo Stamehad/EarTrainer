@@ -6,6 +6,7 @@
 #include "../scoring/scoring.hpp"
 #include "ear/drill_hub.hpp"
 #include "ear/drill_factory.hpp"
+#include "ear/adaptive_drills.hpp"
 #include "rng.hpp"
 
 #include <algorithm>
@@ -74,6 +75,7 @@ struct SessionData {
 
   bool adaptive = false;
   std::unique_ptr<DrillHub> drill_hub;
+  std::unique_ptr<AdaptiveDrills> adaptive_drills;
   double adaptive_fitness = 0.5;
   std::size_t adaptive_target_questions = 0;
   std::size_t adaptive_asked = 0;
