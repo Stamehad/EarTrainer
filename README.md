@@ -103,7 +103,7 @@ A cross‑platform C++ SessionEngine (with Python bindings) is being developed o
 
 ## C++ Session Engine (eartrainer_Cpp/cpp) – Summary
 
-The C++ session engine provides a deterministic, embeddable core for generating ear‑training sessions. It separates concerns cleanly: lightweight Samplers produce theoretical “samples” (degrees/intervals/voicings), DrillModules turn those into UI‑ready QuestionBundles with PromptPlans (what to play), and the SessionEngine orchestrates session state, assistance, and summaries. The design is UI‑agnostic (typed JSON payloads), reproducible (seeded RNG), side‑effect free between API calls, and easily bound to Python via pybind11.
+The C++ session engine provides a deterministic, embeddable core for generating ear‑training sessions. DrillModules now own their internal sampling logic, emitting UI‑ready QuestionBundles with PromptPlans (what to play), while the SessionEngine orchestrates session state, assistance, and summaries. The design is UI‑agnostic (typed JSON payloads), reproducible (seeded RNG), side‑effect free between API calls, and easily bound to Python via pybind11.
 
 - eartrainer/eartrainer_Cpp/cpp/CMakeLists.txt
   - Build config for the static core library, unit test binary, and optional pybind11 module `_earcore`.
@@ -115,7 +115,7 @@ The C++ session engine provides a deterministic, embeddable core for generating 
   - Engine interface: `create_session`, `next_question`, `assist`, `submit_result`, `capabilities`; factory `make_engine()` returning a concrete implementation.
 
 - eartrainer/eartrainer_Cpp/cpp/src/session_engine.cpp
-  - Implements `SessionEngine` (session lifecycle, eager/adaptive generation, idempotent submit, capability listing). Key helpers: `make_sampler`, `make_drill`, `ensure_question`, `materialise_all`, `build_summary`.
+  - Implements `SessionEngine` (session lifecycle, eager/adaptive generation, idempotent submit, capability listing). Key helpers: `ensure_factory`, `ensure_question`, `materialise_all`, `build_summary`.
 
 - eartrainer/eartrainer_Cpp/cpp/src/json_bridge.hpp/.cpp
   - JSON adapters for all public types. Functions: `to_json`/`*_from_json` for `SessionSpec`, `QuestionBundle`, `AssistBundle`, `ResultReport`, `SessionSummary`; includes `PromptPlan` and `TypedPayload` conversions.
@@ -127,22 +127,22 @@ The C++ session engine provides a deterministic, embeddable core for generating 
   - Simple xorshift RNG utilities: `advance_rng`, `rand_int`, `rand_unit` used for deterministic sampling.
 
 - eartrainer/eartrainer_Cpp/cpp/drills/drill.hpp
-  - Abstractions: `Sampler::next` generates `AbstractSample`; `DrillModule::make_question` returns `DrillOutput` (typed question, correct answer, optional `PromptPlan`, `ui_hints`).
+  - Abstractions: `DrillModule::configure(SessionSpec)` primes per-session state; `DrillModule::next_question(spec, rng)` returns a `DrillOutput` (typed question, correct answer, optional `PromptPlan`, `ui_hints`).
 
 - eartrainer/eartrainer_Cpp/cpp/drills/common.hpp
   - Music theory helpers and MIDI mapping: `normalize_degree_index`, `degree_to_offset`, `tonic_from_key`, `central_tonic_midi`, range helpers, `midi_candidates_for_degree`, `degree_to_midi`.
 
 - eartrainer/eartrainer_Cpp/cpp/drills/note.hpp/.cpp
-  - `NoteSampler` (degree/midi selection with repeat‑avoidance and allowed filters) and `NoteDrill` (single‑note prompt, answer kind `degree`, assists include `Replay`). Main methods: `NoteSampler::next`, `NoteDrill::make_question`.
+  - `NoteDrill` owns the degree/midi sampling with repeat‑avoidance and allowed filters, emitting single-note prompts (`degree` answers, `Replay` assist).
 
 - eartrainer/eartrainer_Cpp/cpp/drills/interval.hpp/.cpp
-  - `IntervalSampler` (pick bottom degree and size with optional filters; compute MIDI and orientation) and `IntervalDrill` (two‑note prompt; answer kind `interval_class`; assists `Replay`, `GuideTone`). Main: `IntervalSampler::next`, `IntervalDrill::make_question`.
+  - `IntervalDrill` internally selects bottom degree + size (with optional filters), computes MIDI/orientation, and produces two-note prompts (`interval_class` answers, `Replay`/`GuideTone` assists).
 
 - eartrainer/eartrainer_Cpp/cpp/drills/melody.hpp/.cpp
-  - `MelodySampler` (weighted diatonic step model with musical modifiers and recent‑sequence suppression) and `MelodyDrill` (count‑in and multi‑note prompt; answer kind `melody_notes`; assists `Replay`, `TempoDown`). Main: `MelodySampler::next`, `MelodyDrill::make_question`.
+  - `MelodyDrill` maintains the weighted diatonic step model (recent-sequence suppression) and emits count-in multi-note prompts (`melody_notes` answers, `Replay`/`TempoDown` assists).
 
 - eartrainer/eartrainer_Cpp/cpp/drills/chord.hpp/.cpp
-  - `ChordSampler` (select degree/quality/voicing with simple policies) and `ChordDrill` (bass + right‑hand voicing realization near target registers; answer kind `chord_degree`; assists `Replay`, `GuideTone`). Main: `ChordSampler::next`, `ChordDrill::make_question`.
+  - `ChordDrill` samples degree/quality/voicing internally (including bass offsets) and renders block-chord prompts (`chord_degree` answers, `Replay`/`GuideTone` assists).
 
 - eartrainer/eartrainer_Cpp/cpp/assistance/assistance.hpp/.cpp
   - Assistance generation: returns `AssistBundle` for `Replay`, `GuideTone`, `TempoDown`, `PathwayHint`, optionally altering `PromptPlan` and adding `ui_delta` messages. Main: `assistance::make_assist`.
@@ -154,3 +154,83 @@ The C++ session engine provides a deterministic, embeddable core for generating 
   - Minimal tests: determinism under seeded eager generation, assist/submit idempotence, RNG side‑effect checks, and JSON round‑trip of public types.
 
 Note: The directory `include/nlohmann/json.hpp` contains the vendored JSON library used for all typed JSON payloads.
+
+# System Architecture Overview
+
+## Mermaid Diagram
+```mermaid
+graph TD
+    UI --> Engine
+    Engine --> DF[DrillFactory]
+    Engine --> AD[AdaptiveDrills]
+    AD --> DF
+    AD --> DS[DrillSampler]
+    DF --> DM1[DrillModule 1, 2, ..., k]
+    DM1 -.-> S1[Internal Sampler]
+```
+
+## Module Responsibilities
+
+### 1. Engine
+**Purpose:** Main orchestrator of the C++ core. Interfaces with UI (Python, Android, iOS, etc.) and memory/user data.
+
+**Modes:**
+- **Drill mode** – user selects a single drill.
+- **Set mode** – user selects a stack of drills.
+- **Adaptive mode** – system automatically manages drills and difficulty.
+
+**Key Methods:**
+- `engine.create_session(SessionSpec)` – initialize a session.
+- `engine.next_question() -> QuestionBundle` – generate next question.
+- `engine.submit_result(ResultReport)` – receive feedback from user.
+- `engine.end_session() -> MemoryPackage` – finalize session and produce summary.
+- `engine.diagnostic() -> EngineStatePackage` – report internal state.
+
+### 2. DrillFactory (DF)
+**Purpose:** Unified front-end for interacting with all drills or stacks of drills. Provides a common interface for question generation and result collection.
+(To be later renamed DrillHub but currently this name conflit with some old code not needed anymore)
+
+**Key Methods:**
+- `df.set_bout([DrillSpec])` – initialize a bout with selected drills.
+- `df.next(k) -> QuestionBundle` – fetch next question from drill *k*.
+- `df.diagnostics() -> DrillFactoryState` – provide drill hub diagnostics.
+
+### 3. AdaptiveDrills (AD)
+**Purpose:** Builds and manages adaptive bouts using user level and performance. Selects drills dynamically from pre-defined levels. Adjusts difficulty on-the-fly and updates user progress.
+
+**Bout Types:**
+- **Warm-up** – gentle start with lower difficulty.
+- **Standard** – regular adaptive sequence.
+- **Mixed** – combine multiple drill types (e.g., melody + chords).
+- **Exam** – evaluation bout to graduate to next level.
+
+**Key Methods:**
+- `ad.set_bout(level, score)` – set current bout parameters.
+- `ad.next() -> QuestionBundle` – request next adaptive question.
+- `ad.feedback(ResultReport)` – update internal performance tracking.
+- `ad.update_level()` – recompute level/score post-bout.
+
+### 4. DrillModule (DM)
+**Purpose:** Encapsulates logic for one specific drill family (e.g., melody, chord, interval). Handles creation of individual questions by delegating to its sampler.
+
+**Key Methods:**
+- `dm.configure(SessionSpec)` – configure tempo, key, range, etc.
+- `dm.next() -> QuestionBundle` – generate question via internal sampler.
+- `dm.feedback(ResultReport)` – collect and process user feedback.
+
+### 5. Sampler (S)
+**Purpose:** encapsulates the logic of randomly choosing scale degrees and next note in a melody line, chords etc. These samplers now live entirely inside `DrillModule` implementations and are never exposed externally. 
+
+### 6. DrillSampler (DS)
+**Purpose:** The sampler logic specifically used by `AdaptiveDrills` to select which drill (and difficulty variant) to present next. Balances challenge and engagement.
+
+**Sampler Modes:**
+- **Uniform:** random among available drills.
+- **Progressive:** gradually increases difficulty.
+- **Responsive:** adapts immediately based on last few results.
+- **Streak:** stays on the same drill for a few questions before changing.
+
+---
+
+### Summary
+This architecture separates orchestration (Engine), adaptation (AdaptiveDrills), and generation (DrillHub + DrillFactory). Each drill remains modular, and new families can be added easily by extending `DrillModule`.

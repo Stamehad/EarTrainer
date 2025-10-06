@@ -4,19 +4,14 @@
 
 namespace ear {
 
-class ChordSampler : public Sampler {
+class ChordDrill : public DrillModule {
 public:
-  AbstractSample next(const SessionSpec& spec, std::uint64_t& rng_state) override;
+  void configure(const SessionSpec& spec) override;
+  DrillOutput next_question(const SessionSpec& spec, std::uint64_t& rng_state) override;
 
 private:
   std::optional<int> last_degree_;
   std::optional<int> last_voicing_;
-};
-
-class ChordDrill : public DrillModule {
-public:
-  DrillOutput make_question(const SessionSpec& spec,
-                            const AbstractSample& sample) override;
 };
 
 } // namespace ear

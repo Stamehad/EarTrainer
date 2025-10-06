@@ -213,7 +213,11 @@ std::vector<int> degrees_to_midi(const SessionSpec& spec, const std::vector<int>
 
 } // namespace
 
-AbstractSample MelodySampler::next(const SessionSpec& spec, std::uint64_t& rng_state) {
+void MelodyDrill::configure(const SessionSpec& /*spec*/) {
+  recent_sequences_.clear();
+}
+
+DrillOutput MelodyDrill::next_question(const SessionSpec& spec, std::uint64_t& rng_state) {
   std::vector<int> degrees;
   std::vector<int> midis;
 
@@ -248,12 +252,8 @@ AbstractSample MelodySampler::next(const SessionSpec& spec, std::uint64_t& rng_s
   data["degrees"] = degree_array;
   data["midi"] = midi_array;
 
-  return AbstractSample{"melody", data};
-}
-
-MelodyDrill::DrillOutput MelodyDrill::make_question(const SessionSpec& spec, const AbstractSample& sample) {
-  const auto& degrees_json = sample.degrees.value("degrees", nlohmann::json::array());
-  const auto& midi_json = sample.degrees.value("midi", nlohmann::json::array());
+  const auto& degrees_json = data.value("degrees", nlohmann::json::array());
+  const auto& midi_json = data.value("midi", nlohmann::json::array());
 
   PromptPlan plan;
   plan.modality = "midi";
@@ -286,12 +286,10 @@ MelodyDrill::DrillOutput MelodyDrill::make_question(const SessionSpec& spec, con
   }
   hints["assist_budget"] = budget;
 
-  DrillModule::DrillOutput output{TypedPayload{"melody", question_payload},
-                                  TypedPayload{"melody_notes", answer_payload},
-                                  plan,
-                                  hints};
-  return output;
+  return DrillOutput{TypedPayload{"melody", question_payload},
+                     TypedPayload{"melody_notes", answer_payload},
+                     plan,
+                     hints};
 }
 
 } // namespace ear
-

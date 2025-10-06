@@ -16,18 +16,17 @@ constexpr double kEpsilon = 1e-9;
 DrillHub::DrillHub(std::vector<Entry> entries, std::uint64_t seed)
     : hub_rng_state_(seed == 0 ? 1 : seed) {
   nodes_.reserve(entries.size());
-  std::uint64_t sampler_seed = hub_rng_state_;
+  std::uint64_t module_seed = hub_rng_state_;
   for (auto& entry : entries) {
-    if (!entry.sampler || !entry.drill) {
-      throw std::invalid_argument("DrillHub entry requires sampler and drill");
+    if (!entry.module) {
+      throw std::invalid_argument("DrillHub entry requires a drill module");
     }
     Node node;
     node.drill_kind = std::move(entry.drill_kind);
-    node.sampler = std::move(entry.sampler);
-    node.drill = std::move(entry.drill);
+    node.module = std::move(entry.module);
     node.spec = std::move(entry.spec);
     node.weight = entry.weight;
-    node.sampler_rng_state = advance_rng(sampler_seed);
+    node.module_rng_state = advance_rng(module_seed);
     nodes_.push_back(std::move(node));
   }
 
@@ -52,13 +51,11 @@ DrillHub::Selection DrillHub::next() {
   }
   auto& node = *it;
 
-  auto sample = node.sampler->next(node.spec, node.sampler_rng_state);
-  auto output = node.drill->make_question(node.spec, sample);
+  auto output = node.module->next_question(node.spec, node.module_rng_state);
   DrillHub::Selection selection;
   selection.drill_kind = node.drill_kind;
   selection.output = std::move(output);
   selection.spec = node.spec;
-  selection.sample = std::move(sample);
   last_selected_kind_ = node.drill_kind;
   return selection;
 }

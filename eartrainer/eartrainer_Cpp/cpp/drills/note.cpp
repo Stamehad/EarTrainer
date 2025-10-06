@@ -138,7 +138,12 @@ int pick_degree(const SessionSpec& spec, std::uint64_t& rng_state,
 
 } // namespace
 
-AbstractSample NoteSampler::next(const SessionSpec& spec, std::uint64_t& rng_state) {
+void NoteDrill::configure(const SessionSpec& /*spec*/) {
+  last_degree_.reset();
+  last_midi_.reset();
+}
+
+DrillOutput NoteDrill::next_question(const SessionSpec& spec, std::uint64_t& rng_state) {
   int degree = pick_degree(spec, rng_state, last_degree_);
   last_degree_ = degree;
 
@@ -162,18 +167,7 @@ AbstractSample NoteSampler::next(const SessionSpec& spec, std::uint64_t& rng_sta
   }
   last_midi_ = midi;
 
-  nlohmann::json data = nlohmann::json::object();
-  data["degree"] = degree;
-  data["midi"] = midi;
-  return AbstractSample{"note", data};
-}
-
-DrillModule::DrillOutput NoteDrill::make_question(const SessionSpec& spec,
-                                                  const AbstractSample& sample) {
-  int degree = sample.degrees["degree"].get<int>();
   int tonic_midi = drills::central_tonic_midi(spec.key);
-  int midi = sample.degrees.contains("midi") ? sample.degrees["midi"].get<int>()
-                                              : drills::degree_to_midi(spec, degree);
 
   nlohmann::json q_payload = nlohmann::json::object();
   q_payload["degree"] = degree;
@@ -230,11 +224,10 @@ DrillModule::DrillOutput NoteDrill::make_question(const SessionSpec& spec,
   }
   hints["assist_budget"] = budget;
 
-  DrillOutput output{TypedPayload{"note", q_payload},
+  return DrillOutput{TypedPayload{"note", q_payload},
                      TypedPayload{"degree", answer_payload},
                      plan,
                      hints};
-  return output;
 }
 
 } // namespace ear

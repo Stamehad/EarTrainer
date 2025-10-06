@@ -2,32 +2,31 @@
 
 #include "ear/types.hpp"
 
+#include <optional>
 #include <utility>
 
 namespace ear {
 
-struct AbstractSample {
-  std::string kind;
-  nlohmann::json degrees;
-};
-
-class Sampler {
-public:
-  virtual ~Sampler() = default;
-  virtual AbstractSample next(const SessionSpec& spec, std::uint64_t& rng_state) = 0;
+// A generated question ready to be handed to the UI layer.
+struct DrillOutput {
+  TypedPayload question;
+  TypedPayload correct_answer;
+  std::optional<PromptPlan> prompt;
+  nlohmann::json ui_hints;
 };
 
 class DrillModule {
 public:
   virtual ~DrillModule() = default;
-  struct DrillOutput {
-    TypedPayload question;
-    TypedPayload correct_answer;
-    std::optional<PromptPlan> prompt;
-    nlohmann::json ui_hints;
-  };
 
-  virtual DrillOutput make_question(const SessionSpec& spec, const AbstractSample& sample) = 0;
+  // Configure the drill with the per-session specification.
+  virtual void configure(const SessionSpec& spec) = 0;
+
+  // Produce the next question. `rng_state` is a mutable seed owned by the caller.
+  virtual DrillOutput next_question(const SessionSpec& spec, std::uint64_t& rng_state) = 0;
+
+  // Allow modules to observe feedback when available. Default is no-op.
+  virtual void apply_feedback(const ResultReport& /*report*/) {}
 };
 
 } // namespace ear

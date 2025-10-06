@@ -1,18 +1,16 @@
 #include "ear/session_engine.hpp"
 
 #include "../assistance/assistance.hpp"
-#include "../drills/chord.hpp"
-#include "../drills/interval.hpp"
-#include "../drills/melody.hpp"
-#include "../drills/note.hpp"
 #include "../drills/drill.hpp"
 #include "../drills/common.hpp"
 #include "../scoring/scoring.hpp"
 #include "ear/drill_hub.hpp"
+#include "ear/drill_factory.hpp"
 #include "rng.hpp"
 
 #include <algorithm>
 #include <cctype>
+#include <mutex>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -32,42 +30,23 @@ std::string make_question_id(std::size_t index) {
   return oss.str();
 }
 
-std::unique_ptr<Sampler> make_sampler(const std::string& kind) {
-  if (kind == "note") {
-    return std::make_unique<NoteSampler>();
+std::string factory_family_for(const std::string& kind) {
+  if (kind == "chord_melody") {
+    return "chord";
   }
-  if (kind == "interval") {
-    return std::make_unique<IntervalSampler>();
-  }
-  if (kind == "melody") {
-    return std::make_unique<MelodySampler>();
-  }
-  if (kind == "chord" || kind == "chord_melody") {
-    return std::make_unique<ChordSampler>();
-  }
-  throw std::runtime_error("Unsupported drill kind: " + kind);
+  return kind;
 }
 
-std::unique_ptr<DrillModule> make_drill(const std::string& kind) {
-  if (kind == "note") {
-    return std::make_unique<NoteDrill>();
-  }
-  if (kind == "interval") {
-    return std::make_unique<IntervalDrill>();
-  }
-  if (kind == "melody") {
-    return std::make_unique<MelodyDrill>();
-  }
-  if (kind == "chord" || kind == "chord_melody") {
-    return std::make_unique<ChordDrill>();
-  }
-  throw std::runtime_error("Unsupported drill kind: " + kind);
+DrillFactory& ensure_factory() {
+  static std::once_flag flag;
+  auto& factory = DrillFactory::instance();
+  std::call_once(flag, [&factory]() { register_builtin_drills(factory); });
+  return factory;
 }
 
 struct QuestionState {
   std::string id;
-  std::optional<AbstractSample> sample;
-  std::optional<DrillModule::DrillOutput> output;
+  std::optional<DrillOutput> output;
   bool served = false;
   bool answered = false;
 };
@@ -81,8 +60,7 @@ struct SubmitCache {
 
 struct SessionData {
   SessionSpec spec;
-  std::unique_ptr<Sampler> sampler;
-  std::unique_ptr<DrillModule> drill;
+  std::unique_ptr<DrillModule> module;
   std::uint64_t rng_state = 0;
   bool eager_materialised = false;
   std::vector<QuestionState> questions;
@@ -121,11 +99,8 @@ void ensure_question(SessionData& session, std::size_t index) {
     throw std::out_of_range("question index out of range");
   }
   auto& state = session.questions[index];
-  if (!state.sample.has_value()) {
-    state.sample = session.sampler->next(session.spec, session.rng_state);
-  }
   if (!state.output.has_value()) {
-    state.output = session.drill->make_question(session.spec, *state.sample);
+    state.output = session.module->next_question(session.spec, session.rng_state);
   }
 }
 
@@ -264,8 +239,9 @@ public:
 
     SessionData session;
     session.spec = spec;
-    session.sampler = make_sampler(spec.drill_kind);
-    session.drill = make_drill(spec.drill_kind);
+    auto& factory = ensure_factory();
+    session.module = factory.create_module(factory_family_for(spec.drill_kind));
+    session.module->configure(session.spec);
     session.rng_state = spec.seed == 0 ? 1 : spec.seed;
     session.summary_cache.session_id = "";
     session.summary_cache.totals = nlohmann::json::object();
@@ -536,16 +512,19 @@ std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) 
 
   std::vector<DrillHub::Entry> entries;
   entries.reserve(drill_kinds.size());
+  auto& factory = ensure_factory();
   for (const auto& kind : drill_kinds) {
     DrillHub::Entry entry;
     entry.drill_kind = kind;
-    entry.sampler = make_sampler(kind);
-    entry.drill = make_drill(kind);
+    entry.module = factory.create_module(factory_family_for(kind));
     SessionSpec drill_spec = spec;
     drill_spec.drill_kind = kind;
     drill_spec.adaptive = false;
     drill_spec.n_questions = 1;
     entry.spec = std::move(drill_spec);
+    if (entry.module) {
+      entry.module->configure(entry.spec);
+    }
     entry.weight = 1.0;
     entries.push_back(std::move(entry));
   }
@@ -614,7 +593,6 @@ SessionEngine::Next SessionEngineImpl::next_question_adaptive(const std::string&
 
   QuestionState state;
   state.id = question_id;
-  state.sample = std::move(selection.sample);
   state.output = std::move(selection.output);
   state.served = true;
   state.answered = false;

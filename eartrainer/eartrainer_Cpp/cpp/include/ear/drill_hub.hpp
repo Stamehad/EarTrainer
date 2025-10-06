@@ -18,17 +18,15 @@ class DrillHub {
 public:
   struct Entry {
     std::string drill_kind;
-    std::unique_ptr<Sampler> sampler;
-    std::unique_ptr<DrillModule> drill;
+    std::unique_ptr<DrillModule> module;
     SessionSpec spec;
     double weight = 1.0;
   };
 
   struct Selection {
     std::string drill_kind;
-    DrillModule::DrillOutput output;
+    DrillOutput output;
     SessionSpec spec;
-    AbstractSample sample;
   };
 
   DrillHub() = default;
@@ -51,12 +49,11 @@ public:
 private:
   struct Node {
     std::string drill_kind;
-    std::unique_ptr<Sampler> sampler;
-    std::unique_ptr<DrillModule> drill;
+    std::unique_ptr<DrillModule> module;
     SessionSpec spec;
     double weight = 1.0;
     double cumulative = 0.0;
-    std::uint64_t sampler_rng_state = 0;
+    std::uint64_t module_rng_state = 0;
   };
 
   void recompute_cumulative();

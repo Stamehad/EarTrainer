@@ -166,7 +166,12 @@ std::vector<int> to_vector(const nlohmann::json& array_node) {
 
 } // namespace
 
-AbstractSample ChordSampler::next(const SessionSpec& spec, std::uint64_t& rng_state) {
+void ChordDrill::configure(const SessionSpec& /*spec*/) {
+  last_degree_.reset();
+  last_voicing_.reset();
+}
+
+DrillOutput ChordDrill::next_question(const SessionSpec& spec, std::uint64_t& rng_state) {
   int degree = pick_degree(spec, rng_state, last_degree_);
   last_degree_ = degree;
 
@@ -192,26 +197,27 @@ AbstractSample ChordSampler::next(const SessionSpec& spec, std::uint64_t& rng_st
   last_voicing_ = voicing_index;
 
   auto payload = build_degrees_payload(degree, quality, voicing_index, bass_offset, add_seventh);
-  return AbstractSample{"chord", payload};
-}
 
-DrillModule::DrillOutput
-ChordDrill::make_question(const SessionSpec& spec, const AbstractSample& sample) {
-  int root_degree = sample.degrees["root"].get<int>();
-  std::string quality = sample.degrees["quality"].get<std::string>();
-  int voicing_index = sample.degrees["voicing_index"].get<int>();
-
+  int root_degree = payload["root"].get<int>();
+  std::string sampled_quality = payload["quality"].get<std::string>();
+  int sampled_voicing_index = payload["voicing_index"].get<int>();
   int bass_degree = root_degree;
-  if (sample.degrees.contains("bass_degree")) {
-    bass_degree = sample.degrees["bass_degree"].get<int>();
+  if (payload.contains("bass_degree")) {
+    bass_degree = payload["bass_degree"].get<int>();
   }
-  int bass_offset = 0;
-  if (sample.degrees.contains("bass_offset")) {
-    bass_offset = sample.degrees["bass_offset"].get<int>();
+  int sampled_bass_offset = 0;
+  if (payload.contains("bass_offset")) {
+    sampled_bass_offset = payload["bass_offset"].get<int>();
   }
 
-  nlohmann::json right_offsets_json = sample.degrees.value("right_offsets", nlohmann::json::array());
-  nlohmann::json degrees_node = sample.degrees.value("degrees", nlohmann::json::array());
+  nlohmann::json right_offsets_json = nlohmann::json::array();
+  if (payload.contains("right_offsets")) {
+    right_offsets_json = payload["right_offsets"];
+  }
+  nlohmann::json degrees_node = nlohmann::json::array();
+  if (payload.contains("degrees")) {
+    degrees_node = payload["degrees"];
+  }
   auto right_degrees = to_vector(degrees_node);
   if (right_degrees.empty()) {
     auto right_offsets = to_vector(right_offsets_json);
@@ -294,11 +300,11 @@ ChordDrill::make_question(const SessionSpec& spec, const AbstractSample& sample)
 
   nlohmann::json question_payload = nlohmann::json::object();
   question_payload["root_degree"] = root_degree;
-  question_payload["quality"] = quality;
+  question_payload["quality"] = sampled_quality;
   question_payload["degrees"] = realised_degrees;
   question_payload["voicing_midi"] = midi_tones;
   question_payload["tonic_midi"] = tonic_midi;
-  question_payload["voicing_index"] = voicing_index;
+  question_payload["voicing_index"] = sampled_voicing_index;
   question_payload["bass_midi"] = bass_midi;
   nlohmann::json right_midi_json = nlohmann::json::array();
   for (int value : right_midi) {
@@ -306,7 +312,7 @@ ChordDrill::make_question(const SessionSpec& spec, const AbstractSample& sample)
   }
   question_payload["right_hand_midi"] = right_midi_json;
   question_payload["bass_degree"] = bass_degree;
-  question_payload["bass_offset"] = bass_offset;
+  question_payload["bass_offset"] = sampled_bass_offset;
 
   question_payload["right_offsets"] = right_offsets_json;
 
@@ -325,11 +331,10 @@ ChordDrill::make_question(const SessionSpec& spec, const AbstractSample& sample)
   }
   hints["assist_budget"] = budget;
 
-  DrillModule::DrillOutput output{TypedPayload{"chord", question_payload},
-                                  TypedPayload{"chord_degree", answer_payload},
-                                  plan,
-                                  hints};
-  return output;
+  return DrillOutput{TypedPayload{"chord", question_payload},
+                     TypedPayload{"chord_degree", answer_payload},
+                     plan,
+                     hints};
 }
 
 } // namespace ear

@@ -87,7 +87,12 @@ std::string interval_name(int semitones) {
 
 } // namespace
 
-AbstractSample IntervalSampler::next(const SessionSpec& spec, std::uint64_t& rng_state) {
+void IntervalDrill::configure(const SessionSpec& /*spec*/) {
+  last_bottom_degree_.reset();
+  last_bottom_midi_.reset();
+}
+
+DrillOutput IntervalDrill::next_question(const SessionSpec& spec, std::uint64_t& rng_state) {
   int bottom_degree = pick_bottom_degree(spec, rng_state, last_bottom_degree_);
   int size = pick_interval_size(spec, rng_state);
   int top_degree = bottom_degree + size;
@@ -117,55 +122,20 @@ AbstractSample IntervalSampler::next(const SessionSpec& spec, std::uint64_t& rng
   bool ascending = rand_int(rng_state, 0, 1) == 1;
   std::string orientation = ascending ? "ascending" : "descending";
 
-  nlohmann::json data = nlohmann::json::object();
-  data["bottom_degree"] = bottom_degree;
-  data["top_degree"] = top_degree;
-  data["interval_size"] = size;
-  data["bottom_midi"] = bottom_midi;
-  data["top_midi"] = top_midi;
-  data["semitones"] = semitone_diff;
-  data["orientation"] = orientation;
-
   last_bottom_degree_ = bottom_degree;
   last_bottom_midi_ = bottom_midi;
-
-  return AbstractSample{"interval", data};
-}
-
-DrillModule::DrillOutput IntervalDrill::make_question(const SessionSpec& spec,
-                                                     const AbstractSample& sample) {
-  int bottom_degree = sample.degrees.contains("bottom_degree")
-                          ? sample.degrees["bottom_degree"].get<int>()
-                          : 0;
-  int interval_size = sample.degrees.contains("interval_size")
-                          ? sample.degrees["interval_size"].get<int>()
-                          : 1;
-  int top_degree = sample.degrees.contains("top_degree")
-                       ? sample.degrees["top_degree"].get<int>()
-                       : bottom_degree + interval_size;
-  int bottom_midi = sample.degrees.contains("bottom_midi")
-                        ? sample.degrees["bottom_midi"].get<int>()
-                        : drills::degree_to_midi(spec, bottom_degree);
-  int semitone_diff = sample.degrees.contains("semitones")
-                          ? sample.degrees["semitones"].get<int>()
-                          : drills::degree_to_offset(top_degree) - drills::degree_to_offset(bottom_degree);
-  int top_midi = sample.degrees.contains("top_midi")
-                     ? sample.degrees["top_midi"].get<int>()
-                     : bottom_midi + semitone_diff;
 
   nlohmann::json question_payload = nlohmann::json::object();
   question_payload["bottom_midi"] = bottom_midi;
   question_payload["top_midi"] = top_midi;
   question_payload["bottom_degree"] = bottom_degree;
   question_payload["top_degree"] = top_degree;
-  question_payload["orientation"] = sample.degrees.contains("orientation")
-                                          ? sample.degrees["orientation"].get<std::string>()
-                                          : std::string("ascending");
+  question_payload["orientation"] = orientation;
 
   nlohmann::json answer_payload = nlohmann::json::object();
   answer_payload["name"] = interval_name(std::abs(semitone_diff));
   answer_payload["semitones"] = std::abs(semitone_diff);
-  answer_payload["size"] = interval_size;
+  answer_payload["size"] = size;
 
   PromptPlan plan;
   plan.modality = "midi";
@@ -173,9 +143,6 @@ DrillModule::DrillOutput IntervalDrill::make_question(const SessionSpec& spec,
   plan.count_in = false;
   // Ensure the prompt sequence reflects conceptual orientation so a simple player
   // produces the intended direction without additional UI logic.
-  std::string orientation = sample.degrees.contains("orientation")
-                                ? sample.degrees["orientation"].get<std::string>()
-                                : std::string("ascending");
   if (orientation == "descending") {
     plan.notes.push_back({top_midi, 600, std::nullopt, std::nullopt});
     plan.notes.push_back({bottom_midi, 600, std::nullopt, std::nullopt});
@@ -196,11 +163,10 @@ DrillModule::DrillOutput IntervalDrill::make_question(const SessionSpec& spec,
   }
   hints["assist_budget"] = budget;
 
-  DrillModule::DrillOutput output{TypedPayload{"interval", question_payload},
-                                  TypedPayload{"interval_class", answer_payload},
-                                  plan,
-                                  hints};
-  return output;
+  return DrillOutput{TypedPayload{"interval", question_payload},
+                     TypedPayload{"interval_class", answer_payload},
+                     plan,
+                     hints};
 }
 
 } // namespace ear
