@@ -1,4 +1,5 @@
 #include "ear/session_engine.hpp"
+#include "ear/adaptive_drills.hpp"
 
 #include "json_bridge.hpp"
 
@@ -139,4 +140,19 @@ PYBIND11_MODULE(_earcore, m) {
       .def("submit_result", &PySessionEngine::submit_result)
       .def("capabilities", &PySessionEngine::capabilities)
       .def("debug_state", &PySessionEngine::debug_state);
+
+  py::class_<ear::AdaptiveDrills>(m, "AdaptiveDrills")
+      .def(py::init<std::string, std::uint64_t>(),
+           py::arg("catalog_path") = std::string("eartrainer/eartrainer_Cpp/resources/adaptive_levels.yml"),
+           py::arg("seed") = 1)
+      .def("set_bout", &ear::AdaptiveDrills::set_bout, py::arg("level"))
+      .def("next", [](ear::AdaptiveDrills& ad) {
+        auto b = ad.next();
+        return json_to_py(ear::bridge::to_json(b));
+      })
+      .def("diagnostic", [](const ear::AdaptiveDrills& ad) {
+        return json_to_py(ad.diagnostic());
+      })
+      .def("size", &ear::AdaptiveDrills::size)
+      .def("empty", &ear::AdaptiveDrills::empty);
 }

@@ -49,7 +49,10 @@ find_package(pybind11 QUIET)
 if(pybind11_FOUND)
     pybind11_add_module(_earcore src/bindings.cpp)
     target_link_libraries(_earcore PRIVATE ear_core)
-    target_include_directories(_earcore PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_include_directories(_earcore PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/include)
 else()
     message(WARNING "pybind11 not found; skipping _earcore module build")
 endif()
