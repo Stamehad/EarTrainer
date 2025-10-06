@@ -430,8 +430,8 @@ public:
         counts[kv.first] = static_cast<int>(kv.second);
       }
       info["drill_counts"] = counts;
-      if (session.drill_hub) {
-        info["drill_hub"] = session.drill_hub->debug_state();
+      if (session.adaptive_drills) {
+        info["adaptive_drills"] = session.adaptive_drills->diagnostic();
       }
     } else {
       info["drill_kind"] = session.spec.drill_kind;
@@ -490,68 +490,15 @@ std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) 
     }
   }
 
-  std::vector<std::string> drill_kinds;
-  if (spec.sampler_params.is_object() && spec.sampler_params.contains("drills")) {
-    const auto& drills_json = spec.sampler_params["drills"];
-    if (drills_json.is_array()) {
-      const auto& arr = drills_json.get_array();
-      for (const auto& value : arr) {
-        if (value.is_string()) {
-          drill_kinds.push_back(value.get<std::string>());
-        }
-      }
-    }
+  // Initialize AdaptiveDrills with catalog path and bout level
+  int level = 1;
+  if (spec.sampler_params.is_object() && spec.sampler_params.contains("level")) {
+    const auto& lv = spec.sampler_params["level"];
+    if (lv.is_number_integer()) level = lv.get<int>();
   }
-  if (drill_kinds.empty()) {
-    if (!spec.drill_kind.empty() && spec.drill_kind != "adaptive") {
-      drill_kinds.push_back(spec.drill_kind);
-    } else {
-      drill_kinds.push_back("melody");
-    }
-  }
-
-  std::vector<DrillHub::Entry> entries;
-  entries.reserve(drill_kinds.size());
-  auto& factory = ensure_factory();
-  for (const auto& kind : drill_kinds) {
-    DrillHub::Entry entry;
-    entry.drill_kind = kind;
-    entry.module = factory.create_module(factory_family_for(kind));
-    SessionSpec drill_spec = spec;
-    drill_spec.drill_kind = kind;
-    drill_spec.adaptive = false;
-    drill_spec.n_questions = 1;
-    entry.spec = std::move(drill_spec);
-    if (entry.module) {
-      entry.module->configure(entry.spec);
-    }
-    entry.weight = 1.0;
-    entries.push_back(std::move(entry));
-  }
-
-  if (entries.empty()) {
-    throw std::runtime_error("Adaptive session requires at least one drill kind");
-  }
-
-  session.drill_hub =
-      std::make_unique<DrillHub>(std::move(entries), spec.seed == 0 ? 1 : spec.seed);
-
-  if (spec.sampler_params.is_object() && session.drill_hub &&
-      spec.sampler_params.contains("weights")) {
-    const auto& weights_json = spec.sampler_params["weights"];
-    if (weights_json.is_object()) {
-      std::unordered_map<std::string, double> bias;
-      const auto& obj = weights_json.get_object();
-      for (const auto& kv : obj) {
-        if (kv.second.is_number()) {
-          bias[kv.first] = kv.second.get<double>();
-        }
-      }
-      if (!bias.empty()) {
-        session.drill_hub->set_weight_bias(bias);
-      }
-    }
-  }
+  std::string catalog = "eartrainer/eartrainer_Cpp/resources/adaptive_levels.yml";
+  session.adaptive_drills = std::make_unique<AdaptiveDrills>(catalog, spec.seed);
+  session.adaptive_drills->set_bout(level);
 
   std::string session_id = generate_session_id();
   session.summary_cache.session_id = session_id;
@@ -587,22 +534,27 @@ SessionEngine::Next SessionEngineImpl::next_question_adaptive(const std::string&
     return session.summary_cache;
   }
 
-  auto selection = session.drill_hub->next();
+  if (!session.adaptive_drills) {
+    throw std::runtime_error("Adaptive session missing AdaptiveDrills");
+  }
+  auto bundle_from_ad = session.adaptive_drills->next();
   std::size_t index = session.questions.size();
   std::string question_id = make_question_id(index);
 
   QuestionState state;
   state.id = question_id;
-  state.output = std::move(selection.output);
+  state.output = DrillOutput{bundle_from_ad.question,
+                             bundle_from_ad.correct_answer,
+                             bundle_from_ad.prompt,
+                             bundle_from_ad.ui_hints};
   state.served = true;
   state.answered = false;
 
   session.id_lookup[question_id] = index;
   session.questions.push_back(std::move(state));
-  session.adaptive_specs[question_id] = std::move(selection.spec);
   session.active_question = index;
   session.adaptive_asked += 1;
-  session.adaptive_counts[selection.drill_kind] += 1;
+  // Not attributing per drill kind in this initial integration
 
   auto& stored = session.questions.back();
   return make_bundle(session, stored);
