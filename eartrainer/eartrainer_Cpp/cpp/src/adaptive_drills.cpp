@@ -56,7 +56,7 @@ QuestionBundle AdaptiveDrills::next() {
   auto& slot = slots_[static_cast<std::size_t>(pick)];
   pick_counts_[static_cast<std::size_t>(pick)] += 1;
   last_pick_ = static_cast<std::size_t>(pick);
-  auto output = slot.module->next_question(slot.spec, slot.rng_state);
+  auto output = slot.module->next_question(slot.rng_state);
 
   QuestionBundle bundle;
   bundle.question_id = make_question_id();

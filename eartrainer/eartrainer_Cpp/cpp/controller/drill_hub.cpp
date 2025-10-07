@@ -51,7 +51,7 @@ DrillHub::Selection DrillHub::next() {
   }
   auto& node = *it;
 
-  auto output = node.module->next_question(node.spec, node.module_rng_state);
+  auto output = node.module->next_question(node.module_rng_state);
   DrillHub::Selection selection;
   selection.drill_kind = node.drill_kind;
   selection.output = std::move(output);

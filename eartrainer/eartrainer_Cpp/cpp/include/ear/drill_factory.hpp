@@ -5,7 +5,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "ear/types.hpp"
 #include "ear/drill_spec.hpp"
 #include "drills/drill.hpp"
 
@@ -15,7 +14,7 @@ struct DrillAssignment {
   std::string id;
   std::string family;
   std::unique_ptr<DrillModule> module;
-  SessionSpec spec;
+  DrillSpec spec;
 };
 
 class DrillFactory {

@@ -16,8 +16,50 @@
 #include "drills/interval.hpp"
 #include "drills/melody.hpp"
 #include "drills/note.hpp"
+#include "ear/types.hpp"
 
 using nlohmann::json;
+
+void DrillSpec::apply_defaults() {
+  key = "C";
+  range_min = 60;
+  range_max = 72;
+  tempo_bpm.reset();
+  assistance_policy.clear();
+  params = nlohmann::json::object();
+
+  if (defaults.is_object()) {
+    const auto& obj = defaults.get_object();
+    if (auto it = obj.find("key"); it != obj.end() && it->second.is_string()) {
+      key = it->second.get<std::string>();
+    }
+    if (auto it = obj.find("range_min"); it != obj.end()) {
+      range_min = it->second.get<int>();
+    }
+    if (auto it = obj.find("range_max"); it != obj.end()) {
+      range_max = it->second.get<int>();
+    }
+    if (auto it = obj.find("tempo_bpm"); it != obj.end()) {
+      tempo_bpm = std::max(1, it->second.get<int>());
+    }
+    if (auto it = obj.find("assistance_policy"); it != obj.end() && it->second.is_object()) {
+      for (const auto& kv : it->second.get_object()) {
+        assistance_policy[kv.first] = kv.second.get<int>();
+      }
+    }
+  }
+
+  if (drill_params.is_object()) {
+    for (const auto& kv : drill_params.get_object()) {
+      params[kv.first] = kv.second;
+    }
+  }
+  if (sampler_params.is_object()) {
+    for (const auto& kv : sampler_params.get_object()) {
+      params[kv.first] = kv.second;
+    }
+  }
+}
 
 #if EAR_HAVE_YAML
 
@@ -57,6 +99,7 @@ DrillSpec DrillSpec::from_yaml(const YAML::Node& n) {
   if (n["defaults"])       s.defaults       = yaml_to_json(n["defaults"]);
   if (n["drill_params"])   s.drill_params   = yaml_to_json(n["drill_params"]);
   if (n["sampler_params"]) s.sampler_params = yaml_to_json(n["sampler_params"]);
+  s.apply_defaults();
   return s;
 }
 
@@ -98,6 +141,38 @@ std::vector<DrillSpec> DrillSpec::filter_by_level(const std::vector<DrillSpec>& 
   return out;
 }
 
+DrillSpec DrillSpec::from_session(const ear::SessionSpec& spec) {
+  DrillSpec out;
+  out.id = spec.drill_kind;
+  out.family = spec.drill_kind;
+  out.level = 0;
+  out.key = spec.key;
+  out.range_min = spec.range_min;
+  out.range_max = spec.range_max;
+  if (spec.tempo_bpm.has_value()) {
+    out.tempo_bpm = spec.tempo_bpm;
+  }
+  out.assistance_policy = spec.assistance_policy;
+  out.params = spec.sampler_params.is_object() ? spec.sampler_params : nlohmann::json::object();
+  out.sampler_params = out.params;
+  out.drill_params = nlohmann::json::object();
+  out.defaults = nlohmann::json::object();
+  out.defaults["key"] = out.key;
+  out.defaults["range_min"] = out.range_min;
+  out.defaults["range_max"] = out.range_max;
+  if (out.tempo_bpm.has_value()) {
+    out.defaults["tempo_bpm"] = *out.tempo_bpm;
+  }
+  if (!out.assistance_policy.empty()) {
+    nlohmann::json assists = nlohmann::json::object();
+    for (const auto& kv : out.assistance_policy) {
+      assists[kv.first] = kv.second;
+    }
+    out.defaults["assistance_policy"] = assists;
+  }
+  return out;
+}
+
 // ------------------------ DrillFactory impl ------------------------
 
 namespace ear {
@@ -106,32 +181,6 @@ DrillFactory& DrillFactory::instance() {
   static DrillFactory f;
   return f;
 }
-
-// Utility: fill SessionSpec from DrillSpec.defaults + params
-namespace {
-
-void fill_session_from_spec(const DrillSpec& spec, SessionSpec& dst) {
-  if (spec.defaults.contains("tempo_bpm")) {
-    dst.tempo_bpm = std::max(1, spec.defaults["tempo_bpm"].get<int>());
-  }
-  if (spec.defaults.contains("key")) {
-    dst.key = spec.defaults["key"].get<std::string>();
-  }
-  if (spec.defaults.contains("range_min")) dst.range_min = spec.defaults["range_min"].get<int>();
-  if (spec.defaults.contains("range_max")) dst.range_max = spec.defaults["range_max"].get<int>();
-  if (spec.defaults.contains("assistance_policy")) {
-    dst.assistance_policy.clear();
-    const auto& policy = spec.defaults["assistance_policy"];
-    if (policy.is_object()) {
-      for (const auto& item : policy.get_object()) {
-        dst.assistance_policy[item.first] = item.second.get<int>();
-      }
-    }
-  }
-  dst.sampler_params = spec.sampler_params;
-}
-
-} // namespace
 
 void DrillFactory::register_family(const std::string& family, Creator create) {
   registry_[family] = std::move(create);
@@ -153,7 +202,7 @@ DrillAssignment DrillFactory::create(const DrillSpec& spec) const {
   DrillAssignment assignment;
   assignment.id = spec.id;
   assignment.family = spec.family;
-  fill_session_from_spec(spec, assignment.spec);
+  assignment.spec = spec;
   assignment.module = create_module(spec.family);
   assignment.module->configure(assignment.spec);
   return assignment;

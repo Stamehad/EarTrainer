@@ -29,7 +29,7 @@ private:
   struct Slot {
     std::string id;
     std::string family;
-    SessionSpec spec;
+    DrillSpec spec;
     std::unique_ptr<DrillModule> module;
     std::uint64_t rng_state = 0;
   };

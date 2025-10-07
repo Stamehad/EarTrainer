@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ear/types.hpp"
+#include "ear/drill_spec.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -75,14 +75,14 @@ inline int clamp_to_range(int midi, int min, int max) {
   return std::max(min, std::min(max, midi));
 }
 
-inline std::pair<int, int> relative_bounds(const SessionSpec& spec, int semitone_span) {
+inline std::pair<int, int> relative_bounds(const DrillSpec& spec, int semitone_span) {
   int tonic = central_tonic_midi(spec.key);
   int lower = std::max(0, tonic - semitone_span);
   int upper = std::min(127, tonic + semitone_span);
   return {lower, upper};
 }
 
-inline std::vector<int> midi_candidates_for_degree(const SessionSpec& spec, int degree,
+inline std::vector<int> midi_candidates_for_degree(const DrillSpec& spec, int degree,
                                                    int semitone_span) {
   auto bounds = relative_bounds(spec, semitone_span);
   const int lower = bounds.first;
@@ -110,13 +110,13 @@ inline std::vector<int> midi_candidates_for_degree(const SessionSpec& spec, int 
   return candidates;
 }
 
-inline int degree_to_midi(const SessionSpec& spec, int degree) {
+inline int degree_to_midi(const DrillSpec& spec, int degree) {
   int span = 12;
-  if (spec.sampler_params.contains("note_range_semitones")) {
-    span = std::max(span, spec.sampler_params["note_range_semitones"].get<int>());
+  if (spec.params.contains("note_range_semitones")) {
+    span = std::max(span, spec.params["note_range_semitones"].get<int>());
   }
-  if (spec.sampler_params.contains("chord_range_semitones")) {
-    span = std::max(span, spec.sampler_params["chord_range_semitones"].get<int>());
+  if (spec.params.contains("chord_range_semitones")) {
+    span = std::max(span, spec.params["chord_range_semitones"].get<int>());
   }
   span = std::max(span, 1);
 

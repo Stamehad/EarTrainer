@@ -1,9 +1,9 @@
 #pragma once
-#include <string>
-#include <vector>
 #include <optional>
-#include <unordered_map>
 #include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -11,8 +11,8 @@ namespace YAML {
 class Node;
 }
 
-// Forward declare your SessionSpec – include the real header in .cpp.
-struct SessionSpec;
+// SessionSpec is defined in ear/types.hpp; needed for conversion helpers.
+#include "ear/types.hpp"
 
 /**
  * DrillSpec: data-only description of one drill template, loaded from YAML.
@@ -37,20 +37,32 @@ struct SessionSpec;
 struct DrillSpec {
   std::string id;
   std::string family;
-  int         level = 0;
-  nlohmann::json defaults;        // core SessionSpec defaults (tempo, key, range, assistance...)
-  nlohmann::json drill_params;    // family-specific knobs
-  nlohmann::json sampler_params;  // generator knobs
+  int level = 0;
 
-  // Lightweight helpers
+  // Resolved configuration (available to drills without extra parsing).
+  std::string key = "C";
+  int range_min = 60;
+  int range_max = 72;
+  std::optional<int> tempo_bpm;
+  std::unordered_map<std::string, int> assistance_policy;
+  nlohmann::json params = nlohmann::json::object();
+
+  // Raw authoring data (kept for serialization/backward compatibility).
+  nlohmann::json defaults;        // core defaults (tempo, key, range, assistance...)
+  nlohmann::json drill_params;    // family-specific knobs (legacy)
+  nlohmann::json sampler_params;  // legacy generator knobs
+
+  // Convenience helpers on raw defaults
   bool has_default(const char* k) const { return defaults.contains(k); }
   template <class T> T def_as(const char* k, const T& fallback) const {
     if (!defaults.contains(k)) return fallback;
     return defaults[k].get<T>();
   }
 
-  // --- YAML helpers ---
+  void apply_defaults();
+
   static DrillSpec from_yaml(const YAML::Node& n);
   static std::vector<DrillSpec> load_yaml(const std::string& path_or_yaml);
   static std::vector<DrillSpec> filter_by_level(const std::vector<DrillSpec>& all, int level);
+  static DrillSpec from_session(const ear::SessionSpec& spec);
 };

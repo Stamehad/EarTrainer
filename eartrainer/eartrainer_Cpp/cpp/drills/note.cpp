@@ -12,7 +12,7 @@
 namespace ear {
 namespace {
 
-const pathways::PathwayOptions* resolve_pathway(const SessionSpec& spec, int degree) {
+const pathways::PathwayOptions* resolve_pathway(const DrillSpec& spec, int degree) {
   auto scale = pathways::infer_scale_type(spec.key);
   return pathways::find_pathway(pathways::default_bank(), scale, degree);
 }
@@ -23,11 +23,11 @@ constexpr double kDefaultRestBeats = 0.5;
 constexpr int kRestPitch = -1;
 constexpr int kRestVelocity = 0;
 
-bool flag_param(const SessionSpec& spec, const std::string& key, bool fallback) {
-  if (!spec.sampler_params.contains(key)) {
+bool flag_param(const DrillSpec& spec, const std::string& key, bool fallback) {
+  if (!spec.params.is_object() || !spec.params.contains(key)) {
     return fallback;
   }
-  const auto& node = spec.sampler_params[key];
+  const auto& node = spec.params[key];
   if (node.is_boolean()) {
     return node.get<bool>();
   }
@@ -37,11 +37,11 @@ bool flag_param(const SessionSpec& spec, const std::string& key, bool fallback) 
   return fallback;
 }
 
-double beats_param(const SessionSpec& spec, const std::string& key, double fallback) {
-  if (!spec.sampler_params.contains(key)) {
+double beats_param(const DrillSpec& spec, const std::string& key, double fallback) {
+  if (!spec.params.is_object() || !spec.params.contains(key)) {
     return fallback;
   }
-  const auto& node = spec.sampler_params[key];
+  const auto& node = spec.params[key];
   if (node.is_number_float()) {
     return node.get<double>();
   }
@@ -51,9 +51,9 @@ double beats_param(const SessionSpec& spec, const std::string& key, double fallb
   return fallback;
 }
 
-int tempo_param(const SessionSpec& spec, const std::string& key) {
-  if (spec.sampler_params.contains(key)) {
-    const auto& node = spec.sampler_params[key];
+int tempo_param(const DrillSpec& spec, const std::string& key) {
+  if (spec.params.is_object() && spec.params.contains(key)) {
+    const auto& node = spec.params[key];
     if (node.is_number_float()) {
       return std::max(1, static_cast<int>(std::lround(node.get<double>())));
     }
@@ -94,10 +94,10 @@ std::vector<int> pathway_resolution_degrees(const pathways::PathwayPattern& patt
   return result;
 }
 
-std::vector<int> extract_allowed(const SessionSpec& spec, const std::string& key) {
+std::vector<int> extract_allowed(const DrillSpec& spec, const std::string& key) {
   std::vector<int> values;
-  if (spec.sampler_params.contains(key)) {
-    const auto& node = spec.sampler_params[key];
+  if (spec.params.is_object() && spec.params.contains(key)) {
+    const auto& node = spec.params[key];
     if (node.is_array()) {
       for (const auto& entry : node.get_array()) {
         values.push_back(entry.get<int>());
@@ -111,14 +111,14 @@ std::vector<int> base_degrees() {
   return {0, 1, 2, 3, 4, 5, 6};
 }
 
-bool avoid_repetition(const SessionSpec& spec) {
-  if (!spec.sampler_params.contains("avoid_repeat")) {
+bool avoid_repetition(const DrillSpec& spec) {
+  if (!spec.params.is_object() || !spec.params.contains("avoid_repeat")) {
     return true;
   }
-  return spec.sampler_params["avoid_repeat"].get<bool>();
+  return spec.params["avoid_repeat"].get<bool>();
 }
 
-int pick_degree(const SessionSpec& spec, std::uint64_t& rng_state,
+int pick_degree(const DrillSpec& spec, std::uint64_t& rng_state,
                 const std::optional<int>& previous) {
   auto allowed = extract_allowed(spec, "allowed_degrees");
   if (allowed.empty()) {
@@ -138,28 +138,29 @@ int pick_degree(const SessionSpec& spec, std::uint64_t& rng_state,
 
 } // namespace
 
-void NoteDrill::configure(const SessionSpec& /*spec*/) {
+void NoteDrill::configure(const DrillSpec& spec) {
+  spec_ = spec;
   last_degree_.reset();
   last_midi_.reset();
 }
 
-DrillOutput NoteDrill::next_question(const SessionSpec& spec, std::uint64_t& rng_state) {
-  int degree = pick_degree(spec, rng_state, last_degree_);
+DrillOutput NoteDrill::next_question(std::uint64_t& rng_state) {
+  int degree = pick_degree(spec_, rng_state, last_degree_);
   last_degree_ = degree;
 
   int span = 12;
-  if (spec.sampler_params.contains("note_range_semitones")) {
-    span = std::max(1, spec.sampler_params["note_range_semitones"].get<int>());
+  if (spec_.params.contains("note_range_semitones")) {
+    span = std::max(1, spec_.params["note_range_semitones"].get<int>());
   }
 
-  auto candidates = drills::midi_candidates_for_degree(spec, degree, span);
-  int midi = drills::central_tonic_midi(spec.key) + drills::degree_to_offset(degree);
+  auto candidates = drills::midi_candidates_for_degree(spec_, degree, span);
+  int midi = drills::central_tonic_midi(spec_.key) + drills::degree_to_offset(degree);
   if (!candidates.empty()) {
-    if (avoid_repetition(spec) && last_midi_.has_value() && candidates.size() > 1) {
+    if (avoid_repetition(spec_) && last_midi_.has_value() && candidates.size() > 1) {
       candidates.erase(std::remove(candidates.begin(), candidates.end(), last_midi_.value()),
                        candidates.end());
       if (candidates.empty()) {
-        candidates = drills::midi_candidates_for_degree(spec, degree, span);
+        candidates = drills::midi_candidates_for_degree(spec_, degree, span);
       }
     }
     int choice = rand_int(rng_state, 0, static_cast<int>(candidates.size()) - 1);
@@ -167,7 +168,7 @@ DrillOutput NoteDrill::next_question(const SessionSpec& spec, std::uint64_t& rng
   }
   last_midi_ = midi;
 
-  int tonic_midi = drills::central_tonic_midi(spec.key);
+  int tonic_midi = drills::central_tonic_midi(spec_.key);
 
   nlohmann::json q_payload = nlohmann::json::object();
   q_payload["degree"] = degree;
@@ -177,16 +178,16 @@ DrillOutput NoteDrill::next_question(const SessionSpec& spec, std::uint64_t& rng
   nlohmann::json answer_payload = nlohmann::json::object();
   answer_payload["degree"] = degree;
 
-  bool pathways_requested = flag_param(spec, "use_pathway", false);
+  bool pathways_requested = flag_param(spec_, "use_pathway", false);
   const pathways::PathwayOptions* pathway =
-      pathways_requested ? resolve_pathway(spec, degree) : nullptr;
+      pathways_requested ? resolve_pathway(spec_, degree) : nullptr;
   bool pathways_active = pathways_requested && pathway != nullptr;
-  bool repeat_lead = pathways_active && flag_param(spec, "pathway_repeat_lead", false);
+  bool repeat_lead = pathways_active && flag_param(spec_, "pathway_repeat_lead", false);
 
   std::string tempo_key = pathways_active ? "pathway_tempo_bpm" : "note_tempo_bpm";
-  int tempo_bpm = tempo_param(spec, tempo_key);
-  double note_beats = pathways_active ? beats_param(spec, "pathway_step_beats", kDefaultStepBeats)
-                                      : beats_param(spec, "note_step_beats", kDefaultStepBeats);
+  int tempo_bpm = tempo_param(spec_, tempo_key);
+  double note_beats = pathways_active ? beats_param(spec_, "pathway_step_beats", kDefaultStepBeats)
+                                      : beats_param(spec_, "note_step_beats", kDefaultStepBeats);
   int note_duration_ms = beats_to_ms(note_beats, tempo_bpm);
   if (note_duration_ms <= 0) {
     note_duration_ms = beats_to_ms(kDefaultStepBeats, tempo_bpm);
@@ -199,7 +200,7 @@ DrillOutput NoteDrill::next_question(const SessionSpec& spec, std::uint64_t& rng
   plan.notes.push_back({midi, note_duration_ms, std::nullopt, std::nullopt});
 
   if (pathways_active) {
-    double rest_beats = beats_param(spec, "pathway_rest_beats", kDefaultRestBeats);
+    double rest_beats = beats_param(spec_, "pathway_rest_beats", kDefaultRestBeats);
     int rest_ms = beats_to_ms(rest_beats, tempo_bpm);
     if (rest_ms > 0) {
       // Use sentinel pitch/velocity to represent silence between the lead note and pathway.
@@ -208,7 +209,7 @@ DrillOutput NoteDrill::next_question(const SessionSpec& spec, std::uint64_t& rng
 
     auto resolution_degrees = pathway_resolution_degrees(pathway->primary, degree, repeat_lead);
     for (int resolution_degree : resolution_degrees) {
-      int resolution_midi = drills::degree_to_midi(spec, resolution_degree);
+      int resolution_midi = drills::degree_to_midi(spec_, resolution_degree);
       plan.notes.push_back({resolution_midi, note_duration_ms, std::nullopt, std::nullopt});
     }
   }
@@ -219,7 +220,7 @@ DrillOutput NoteDrill::next_question(const SessionSpec& spec, std::uint64_t& rng
   allowed.push_back("Replay");
   hints["allowed_assists"] = allowed;
   nlohmann::json budget = nlohmann::json::object();
-  for (const auto& entry : spec.assistance_policy) {
+  for (const auto& entry : spec_.assistance_policy) {
     budget[entry.first] = entry.second;
   }
   hints["assist_budget"] = budget;

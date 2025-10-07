@@ -11,10 +11,10 @@
 namespace ear {
 namespace {
 
-std::vector<int> extract_allowed(const SessionSpec& spec, const std::string& key) {
+std::vector<int> extract_allowed(const DrillSpec& spec, const std::string& key) {
   std::vector<int> values;
-  if (spec.sampler_params.contains(key)) {
-    const auto& node = spec.sampler_params[key];
+  if (spec.params.is_object() && spec.params.contains(key)) {
+    const auto& node = spec.params[key];
     if (node.is_array()) {
       for (const auto& entry : node.get_array()) {
         values.push_back(entry.get<int>());
@@ -28,17 +28,17 @@ std::vector<int> base_bottom_degrees() {
   return {0, 1, 2, 3, 4, 5, 6};
 }
 
-bool avoid_repetition(const SessionSpec& spec) {
-  if (!spec.sampler_params.contains("interval_avoid_repeat")) {
-    if (!spec.sampler_params.contains("avoid_repeat")) {
+bool avoid_repetition(const DrillSpec& spec) {
+  if (!spec.params.is_object() || !spec.params.contains("interval_avoid_repeat")) {
+    if (!spec.params.is_object() || !spec.params.contains("avoid_repeat")) {
       return true;
     }
-    return spec.sampler_params["avoid_repeat"].get<bool>();
+    return spec.params["avoid_repeat"].get<bool>();
   }
-  return spec.sampler_params["interval_avoid_repeat"].get<bool>();
+  return spec.params["interval_avoid_repeat"].get<bool>();
 }
 
-int pick_bottom_degree(const SessionSpec& spec, std::uint64_t& rng_state,
+int pick_bottom_degree(const DrillSpec& spec, std::uint64_t& rng_state,
                        const std::optional<int>& previous_degree) {
   auto allowed = extract_allowed(spec, "interval_allowed_bottom_degrees");
   if (allowed.empty()) {
@@ -62,7 +62,7 @@ int pick_bottom_degree(const SessionSpec& spec, std::uint64_t& rng_state,
   return allowed[static_cast<std::size_t>(idx)];
 }
 
-int pick_interval_size(const SessionSpec& spec, std::uint64_t& rng_state) {
+int pick_interval_size(const DrillSpec& spec, std::uint64_t& rng_state) {
   auto allowed = extract_allowed(spec, "interval_allowed_sizes");
   if (allowed.empty()) {
     allowed = {1, 2, 3, 4, 5, 6, 7};
@@ -87,29 +87,30 @@ std::string interval_name(int semitones) {
 
 } // namespace
 
-void IntervalDrill::configure(const SessionSpec& /*spec*/) {
+void IntervalDrill::configure(const DrillSpec& spec) {
+  spec_ = spec;
   last_bottom_degree_.reset();
   last_bottom_midi_.reset();
 }
 
-DrillOutput IntervalDrill::next_question(const SessionSpec& spec, std::uint64_t& rng_state) {
-  int bottom_degree = pick_bottom_degree(spec, rng_state, last_bottom_degree_);
-  int size = pick_interval_size(spec, rng_state);
+DrillOutput IntervalDrill::next_question(std::uint64_t& rng_state) {
+  int bottom_degree = pick_bottom_degree(spec_, rng_state, last_bottom_degree_);
+  int size = pick_interval_size(spec_, rng_state);
   int top_degree = bottom_degree + size;
 
   int span = 12;
-  if (spec.sampler_params.contains("interval_range_semitones")) {
-    span = std::max(1, spec.sampler_params["interval_range_semitones"].get<int>());
+  if (spec_.params.contains("interval_range_semitones")) {
+    span = std::max(1, spec_.params["interval_range_semitones"].get<int>());
   }
 
-  auto candidates = drills::midi_candidates_for_degree(spec, bottom_degree, span);
-  int bottom_midi = drills::degree_to_midi(spec, bottom_degree);
+  auto candidates = drills::midi_candidates_for_degree(spec_, bottom_degree, span);
+  int bottom_midi = drills::degree_to_midi(spec_, bottom_degree);
   if (!candidates.empty()) {
-    if (avoid_repetition(spec) && last_bottom_midi_.has_value() && candidates.size() > 1) {
+    if (avoid_repetition(spec_) && last_bottom_midi_.has_value() && candidates.size() > 1) {
       candidates.erase(std::remove(candidates.begin(), candidates.end(), last_bottom_midi_.value()),
                        candidates.end());
       if (candidates.empty()) {
-        candidates = drills::midi_candidates_for_degree(spec, bottom_degree, span);
+        candidates = drills::midi_candidates_for_degree(spec_, bottom_degree, span);
       }
     }
     int idx = rand_int(rng_state, 0, static_cast<int>(candidates.size()) - 1);
@@ -139,7 +140,7 @@ DrillOutput IntervalDrill::next_question(const SessionSpec& spec, std::uint64_t&
 
   PromptPlan plan;
   plan.modality = "midi";
-  plan.tempo_bpm = spec.tempo_bpm;
+  plan.tempo_bpm = spec_.tempo_bpm;
   plan.count_in = false;
   // Ensure the prompt sequence reflects conceptual orientation so a simple player
   // produces the intended direction without additional UI logic.
@@ -158,7 +159,7 @@ DrillOutput IntervalDrill::next_question(const SessionSpec& spec, std::uint64_t&
   allowed.push_back("GuideTone");
   hints["allowed_assists"] = allowed;
   nlohmann::json budget = nlohmann::json::object();
-  for (const auto& entry : spec.assistance_policy) {
+  for (const auto& entry : spec_.assistance_policy) {
     budget[entry.first] = entry.second;
   }
   hints["assist_budget"] = budget;

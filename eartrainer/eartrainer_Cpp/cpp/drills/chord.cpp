@@ -26,10 +26,10 @@ const std::unordered_map<std::string, std::vector<std::vector<int>>> kRightHandV
     {"diminished", {{0, 2, 4, 7}, {0, 2, 4}, {-3, 0, 2}}},
 };
 
-std::vector<int> extract_allowed(const SessionSpec& spec, const std::string& key) {
+std::vector<int> extract_allowed(const DrillSpec& spec, const std::string& key) {
   std::vector<int> values;
-  if (spec.sampler_params.contains(key)) {
-    const auto& node = spec.sampler_params[key];
+  if (spec.params.is_object() && spec.params.contains(key)) {
+    const auto& node = spec.params[key];
     if (node.is_array()) {
       for (const auto& entry : node.get_array()) {
         values.push_back(entry.get<int>());
@@ -43,17 +43,17 @@ std::vector<int> base_degrees() {
   return {0, 1, 2, 3, 4, 5, 6};
 }
 
-bool avoid_repetition(const SessionSpec& spec) {
-  if (!spec.sampler_params.contains("chord_avoid_repeat")) {
-    if (!spec.sampler_params.contains("avoid_repeat")) {
+bool avoid_repetition(const DrillSpec& spec) {
+  if (!spec.params.is_object() || !spec.params.contains("chord_avoid_repeat")) {
+    if (!spec.params.is_object() || !spec.params.contains("avoid_repeat")) {
       return true;
     }
-    return spec.sampler_params["avoid_repeat"].get<bool>();
+    return spec.params["avoid_repeat"].get<bool>();
   }
-  return spec.sampler_params["chord_avoid_repeat"].get<bool>();
+  return spec.params["chord_avoid_repeat"].get<bool>();
 }
 
-int pick_degree(const SessionSpec& spec, std::uint64_t& rng_state,
+int pick_degree(const DrillSpec& spec, std::uint64_t& rng_state,
                 const std::optional<int>& previous) {
   auto allowed = extract_allowed(spec, "chord_allowed_degrees");
   if (allowed.empty()) {
@@ -166,18 +166,19 @@ std::vector<int> to_vector(const nlohmann::json& array_node) {
 
 } // namespace
 
-void ChordDrill::configure(const SessionSpec& /*spec*/) {
+void ChordDrill::configure(const DrillSpec& spec) {
+  spec_ = spec;
   last_degree_.reset();
   last_voicing_.reset();
 }
 
-DrillOutput ChordDrill::next_question(const SessionSpec& spec, std::uint64_t& rng_state) {
-  int degree = pick_degree(spec, rng_state, last_degree_);
+DrillOutput ChordDrill::next_question(std::uint64_t& rng_state) {
+  int degree = pick_degree(spec_, rng_state, last_degree_);
   last_degree_ = degree;
 
   bool add_seventh = false;
-  if (spec.sampler_params.contains("add_seventh")) {
-    add_seventh = spec.sampler_params["add_seventh"].get<bool>();
+  if (spec_.params.contains("add_seventh")) {
+    add_seventh = spec_.params["add_seventh"].get<bool>();
   }
 
   std::string quality = chord_quality_for_degree(degree);
@@ -186,7 +187,7 @@ DrillOutput ChordDrill::next_question(const SessionSpec& spec, std::uint64_t& rn
   int bass_offset = bass_options.empty() ? 0 : bass_options[static_cast<std::size_t>(bass_index)];
 
   int voicing_index = pick_voicing_index(quality, rng_state);
-  if (avoid_repetition(spec) && last_voicing_.has_value()) {
+  if (avoid_repetition(spec_) && last_voicing_.has_value()) {
     const auto& voicings = right_hand_voicings_for_quality(quality);
     if (voicings.size() > 1) {
       for (int attempt = 0; attempt < 3 && voicing_index == last_voicing_.value(); ++attempt) {
@@ -230,10 +231,10 @@ DrillOutput ChordDrill::next_question(const SessionSpec& spec, std::uint64_t& rn
   // Emit a block chord prompt: simultaneous note_on events encoded via midi-clip.
   // We indicate this intent by using a dedicated modality the JSON bridge recognizes.
   plan.modality = "midi_block";
-  plan.tempo_bpm = spec.tempo_bpm;
+  plan.tempo_bpm = spec_.tempo_bpm;
   plan.count_in = false;
 
-  int tonic_midi = drills::central_tonic_midi(spec.key);
+  int tonic_midi = drills::central_tonic_midi(spec_.key);
   int bass_base = tonic_midi + drills::degree_to_offset(bass_degree);
   constexpr int kBassTarget = 36; // C2
   int best_bass = bass_base;
@@ -326,7 +327,7 @@ DrillOutput ChordDrill::next_question(const SessionSpec& spec, std::uint64_t& rn
   allowed.push_back("GuideTone");
   hints["allowed_assists"] = allowed;
   nlohmann::json budget = nlohmann::json::object();
-  for (const auto& entry : spec.assistance_policy) {
+  for (const auto& entry : spec_.assistance_policy) {
     budget[entry.first] = entry.second;
   }
   hints["assist_budget"] = budget;

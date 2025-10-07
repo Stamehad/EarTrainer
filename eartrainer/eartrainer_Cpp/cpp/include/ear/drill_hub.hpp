@@ -19,14 +19,14 @@ public:
   struct Entry {
     std::string drill_kind;
     std::unique_ptr<DrillModule> module;
-    SessionSpec spec;
+    DrillSpec spec;
     double weight = 1.0;
   };
 
   struct Selection {
     std::string drill_kind;
     DrillOutput output;
-    SessionSpec spec;
+    DrillSpec spec;
   };
 
   DrillHub() = default;
@@ -50,7 +50,7 @@ private:
   struct Node {
     std::string drill_kind;
     std::unique_ptr<DrillModule> module;
-    SessionSpec spec;
+    DrillSpec spec;
     double weight = 1.0;
     double cumulative = 0.0;
     std::uint64_t module_rng_state = 0;

@@ -61,6 +61,7 @@ struct SubmitCache {
 
 struct SessionData {
   SessionSpec spec;
+  DrillSpec drill_spec;
   std::unique_ptr<DrillModule> module;
   std::uint64_t rng_state = 0;
   bool eager_materialised = false;
@@ -102,7 +103,7 @@ void ensure_question(SessionData& session, std::size_t index) {
   }
   auto& state = session.questions[index];
   if (!state.output.has_value()) {
-    state.output = session.module->next_question(session.spec, session.rng_state);
+    state.output = session.module->next_question(session.rng_state);
   }
 }
 
@@ -192,10 +193,11 @@ PromptPlan make_scale_arpeggio_prompt(const SessionSpec& spec) {
   const std::vector<int> pattern = {0, 1, 2, 3, 4, 5, 6, 7, 4, 2, 0};
   const int min_pitch = std::max(0, spec.range_min);
   const int max_pitch = std::min(127, spec.range_max > 0 ? spec.range_max : 127);
+  DrillSpec drill_spec = DrillSpec::from_session(spec);
 
   for (std::size_t i = 0; i < pattern.size(); ++i) {
     int degree = pattern[i];
-    int midi = drills::degree_to_midi(spec, degree);
+    int midi = drills::degree_to_midi(drill_spec, degree);
     midi = std::max(min_pitch, std::min(max_pitch, midi));
     int dur = (i == pattern.size() - 1) ? 520 : 320;
     plan.notes.push_back({midi, dur, std::nullopt, std::nullopt});
@@ -241,9 +243,10 @@ public:
 
     SessionData session;
     session.spec = spec;
+    session.drill_spec = DrillSpec::from_session(spec);
     auto& factory = ensure_factory();
     session.module = factory.create_module(factory_family_for(spec.drill_kind));
-    session.module->configure(session.spec);
+    session.module->configure(session.drill_spec);
     session.rng_state = spec.seed == 0 ? 1 : spec.seed;
     session.summary_cache.session_id = "";
     session.summary_cache.totals = nlohmann::json::object();

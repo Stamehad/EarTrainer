@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <numeric>
+#include <optional>
 #include <vector>
 
 namespace ear {
@@ -109,10 +110,10 @@ int choose_step(std::uint64_t& rng_state, const std::vector<double>& probs) {
   return kSteps[probs.size() - 1];
 }
 
-std::vector<int> generate_degrees(const SessionSpec& spec, std::uint64_t& rng_state) {
+std::vector<int> generate_degrees(const DrillSpec& spec, std::uint64_t& rng_state) {
   int length = kDefaultLength;
-  if (spec.sampler_params.contains("melody_length")) {
-    length = std::max(1, spec.sampler_params["melody_length"].get<int>());
+  if (spec.params.contains("melody_length")) {
+    length = std::max(1, spec.params["melody_length"].get<int>());
   }
 
   std::vector<int> all_degrees = base_degrees();
@@ -151,7 +152,7 @@ std::vector<int> generate_degrees(const SessionSpec& spec, std::uint64_t& rng_st
   return sequence;
 }
 
-std::vector<int> degrees_to_midi(const SessionSpec& spec, const std::vector<int>& degrees) {
+std::vector<int> degrees_to_midi(const DrillSpec& spec, const std::vector<int>& degrees) {
   int tonic = drills::central_tonic_midi(spec.key);
   std::vector<int> base_midis;
   base_midis.reserve(degrees.size());
@@ -213,16 +214,17 @@ std::vector<int> degrees_to_midi(const SessionSpec& spec, const std::vector<int>
 
 } // namespace
 
-void MelodyDrill::configure(const SessionSpec& /*spec*/) {
+void MelodyDrill::configure(const DrillSpec& spec) {
+  spec_ = spec;
   recent_sequences_.clear();
 }
 
-DrillOutput MelodyDrill::next_question(const SessionSpec& spec, std::uint64_t& rng_state) {
+DrillOutput MelodyDrill::next_question(std::uint64_t& rng_state) {
   std::vector<int> degrees;
   std::vector<int> midis;
 
   for (int attempt = 0; attempt < kMaxTries; ++attempt) {
-    degrees = generate_degrees(spec, rng_state);
+    degrees = generate_degrees(spec_, rng_state);
     if (kRecentCapacity == 0) {
       break;
     }
@@ -238,7 +240,7 @@ DrillOutput MelodyDrill::next_question(const SessionSpec& spec, std::uint64_t& r
     }
   }
 
-  midis = degrees_to_midi(spec, degrees);
+  midis = degrees_to_midi(spec_, degrees);
 
   nlohmann::json data = nlohmann::json::object();
   nlohmann::json degree_array = nlohmann::json::array();
@@ -257,7 +259,7 @@ DrillOutput MelodyDrill::next_question(const SessionSpec& spec, std::uint64_t& r
 
   PromptPlan plan;
   plan.modality = "midi";
-  plan.tempo_bpm = spec.tempo_bpm;
+  plan.tempo_bpm = spec_.tempo_bpm;
   plan.count_in = true;
 
   nlohmann::json note_payload = nlohmann::json::array();
@@ -281,7 +283,7 @@ DrillOutput MelodyDrill::next_question(const SessionSpec& spec, std::uint64_t& r
   allowed.push_back("TempoDown");
   hints["allowed_assists"] = allowed;
   nlohmann::json budget = nlohmann::json::object();
-  for (const auto& entry : spec.assistance_policy) {
+  for (const auto& entry : spec_.assistance_policy) {
     budget[entry.first] = entry.second;
   }
   hints["assist_budget"] = budget;
