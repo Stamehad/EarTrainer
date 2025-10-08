@@ -192,7 +192,37 @@ DrillOutput NoteDrill::next_question(std::uint64_t& rng_state) {
   plan.modality = "midi";
   plan.tempo_bpm = tempo_bpm;
   plan.count_in = false;
-  plan.notes.push_back({midi, note_duration_ms, std::nullopt, std::nullopt});
+
+  auto add_note = [&](int pitch) {
+    plan.notes.push_back({pitch, note_duration_ms, std::nullopt, std::nullopt});
+  };
+
+  std::string tonic_anchor = "none";
+  if (spec_.params.contains("tonic_anchor") && spec_.params["tonic_anchor"].is_string()) {
+    tonic_anchor = spec_.params["tonic_anchor"].get<std::string>();
+    std::transform(tonic_anchor.begin(), tonic_anchor.end(), tonic_anchor.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
+  }
+
+  bool anchor_before = tonic_anchor == "before" || tonic_anchor == "both";
+  bool anchor_after = tonic_anchor == "after" || tonic_anchor == "both";
+
+  if (pathways_active) {
+    // Pathway mode supersedes tonic anchoring.
+    anchor_before = false;
+    anchor_after = false;
+  }
+
+  if (anchor_before) {
+    add_note(tonic_midi);
+  }
+
+  add_note(midi);
+
+  if (anchor_after) {
+    add_note(tonic_midi);
+  }
 
   if (pathways_active) {
     double rest_beats = beats_param(spec_, "pathway_rest_beats", kDefaultRestBeats);

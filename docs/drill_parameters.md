@@ -29,6 +29,7 @@ Parameters (`params`):
 - `pathway_tempo_bpm: int` — tempo override for the pathway portion; falls back to `defaults.tempo_bpm`.
 - `note_step_beats: float` — optional lead-note duration in beats (falls back to an internal default).
 - `note_tempo_bpm: int` — optional tempo override for the lead; falls back to `defaults.tempo_bpm`.
+- `tonic_anchor: "before" | "after" | "both"` — optionally wrap the sampled degree with the tonic before/after (ignored when `use_pathway` is true).
 
 Prompt shape:
 - Lead: one note (dur from `note_step_beats` at `note_tempo_bpm` or `defaults.tempo_bpm`).
@@ -52,6 +53,24 @@ Example (pathway I–IV):
     pathway_repeat_lead: false
     pathway_step_beats: 1.0
     pathway_rest_beats: 0.5
+```
+
+Example (tonic arrival, two notes):
+```yaml
+- id: NOTE_TONIC_IN
+  family: note
+  level: 1
+  defaults:
+    key: C
+    tempo_bpm: 60
+    range_min: 60
+    range_max: 72
+    assistance_policy: { Replay: 2 }
+  params:
+    allowed_degrees: [1,2,3,4,5,6] # avoid dominant tonic as first degree
+    range_below_semitones: 12
+    range_above_semitones: 11
+    tonic_anchor: "after"
 ```
 
 ## Interval Drill (family: `interval`)

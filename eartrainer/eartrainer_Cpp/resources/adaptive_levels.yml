@@ -13,7 +13,7 @@ drills:
     params:
       avoid_repeat: true
       allowed_degrees: [0, 1, 2, 3] # I–IV
-      range_below_semitones: 12
+      range_below_semitones: 0
       range_above_semitones: 11
       use_pathway: true
       pathway_repeat_lead: false
@@ -32,7 +32,7 @@ drills:
     params:
       avoid_repeat: true
       allowed_degrees: [4, 5, 6] # V–VII
-      range_below_semitones: 12
+      range_below_semitones: 0
       range_above_semitones: 11
       use_pathway: true
       pathway_repeat_lead: false
@@ -49,7 +49,7 @@ drills:
       assistance_policy: { Replay: 3, GuideTone: 1 }
     params:
       avoid_repeat: true
-      range_below_semitones: 12
+      range_below_semitones: 0
       range_above_semitones: 11
       use_pathway: true
       pathway_repeat_lead: false
@@ -67,7 +67,7 @@ drills:
       assistance_policy: { Replay: 3 }
     params:
       allowed_degrees: [0, 1, 2, 3] # I–IV
-      range_below_semitones: 12
+      range_below_semitones: 0
       range_above_semitones: 11
       avoid_repeat: true
   
@@ -82,7 +82,7 @@ drills:
       assistance_policy: { Replay: 3 }
     params:
       allowed_degrees: [4, 5, 6] # V–VII
-      range_below_semitones: 12
+      range_below_semitones: 0
       range_above_semitones: 11
       avoid_repeat: true
   
@@ -96,7 +96,52 @@ drills:
       assistance_policy: { Replay: 3 }
     params:
       allowed_degrees: [4, 5, 6] # V–VII
-      range_below_semitones: 12
+      range_below_semitones: 0
+      range_above_semitones: 11
+      avoid_repeat: true
+  
+  - id: NOTE_TO_TONIC
+    family: note
+    level: 3
+    defaults:
+      tempo_bpm: 72
+      range_min: 60
+      range_max: 72
+      assistance_policy: { Replay: 3 }
+    params:
+      allowed_degrees: [1, 2, 3, 4, 5, 6]
+      tonic_anchor: "after"
+      range_below_semitones: 0
+      range_above_semitones: 11
+      avoid_repeat: true
+
+  - id: NOTE_AFTER_TONIC
+    family: note
+    level: 3
+    defaults:
+      tempo_bpm: 72
+      range_min: 60
+      range_max: 72
+      assistance_policy: { Replay: 3 }
+    params:
+      allowed_degrees: [1, 2, 3, 4, 5, 6]
+      tonic_anchor: "before"
+      range_below_semitones: 0
+      range_above_semitones: 11
+      avoid_repeat: true
+
+  - id: NOTE_WITH_TONIC
+    family: note
+    level: 3
+    defaults:
+      tempo_bpm: 72
+      range_min: 60
+      range_max: 72
+      assistance_policy: { Replay: 3 }
+    params:
+      allowed_degrees: [1, 2, 3, 4, 5, 6]
+      tonic_anchor: "both"
+      range_below_semitones: 0
       range_above_semitones: 11
       avoid_repeat: true
 
