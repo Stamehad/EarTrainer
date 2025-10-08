@@ -59,6 +59,14 @@ void DrillSpec::apply_defaults() {
       params[kv.first] = kv.second;
     }
   }
+  if (params.is_object()) {
+    if (!params.contains("range_below_semitones") && params.contains("note_range_semitones")) {
+      params["range_below_semitones"] = params["note_range_semitones"];
+    }
+    if (!params.contains("range_above_semitones") && params.contains("note_range_semitones")) {
+      params["range_above_semitones"] = params["note_range_semitones"];
+    }
+  }
 }
 
 #if EAR_HAVE_YAML

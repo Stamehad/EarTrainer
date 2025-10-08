@@ -148,19 +148,14 @@ DrillOutput NoteDrill::next_question(std::uint64_t& rng_state) {
   int degree = pick_degree(spec_, rng_state, last_degree_);
   last_degree_ = degree;
 
-  int span = 12;
-  if (spec_.params.contains("note_range_semitones")) {
-    span = std::max(1, spec_.params["note_range_semitones"].get<int>());
-  }
-
-  auto candidates = drills::midi_candidates_for_degree(spec_, degree, span);
+  auto candidates = drills::midi_candidates_for_degree(spec_, degree, 12);
   int midi = drills::central_tonic_midi(spec_.key) + drills::degree_to_offset(degree);
   if (!candidates.empty()) {
     if (avoid_repetition(spec_) && last_midi_.has_value() && candidates.size() > 1) {
       candidates.erase(std::remove(candidates.begin(), candidates.end(), last_midi_.value()),
                        candidates.end());
       if (candidates.empty()) {
-        candidates = drills::midi_candidates_for_degree(spec_, degree, span);
+        candidates = drills::midi_candidates_for_degree(spec_, degree, 12);
       }
     }
     int choice = rand_int(rng_state, 0, static_cast<int>(candidates.size()) - 1);

@@ -1,75 +1,162 @@
 # Adaptive drill catalog
 # Levels map to curated drill specs consumed by AdaptiveDrills.
 drills:
-  - id: NOTE_EASY_60
+  - id: PATHWAYS_1_4
     family: note
     level: 1
+    transition: true
     defaults:
-      tempo_bpm: 72
+      tempo_bpm: 60
       range_min: 60
       range_max: 72
-      assistance_policy: { Replay: 3 }
-    sampler_params:
-      note_range_semitones: 12
+      assistance_policy: { Replay: 2, GuideTone: 1 }
+    params:
       avoid_repeat: true
+      allowed_degrees: [0, 1, 2, 3] # I–IV
+      range_below_semitones: 12
+      range_above_semitones: 11
+      use_pathway: true
+      pathway_repeat_lead: false
+      pathway_step_beats: 1.0
+      pathway_rest_beats: 0.5
 
-  - id: MELODY_SHORT_60
-    family: melody
+  - id: PATHWAYS_5_7
+    family: note
+    level: 1
+    transition: true
+    defaults:
+      tempo_bpm: 60
+      range_min: 60
+      range_max: 72
+      assistance_policy: { Replay: 3, GuideTone: 1 }
+    params:
+      avoid_repeat: true
+      allowed_degrees: [4, 5, 6] # V–VII
+      range_below_semitones: 12
+      range_above_semitones: 11
+      use_pathway: true
+      pathway_repeat_lead: false
+      pathway_step_beats: 1.0
+      pathway_rest_beats: 0.5
+
+  - id: PATHWAYS
+    family: note
     level: 1
     defaults:
       tempo_bpm: 60
       range_min: 60
       range_max: 72
-      assistance_policy: { Replay: 2, TempoDown: 1 }
-    drill_params:
-      cue_type: pathway_immediate
-    sampler_params:
-      melody_length: 2
+      assistance_policy: { Replay: 3, GuideTone: 1 }
+    params:
+      avoid_repeat: true
+      range_below_semitones: 12
+      range_above_semitones: 11
+      use_pathway: true
+      pathway_repeat_lead: false
+      pathway_step_beats: 1.0
+      pathway_rest_beats: 0.5
 
-  - id: INTERVAL_STEPWISE_72
-    family: interval
-    level: 2
-    defaults:
-      tempo_bpm: 72
-      range_min: 55
-      range_max: 79
-      assistance_policy: { Replay: 2, GuideTone: 1 }
-    sampler_params:
-      interval_allowed_sizes: [1, 2, 3, 4]
-      interval_range_semitones: 24
-
-  - id: MELODY_MEDIUM_80
-    family: melody
-    level: 2
-    defaults:
-      tempo_bpm: 80
-      range_min: 55
-      range_max: 79
-      assistance_policy: { Replay: 2, TempoDown: 2 }
-    drill_params:
-      cue_type: pathway_immediate
-    sampler_params:
-      melody_length: 3
-
-  - id: CHORD_TRIADS_72
-    family: chord
-    level: 3
-    defaults:
-      tempo_bpm: 72
-      range_min: 48
-      range_max: 84
-      assistance_policy: { Replay: 2, GuideTone: 2 }
-    sampler_params:
-      chord_range_semitones: 24
-
-  - id: NOTE_WIDE_80
+  - id: NOTE_1_4
     family: note
-    level: 3
+    level: 2
+    transition: true
     defaults:
-      tempo_bpm: 80
-      range_min: 52
-      range_max: 88
-      assistance_policy: { Replay: 1 }
-    sampler_params:
-      note_range_semitones: 24
-      avoid_repeat: false
+      tempo_bpm: 72
+      range_min: 60
+      range_max: 72
+      assistance_policy: { Replay: 3 }
+    params:
+      allowed_degrees: [0, 1, 2, 3] # I–IV
+      range_below_semitones: 12
+      range_above_semitones: 11
+      avoid_repeat: true
+  
+  - id: NOTE_5_7
+    family: note
+    level: 2
+    transition: true
+    defaults:
+      tempo_bpm: 72
+      range_min: 60
+      range_max: 72
+      assistance_policy: { Replay: 3 }
+    params:
+      allowed_degrees: [4, 5, 6] # V–VII
+      range_below_semitones: 12
+      range_above_semitones: 11
+      avoid_repeat: true
+  
+  - id: NOTE
+    family: note
+    level: 2
+    defaults:
+      tempo_bpm: 72
+      range_min: 60
+      range_max: 72
+      assistance_policy: { Replay: 3 }
+    params:
+      allowed_degrees: [4, 5, 6] # V–VII
+      range_below_semitones: 12
+      range_above_semitones: 11
+      avoid_repeat: true
+
+  # - id: MELODY_SHORT_60
+  #   family: melody
+  #   level: 1
+  #   defaults:
+  #     tempo_bpm: 60
+  #     range_min: 60
+  #     range_max: 72
+  #     assistance_policy: { Replay: 2, TempoDown: 1 }
+  #   drill_params:
+  #     cue_type: pathway_immediate
+  #   sampler_params:
+  #     melody_length: 2
+
+  # - id: INTERVAL_STEPWISE_72
+  #   family: interval
+  #   level: 2
+  #   defaults:
+  #     tempo_bpm: 72
+  #     range_min: 55
+  #     range_max: 79
+  #     assistance_policy: { Replay: 2, GuideTone: 1 }
+  #   sampler_params:
+  #     interval_allowed_sizes: [1, 2, 3, 4]
+  #     interval_range_semitones: 24
+
+  # - id: MELODY_MEDIUM_80
+  #   family: melody
+  #   level: 2
+  #   defaults:
+  #     tempo_bpm: 80
+  #     range_min: 55
+  #     range_max: 79
+  #     assistance_policy: { Replay: 2, TempoDown: 2 }
+  #   drill_params:
+  #     cue_type: pathway_immediate
+  #   sampler_params:
+  #     melody_length: 3
+
+  # - id: CHORD_TRIADS_72
+  #   family: chord
+  #   level: 3
+  #   defaults:
+  #     tempo_bpm: 72
+  #     range_min: 48
+  #     range_max: 84
+  #     assistance_policy: { Replay: 2, GuideTone: 2 }
+  #   sampler_params:
+  #     chord_range_semitones: 24
+
+  # - id: NOTE_WIDE_80
+  #   family: note
+  #   level: 3
+  #   defaults:
+  #     tempo_bpm: 80
+  #     range_min: 52
+  #     range_max: 88
+  #     assistance_policy: { Replay: 1 }
+  #   sampler_params:
+  #     note_range_semitones: 24
+  #     avoid_repeat: false

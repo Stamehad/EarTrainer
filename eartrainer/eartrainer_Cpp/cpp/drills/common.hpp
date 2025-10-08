@@ -75,10 +75,25 @@ inline int clamp_to_range(int midi, int min, int max) {
   return std::max(min, std::min(max, midi));
 }
 
-inline std::pair<int, int> relative_bounds(const DrillSpec& spec, int semitone_span) {
+inline std::pair<int, int> relative_bounds(const DrillSpec& spec, int default_span) {
   int tonic = central_tonic_midi(spec.key);
-  int lower = std::max(0, tonic - semitone_span);
-  int upper = std::min(127, tonic + semitone_span);
+  int below = default_span;
+  int above = default_span;
+  if (spec.params.is_object()) {
+    if (spec.params.contains("range_below_semitones")) {
+      below = std::max(0, spec.params["range_below_semitones"].get<int>());
+    }
+    if (spec.params.contains("range_above_semitones")) {
+      above = std::max(0, spec.params["range_above_semitones"].get<int>());
+    }
+  }
+  int lower = std::max(0, tonic - below);
+  int upper = std::min(127, tonic + above);
+  lower = std::max(lower, spec.range_min);
+  upper = std::min(upper, spec.range_max);
+  if (lower > upper) {
+    std::swap(lower, upper);
+  }
   return {lower, upper};
 }
 
@@ -112,13 +127,17 @@ inline std::vector<int> midi_candidates_for_degree(const DrillSpec& spec, int de
 
 inline int degree_to_midi(const DrillSpec& spec, int degree) {
   int span = 12;
-  if (spec.params.contains("note_range_semitones")) {
-    span = std::max(span, spec.params["note_range_semitones"].get<int>());
+  if (spec.params.is_object()) {
+    if (spec.params.contains("range_below_semitones") || spec.params.contains("range_above_semitones")) {
+      int below = spec.params.contains("range_below_semitones") ? spec.params["range_below_semitones"].get<int>() : 12;
+      int above = spec.params.contains("range_above_semitones") ? spec.params["range_above_semitones"].get<int>() : 12;
+      span = std::max({1, below, above});
+    } else if (spec.params.contains("note_range_semitones")) {
+      span = std::max(1, spec.params["note_range_semitones"].get<int>());
+    } else if (spec.params.contains("chord_range_semitones")) {
+      span = std::max(1, spec.params["chord_range_semitones"].get<int>());
+    }
   }
-  if (spec.params.contains("chord_range_semitones")) {
-    span = std::max(span, spec.params["chord_range_semitones"].get<int>());
-  }
-  span = std::max(span, 1);
 
   auto candidates = midi_candidates_for_degree(spec, degree, span);
   if (!candidates.empty()) {
