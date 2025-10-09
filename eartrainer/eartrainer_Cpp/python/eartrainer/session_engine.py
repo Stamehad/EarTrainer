@@ -4,14 +4,18 @@ from typing import Union
 
 from . import models
 
-try:  # pragma: no cover - import resolution differs between editable/wheel installs
-    from .. import _earcore as _core  # type: ignore
-except ImportError:  # pragma: no cover
+import sys
+import importlib
+
+_core = sys.modules.get("eartrainer.eartrainer_Cpp._earcore")
+if _core is None:  # pragma: no cover - resolution differs between editable/wheel installs
     try:
-        from . import _earcore as _core  # type: ignore
-    except ImportError:
-        import importlib
         _core = importlib.import_module("eartrainer.eartrainer_Cpp._earcore")
+    except ModuleNotFoundError:
+        try:
+            from .. import _earcore as _core  # type: ignore
+        except ImportError:
+            from . import _earcore as _core  # type: ignore
 
 
 Next = Union[models.QuestionBundle, models.SessionSummary]

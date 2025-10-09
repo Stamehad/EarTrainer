@@ -63,6 +63,8 @@ struct DrillSpec {
 
   static DrillSpec from_yaml(const YAML::Node& n);
   static std::vector<DrillSpec> load_yaml(const std::string& path_or_yaml);
+  static DrillSpec from_json(const nlohmann::json& spec_json);
+  static std::vector<DrillSpec> load_json(const nlohmann::json& document);
   static std::vector<DrillSpec> filter_by_level(const std::vector<DrillSpec>& all, int level);
   static DrillSpec from_session(const ear::SessionSpec& spec);
 };

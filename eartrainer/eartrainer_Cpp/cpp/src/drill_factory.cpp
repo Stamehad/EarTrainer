@@ -26,7 +26,7 @@ void DrillSpec::apply_defaults() {
   range_max = 72;
   tempo_bpm.reset();
   assistance_policy.clear();
-  params = nlohmann::json::object();
+  nlohmann::json merged_params = params.is_object() ? params : nlohmann::json::object();
 
   if (defaults.is_object()) {
     const auto& obj = defaults.get_object();
@@ -51,22 +51,23 @@ void DrillSpec::apply_defaults() {
 
   if (drill_params.is_object()) {
     for (const auto& kv : drill_params.get_object()) {
-      params[kv.first] = kv.second;
+      merged_params[kv.first] = kv.second;
     }
   }
   if (sampler_params.is_object()) {
     for (const auto& kv : sampler_params.get_object()) {
-      params[kv.first] = kv.second;
+      merged_params[kv.first] = kv.second;
     }
   }
-  if (params.is_object()) {
-    if (!params.contains("range_below_semitones") && params.contains("note_range_semitones")) {
-      params["range_below_semitones"] = params["note_range_semitones"];
+  if (merged_params.is_object()) {
+    if (!merged_params.contains("range_below_semitones") && merged_params.contains("note_range_semitones")) {
+      merged_params["range_below_semitones"] = merged_params["note_range_semitones"];
     }
-    if (!params.contains("range_above_semitones") && params.contains("note_range_semitones")) {
-      params["range_above_semitones"] = params["note_range_semitones"];
+    if (!merged_params.contains("range_above_semitones") && merged_params.contains("note_range_semitones")) {
+      merged_params["range_above_semitones"] = merged_params["note_range_semitones"];
     }
   }
+  params = merged_params;
 }
 
 #if EAR_HAVE_YAML
@@ -107,6 +108,7 @@ DrillSpec DrillSpec::from_yaml(const YAML::Node& n) {
   if (n["defaults"])       s.defaults       = yaml_to_json(n["defaults"]);
   if (n["drill_params"])   s.drill_params   = yaml_to_json(n["drill_params"]);
   if (n["sampler_params"]) s.sampler_params = yaml_to_json(n["sampler_params"]);
+  if (n["params"])         s.params         = yaml_to_json(n["params"]);
   s.apply_defaults();
   return s;
 }
@@ -142,6 +144,55 @@ std::vector<DrillSpec> DrillSpec::load_yaml(const std::string&) {
 }
 
 #endif
+
+DrillSpec DrillSpec::from_json(const nlohmann::json& spec_json) {
+  if (!spec_json.contains("id") || !spec_json.contains("family") || !spec_json.contains("level")) {
+    throw std::runtime_error("DrillSpec JSON missing required fields: 'id', 'family', 'level'");
+  }
+
+  DrillSpec spec;
+  spec.id = spec_json["id"].get<std::string>();
+  spec.family = spec_json["family"].get<std::string>();
+  spec.level = spec_json["level"].get<int>();
+
+  if (spec_json.contains("defaults")) {
+    spec.defaults = spec_json["defaults"];
+  }
+  if (spec_json.contains("drill_params")) {
+    spec.drill_params = spec_json["drill_params"];
+  }
+  if (spec_json.contains("sampler_params")) {
+    spec.sampler_params = spec_json["sampler_params"];
+  }
+  if (spec_json.contains("params")) {
+    spec.params = spec_json["params"];
+  }
+
+  spec.apply_defaults();
+  return spec;
+}
+
+std::vector<DrillSpec> DrillSpec::load_json(const nlohmann::json& document) {
+  const nlohmann::json* drills_json = &document;
+  if (document.is_object()) {
+    if (!document.contains("drills")) {
+      throw std::runtime_error("Adaptive catalog JSON must contain a 'drills' array");
+    }
+    drills_json = &document["drills"];
+  }
+
+  if (!drills_json->is_array()) {
+    throw std::runtime_error("Adaptive catalog JSON must contain a 'drills' array");
+  }
+
+  const auto& entries = drills_json->get_array();
+  std::vector<DrillSpec> specs;
+  specs.reserve(entries.size());
+  for (const auto& entry : entries) {
+    specs.push_back(DrillSpec::from_json(entry));
+  }
+  return specs;
+}
 
 std::vector<DrillSpec> DrillSpec::filter_by_level(const std::vector<DrillSpec>& all, int level) {
   std::vector<DrillSpec> out;

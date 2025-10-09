@@ -68,6 +68,17 @@ if [[ -n "$EXT_MODULE" ]]; then
   echo "[eartrainer] Copied $(basename "$EXT_MODULE") into $TARGET_DIR"
   cp "$EXT_MODULE" "$SCRIPT_DIR/$(basename "$EXT_MODULE")"
   echo "[eartrainer] Copied $(basename "$EXT_MODULE") into $SCRIPT_DIR"
+  if command -v codesign >/dev/null 2>&1; then
+    for signed_lib in "$TARGET_DIR/$(basename "$EXT_MODULE")" "$SCRIPT_DIR/$(basename "$EXT_MODULE")"; do
+      if [[ -f "$signed_lib" ]]; then
+        if codesign --force --sign - "$signed_lib"; then
+          echo "[eartrainer] Codesigned $signed_lib"
+        else
+          echo "[eartrainer] Warning: failed to codesign $signed_lib" >&2
+        fi
+      fi
+    done
+  fi
 else
   echo "[eartrainer] Warning: compiled _earcore module not found in $BUILD_DIR"
 fi

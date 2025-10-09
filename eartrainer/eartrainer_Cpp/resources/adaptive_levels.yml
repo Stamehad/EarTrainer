@@ -4,9 +4,10 @@ drills:
   - id: PATHWAYS_1_4
     family: note
     level: 1
+    tier: 0
     transition: true
     defaults:
-      tempo_bpm: 60
+      tempo_bpm: 80
       range_min: 60
       range_max: 72
       assistance_policy: { Replay: 2, GuideTone: 1 }
@@ -14,7 +15,7 @@ drills:
       avoid_repeat: true
       allowed_degrees: [0, 1, 2, 3] # I–IV
       range_below_semitones: 0
-      range_above_semitones: 11
+      range_above_semitones: 12
       use_pathway: true
       pathway_repeat_lead: false
       pathway_step_beats: 1.0
@@ -23,9 +24,10 @@ drills:
   - id: PATHWAYS_5_7
     family: note
     level: 1
+    tier: 1
     transition: true
     defaults:
-      tempo_bpm: 60
+      tempo_bpm: 80
       range_min: 60
       range_max: 72
       assistance_policy: { Replay: 3, GuideTone: 1 }
@@ -33,7 +35,7 @@ drills:
       avoid_repeat: true
       allowed_degrees: [4, 5, 6] # V–VII
       range_below_semitones: 0
-      range_above_semitones: 11
+      range_above_semitones: 12
       use_pathway: true
       pathway_repeat_lead: false
       pathway_step_beats: 1.0
@@ -42,15 +44,16 @@ drills:
   - id: PATHWAYS
     family: note
     level: 1
+    tier: 2
     defaults:
-      tempo_bpm: 60
+      tempo_bpm: 80
       range_min: 60
       range_max: 72
       assistance_policy: { Replay: 3, GuideTone: 1 }
     params:
       avoid_repeat: true
       range_below_semitones: 0
-      range_above_semitones: 11
+      range_above_semitones: 12
       use_pathway: true
       pathway_repeat_lead: false
       pathway_step_beats: 1.0
@@ -59,6 +62,7 @@ drills:
   - id: NOTE_1_4
     family: note
     level: 2
+    tier: 0
     transition: true
     defaults:
       tempo_bpm: 72
@@ -68,12 +72,13 @@ drills:
     params:
       allowed_degrees: [0, 1, 2, 3] # I–IV
       range_below_semitones: 0
-      range_above_semitones: 11
+      range_above_semitones: 12
       avoid_repeat: true
   
   - id: NOTE_5_7
     family: note
     level: 2
+    tier: 1
     transition: true
     defaults:
       tempo_bpm: 72
@@ -89,13 +94,13 @@ drills:
   - id: NOTE
     family: note
     level: 2
+    tier: 2
     defaults:
       tempo_bpm: 72
       range_min: 60
       range_max: 72
       assistance_policy: { Replay: 3 }
     params:
-      allowed_degrees: [4, 5, 6] # V–VII
       range_below_semitones: 0
       range_above_semitones: 11
       avoid_repeat: true
@@ -103,6 +108,7 @@ drills:
   - id: NOTE_TO_TONIC
     family: note
     level: 3
+    tier: 0
     defaults:
       tempo_bpm: 72
       range_min: 60
@@ -112,12 +118,13 @@ drills:
       allowed_degrees: [1, 2, 3, 4, 5, 6]
       tonic_anchor: "after"
       range_below_semitones: 0
-      range_above_semitones: 11
+      range_above_semitones: 12
       avoid_repeat: true
 
   - id: NOTE_AFTER_TONIC
     family: note
     level: 3
+    tier: 1
     defaults:
       tempo_bpm: 72
       range_min: 60
@@ -127,12 +134,13 @@ drills:
       allowed_degrees: [1, 2, 3, 4, 5, 6]
       tonic_anchor: "before"
       range_below_semitones: 0
-      range_above_semitones: 11
+      range_above_semitones: 12
       avoid_repeat: true
 
   - id: NOTE_WITH_TONIC
     family: note
     level: 3
+    tier: 2
     defaults:
       tempo_bpm: 72
       range_min: 60
@@ -141,8 +149,9 @@ drills:
     params:
       allowed_degrees: [1, 2, 3, 4, 5, 6]
       tonic_anchor: "both"
+      tonic_anchor_include_octave: true
       range_below_semitones: 0
-      range_above_semitones: 11
+      range_above_semitones: 12
       avoid_repeat: true
 
   # - id: MELODY_SHORT_60

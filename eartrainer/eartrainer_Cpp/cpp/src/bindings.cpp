@@ -146,6 +146,13 @@ PYBIND11_MODULE(_earcore, m) {
            py::arg("catalog_path") = std::string("eartrainer/eartrainer_Cpp/resources/adaptive_levels.yml"),
            py::arg("seed") = 1)
       .def("set_bout", &ear::AdaptiveDrills::set_bout, py::arg("level"))
+      .def("set_bout_from_catalog",
+           [](ear::AdaptiveDrills& ad, int level, py::object catalog_obj) {
+             auto json_doc = py_to_json(catalog_obj);
+             ad.set_bout_from_json(level, json_doc);
+           },
+           py::arg("level"),
+           py::arg("catalog_data"))
       .def("next", [](ear::AdaptiveDrills& ad) {
         auto b = ad.next();
         return json_to_py(ear::bridge::to_json(b));

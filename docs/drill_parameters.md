@@ -29,7 +29,8 @@ Parameters (`params`):
 - `pathway_tempo_bpm: int` — tempo override for the pathway portion; falls back to `defaults.tempo_bpm`.
 - `note_step_beats: float` — optional lead-note duration in beats (falls back to an internal default).
 - `note_tempo_bpm: int` — optional tempo override for the lead; falls back to `defaults.tempo_bpm`.
-- `tonic_anchor: "before" | "after" | "both"` — optionally wrap the sampled degree with the tonic before/after (ignored when `use_pathway` is true).
+- `tonic_anchor: "before" | "after" | "both"` — optionally wrap the sampled degree with the tonic before/after (ignored when `use_pathway` is true). When set to `"both"` the engine randomly chooses either a leading or trailing tonic for each question.
+- `tonic_anchor_include_octave: bool` — when `tonic_anchor` is active, emit the octave tonic (degree 8) immediately after the root anchor, e.g. `[1, 8]`.
 
 Prompt shape:
 - Lead: one note (dur from `note_step_beats` at `note_tempo_bpm` or `defaults.tempo_bpm`).
@@ -69,8 +70,9 @@ Example (tonic arrival, two notes):
   params:
     allowed_degrees: [1,2,3,4,5,6] # avoid dominant tonic as first degree
     range_below_semitones: 12
-    range_above_semitones: 11
+    range_above_semitones: 12
     tonic_anchor: "after"
+    tonic_anchor_include_octave: true  # optional: include degree 8 with the tonic anchor
 ```
 
 ## Interval Drill (family: `interval`)

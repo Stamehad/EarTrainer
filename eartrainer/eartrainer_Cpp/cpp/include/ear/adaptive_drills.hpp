@@ -19,6 +19,7 @@ public:
                           std::uint64_t seed = 1);
 
   void set_bout(int level);
+  void set_bout_from_json(int level, const nlohmann::json& document);
   QuestionBundle next();
   nlohmann::json diagnostic() const;
 
@@ -35,6 +36,7 @@ private:
   };
 
   std::string make_question_id();
+  void initialize_bout(int level, const std::vector<DrillSpec>& specs);
 
   std::string catalog_path_;
   std::uint64_t master_rng_;

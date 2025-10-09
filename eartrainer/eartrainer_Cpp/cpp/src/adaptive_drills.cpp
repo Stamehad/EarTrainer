@@ -5,24 +5,52 @@
 #include "rng.hpp"
 
 #include <stdexcept>
+#include <mutex>
 #include <sstream>
 #include <utility>
 
 namespace ear {
 
+namespace {
+
+void ensure_factory_registered() {
+  static std::once_flag flag;
+  std::call_once(flag, []() {
+    auto& factory = DrillFactory::instance();
+    register_builtin_drills(factory);
+  });
+}
+
+} // namespace
+
 AdaptiveDrills::AdaptiveDrills(std::string catalog_path, std::uint64_t seed)
     : catalog_path_(std::move(catalog_path)),
       master_rng_(seed == 0 ? 1 : seed),
-      factory_(DrillFactory::instance()) {}
+      factory_(DrillFactory::instance()) {
+  ensure_factory_registered();
+}
 
 void AdaptiveDrills::set_bout(int level) {
+  auto specs = adaptive::load_level_catalog(catalog_path_, level);
+  initialize_bout(level, specs);
+}
+
+void AdaptiveDrills::set_bout_from_json(int level, const nlohmann::json& document) {
+  auto specs = DrillSpec::load_json(document);
+  auto filtered = DrillSpec::filter_by_level(specs, level);
+  if (filtered.empty()) {
+    throw std::runtime_error("No adaptive drills configured for level " + std::to_string(level));
+  }
+  initialize_bout(level, filtered);
+}
+
+void AdaptiveDrills::initialize_bout(int level, const std::vector<DrillSpec>& specs) {
   slots_.clear();
   question_counter_ = 0;
   current_level_ = level;
   pick_counts_.clear();
   last_pick_.reset();
 
-  auto specs = adaptive::load_level_catalog(catalog_path_, level);
   if (specs.empty()) {
     throw std::runtime_error("Adaptive bout has no drills configured");
   }

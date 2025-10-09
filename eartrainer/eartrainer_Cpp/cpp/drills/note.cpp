@@ -205,23 +205,41 @@ DrillOutput NoteDrill::next_question(std::uint64_t& rng_state) {
     });
   }
 
-  bool anchor_before = tonic_anchor == "before" || tonic_anchor == "both";
-  bool anchor_after = tonic_anchor == "after" || tonic_anchor == "both";
+  bool anchor_before = false;
+  bool anchor_after = false;
+  bool anchor_include_octave = false;
 
-  if (pathways_active) {
-    // Pathway mode supersedes tonic anchoring.
-    anchor_before = false;
-    anchor_after = false;
+  if (!pathways_active) {
+    if (tonic_anchor == "before") {
+      anchor_before = true;
+    } else if (tonic_anchor == "after") {
+      anchor_after = true;
+    } else if (tonic_anchor == "both") {
+      anchor_before = rand_int(rng_state, 0, 1) == 0;
+      anchor_after = !anchor_before;
+    }
+    anchor_include_octave = flag_param(spec_, "tonic_anchor_include_octave", false);
   }
 
+  auto choose_anchor_pitch = [&](int base_pitch) -> int {
+    int tonic_pitch = base_pitch;
+    if (anchor_include_octave && rand_int(rng_state, 0, 1) == 1) {
+      int octave_pitch = drills::clamp_to_range(tonic_pitch + 12, spec_.range_min, spec_.range_max);
+      if (octave_pitch > tonic_pitch) {
+        tonic_pitch = octave_pitch;
+      }
+    }
+    return tonic_pitch;
+  };
+
   if (anchor_before) {
-    add_note(tonic_midi);
+    add_note(choose_anchor_pitch(tonic_midi));
   }
 
   add_note(midi);
 
   if (anchor_after) {
-    add_note(tonic_midi);
+    add_note(choose_anchor_pitch(tonic_midi));
   }
 
   if (pathways_active) {
