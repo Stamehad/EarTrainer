@@ -2,6 +2,8 @@ triads:
   major:
     - offsets: [0, 2, 4, 7]
       description: "Root position with octave doubling"
+    - offsets: [0, 2, 4]
+      description: "Root position"
     - offsets: [-3, 0, 2]
       description: "First inversion with low fifth"
     - offsets: [2, 4, 7]
@@ -9,6 +11,8 @@ triads:
   minor:
     - offsets: [0, 2, 4, 7]
       description: "Root position with octave doubling"
+    - offsets: [0, 2, 4]
+      description: "Root position"
     - offsets: [-3, 0, 2]
       description: "First inversion with low fifth"
     - offsets: [2, 4, 7]
@@ -16,6 +20,8 @@ triads:
   diminished:
     - offsets: [0, 2, 4, 7]
       description: "Root position with octave doubling"
+    - offsets: [0, 2, 4]
+      description: "Root position"
     - offsets: [-3, 0, 2]
       description: "First inversion with low fifth"
     - offsets: [2, 4, 7]

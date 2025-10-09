@@ -35,7 +35,7 @@ def format_entry(entry: Dict[str, Any]) -> str:
     if isinstance(allowed, Iterable) and not isinstance(allowed, (str, bytes)):
         allowed_str = ",".join(str(d) for d in allowed)
     else:
-        allowed_str = "n/a"
+        return f"{drill_id} | L={level} | bpm={tempo}"
 
     return f"{drill_id} | L={level} | bpm={tempo} | allowed_degrees=[{allowed_str}]"
 

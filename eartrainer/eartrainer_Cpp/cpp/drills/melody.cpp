@@ -116,6 +116,11 @@ std::vector<int> generate_degrees(const DrillSpec& spec, std::uint64_t& rng_stat
     length = std::max(1, spec.params["melody_length"].get<int>());
   }
 
+  int max_step = 7;
+  if (spec.params.contains("melody_max_step")) {
+    max_step = std::clamp(spec.params["melody_max_step"].get<int>(), 0, 7);
+  }
+
   std::vector<int> all_degrees = base_degrees();
   int start_index = rand_int(rng_state, 0, static_cast<int>(all_degrees.size()) - 1);
   std::vector<int> sequence;
@@ -126,12 +131,19 @@ std::vector<int> generate_degrees(const DrillSpec& spec, std::uint64_t& rng_stat
 
   for (int i = 1; i < length; ++i) {
     auto weights = make_base_weights();
+    if (max_step < 7) {
+      for (std::size_t idx = 0; idx < weights.size(); ++idx) {
+        if (std::abs(kSteps[idx]) > max_step) {
+          weights[idx] = 0.0;
+        }
+      }
+    }
     apply_musical_modifiers(weights, state);
     auto probs = normalise(weights);
     int step = choose_step(rng_state, probs);
 
     int last_degree = sequence.back();
-    int next_degree = ((last_degree + step) % 7 + 7) % 7;
+    int next_degree = last_degree + step;
     sequence.push_back(next_degree);
 
     if (step == 0) {
@@ -262,10 +274,18 @@ DrillOutput MelodyDrill::next_question(std::uint64_t& rng_state) {
   plan.tempo_bpm = spec_.tempo_bpm;
   plan.count_in = true;
 
+  auto step_duration_ms = [](int bpm) {
+    int tempo = std::max(1, bpm);
+    double quarter_ms = 60000.0 / static_cast<double>(tempo);
+    return static_cast<int>(std::lround(quarter_ms));
+  };
+  int tempo_bpm = spec_.tempo_bpm.has_value() ? spec_.tempo_bpm.value() : 60;
+  int duration_ms = step_duration_ms(tempo_bpm);
+
   nlohmann::json note_payload = nlohmann::json::array();
   for (const auto& entry : midi_json.get_array()) {
     int pitch = entry.get<int>();
-    plan.notes.push_back({pitch, 400, std::nullopt, std::nullopt});
+    plan.notes.push_back({pitch, duration_ms, std::nullopt, std::nullopt});
     note_payload.push_back(pitch);
   }
 

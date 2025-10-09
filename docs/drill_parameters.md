@@ -31,6 +31,7 @@ Parameters (`params`):
 - `note_tempo_bpm: int` — optional tempo override for the lead; falls back to `defaults.tempo_bpm`.
 - `tonic_anchor: "before" | "after" | "both"` — optionally wrap the sampled degree with the tonic before/after (ignored when `use_pathway` is true). When set to `"both"` the engine randomly chooses either a leading or trailing tonic for each question.
 - `tonic_anchor_include_octave: bool` — when `tonic_anchor` is active, emit the octave tonic (degree 8) immediately after the root anchor, e.g. `[1, 8]`.
+- `melody_max_step: int` — optional absolute limit on step size (1 = purely stepwise motion, 2 = up to thirds, default = 7 allowing full leaps).
 
 Prompt shape:
 - Lead: one note (dur from `note_step_beats` at `note_tempo_bpm` or `defaults.tempo_bpm`).
