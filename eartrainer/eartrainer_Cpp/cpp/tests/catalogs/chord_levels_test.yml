@@ -1,0 +1,14 @@
+drills:
+  - id: CHD_PHASE1_1
+    family: test
+    level: 211
+  - id: CHD_PHASE1_2
+    family: test
+    level: 215
+  - id: CHD_PHASE1_3
+    family: test
+    level: 217
+  - id: CHD_PHASE2_1
+    family: test
+    level: 221
+

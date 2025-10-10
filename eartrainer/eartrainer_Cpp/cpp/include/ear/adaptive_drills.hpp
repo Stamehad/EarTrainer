@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ear/track_selector.hpp"
 #include "ear/drill_factory.hpp"
 #include "ear/types.hpp"
 
@@ -18,13 +19,21 @@ public:
   explicit AdaptiveDrills(std::string catalog_path = "resources/adaptive_levels.yml",
                           std::uint64_t seed = 1);
 
-  void set_bout(int level);
-  void set_bout_from_json(int level, const nlohmann::json& document);
+  void set_bout(const std::vector<int>& track_levels);
+  void set_bout_from_json(const std::vector<int>& track_levels, const nlohmann::json& document);
+  struct TrackPick {
+    int phase_digit = -1;
+    int picked_track = -1;
+    std::vector<int> weights;
+  };
+  TrackPick pick_track(const std::vector<int>& current_levels);
   QuestionBundle next();
   nlohmann::json diagnostic() const;
 
   bool empty() const { return slots_.empty(); }
   std::size_t size() const { return slots_.size(); }
+  std::size_t track_count() const { return track_phase_catalogs_.size(); }
+  const std::vector<int>& last_used_track_levels() const { return last_track_levels_; }
 
 private:
   struct Slot {
@@ -46,6 +55,21 @@ private:
   std::vector<Slot> slots_;
   std::vector<std::size_t> pick_counts_;
   std::optional<std::size_t> last_pick_;
+  std::vector<adaptive::TrackPhaseCatalog> track_phase_catalogs_;
+
+  // Track-selection diagnostics/state
+  std::optional<int> last_track_pick_;
+  std::vector<int> last_track_weights_;
+  std::optional<int> last_phase_digit_;
+  std::optional<bool> phase_consistent_;
+  std::vector<int> last_track_levels_;
+  std::optional<std::string> track_catalog_error_;
+
+  // helpers
+  static int weighted_pick(const std::vector<int>& weights, std::uint64_t& rng_state);
+  std::vector<int> levels_in_scope_for_track(int track_index, int current_level, int phase_digit) const;
+  int first_level_for_track(int track_index) const;
+  std::vector<int> normalize_track_levels(const std::vector<int>& track_levels) const;
 };
 
 } // namespace ear

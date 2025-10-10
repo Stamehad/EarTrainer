@@ -77,6 +77,7 @@ struct SessionData {
   bool adaptive = false;
   std::unique_ptr<DrillHub> drill_hub;
   std::unique_ptr<AdaptiveDrills> adaptive_drills;
+  std::vector<int> track_levels;
   double adaptive_fitness = 0.5;
   std::size_t adaptive_target_questions = 0;
   std::size_t adaptive_asked = 0;
@@ -495,15 +496,42 @@ std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) 
     }
   }
 
-  // Initialize AdaptiveDrills with catalog path and bout level
-  int level = 1;
-  if (spec.sampler_params.is_object() && spec.sampler_params.contains("level")) {
-    const auto& lv = spec.sampler_params["level"];
-    if (lv.is_number_integer()) level = lv.get<int>();
-  }
+  // Initialize AdaptiveDrills with catalog path and track levels
   std::string catalog = "eartrainer/eartrainer_Cpp/resources/adaptive_levels.yml";
   session.adaptive_drills = std::make_unique<AdaptiveDrills>(catalog, spec.seed);
-  session.adaptive_drills->set_bout(level);
+  auto track_count = session.adaptive_drills->track_count();
+
+  session.track_levels = spec.track_levels;
+  if (session.track_levels.empty() && spec.sampler_params.is_object()) {
+    if (spec.sampler_params.contains("track_levels")) {
+      const auto& tl = spec.sampler_params["track_levels"];
+      if (tl.is_array()) {
+        for (const auto& entry : tl.get_array()) {
+          if (entry.is_number_integer()) {
+            session.track_levels.push_back(entry.get<int>());
+          }
+        }
+      }
+    }
+  }
+  if (session.track_levels.empty()) {
+    int legacy_level = 1;
+    if (spec.sampler_params.is_object() && spec.sampler_params.contains("level")) {
+      const auto& lv = spec.sampler_params["level"];
+      if (lv.is_number_integer()) legacy_level = lv.get<int>();
+    }
+    session.track_levels.push_back(legacy_level);
+  }
+  if (track_count > 0) {
+    if (session.track_levels.size() < track_count) {
+      session.track_levels.resize(track_count, 0);
+    } else if (session.track_levels.size() > track_count) {
+      session.track_levels.resize(track_count);
+    }
+  }
+  session.adaptive_drills->set_bout(session.track_levels);
+  session.track_levels = session.adaptive_drills->last_used_track_levels();
+  session.spec.track_levels = session.track_levels;
 
   std::string session_id = generate_session_id();
   session.summary_cache.session_id = session_id;

@@ -23,6 +23,7 @@ struct SessionSpec {
   nlohmann::json sampler_params;
   std::uint64_t seed;
   bool adaptive = false;
+  std::vector<int> track_levels;
 };
 
 struct Note {

@@ -1,10 +1,13 @@
 #include "ear/session_engine.hpp"
+#include "ear/track_selector.hpp"
 #include "ear/types.hpp"
 #include "scoring/scoring.hpp"
 
 #include "../src/json_bridge.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <iostream>
 #include <variant>
 #include <vector>
@@ -54,10 +57,73 @@ std::string digest(const ear::QuestionBundle& bundle) {
   return bundle.question.payload.dump();
 }
 
+void test_track_selector(TestSuite& suite) {
+  using ear::adaptive::TrackCatalogDescriptor;
+  using ear::adaptive::compute_track_phase_weights;
+
+  const auto base_dir = std::filesystem::path(__FILE__).parent_path() / "catalogs";
+  std::vector<TrackCatalogDescriptor> catalog_descriptors = {
+      {"degree", base_dir / "degree_levels_test.yml"},
+      {"melody", base_dir / "melody_levels_test.yml"},
+      {"chord",  base_dir / "chord_levels_test.yml"},
+  };
+  auto catalogs = ear::adaptive::load_track_phase_catalogs(catalog_descriptors);
+
+  {
+    auto result = compute_track_phase_weights(std::vector<int>{11, 111, 211}, catalogs);
+    suite.require(result.phase_digit == 1, "expected phase digit 1 for initial phase");
+    suite.require(result.weights.size() == catalogs.size(), "weight count should match tracks");
+    suite.require(result.weights[0] == 3, "degree track should have 3 pending levels");
+    suite.require(result.weights[1] == 2, "melody track should have 2 pending levels");
+    suite.require(result.weights[2] == 3, "chord track should have 3 pending levels");
+  }
+
+  {
+    auto result = compute_track_phase_weights(std::vector<int>{19, 118, 211}, catalogs);
+    suite.require(result.weights[0] == 1, "degree track should have 1 pending level after progress");
+    suite.require(result.weights[1] == 1, "melody track should have 1 pending level after progress");
+    suite.require(result.weights[2] == 3, "chord track remains at 3 pending levels");
+  }
+
+  {
+    auto result = compute_track_phase_weights(std::vector<int>{21, 118, 217}, catalogs);
+    suite.require(result.phase_digit == 1, "phase should remain 1 until all phase-1 levels complete");
+    suite.require(result.weights[0] == 0, "track ahead of phase should contribute zero weight");
+    suite.require(result.weights[1] == 1, "melody track should have 1 pending level");
+    suite.require(result.weights[2] == 1, "chord track should have 1 pending level");
+  }
+
+  {
+    auto result = compute_track_phase_weights(std::vector<int>{0, 0, 0}, catalogs);
+    suite.require(result.phase_digit == -1, "no active phase when all tracks finished");
+    suite.require(std::all_of(result.weights.begin(), result.weights.end(),
+                              [](int weight) { return weight == 0; }),
+                  "weights should be zero when no track is active");
+  }
+
+  bool mismatched_sizes_threw = false;
+  try {
+    (void)compute_track_phase_weights(std::vector<int>{11, 111}, catalogs);
+  } catch (const std::invalid_argument&) {
+    mismatched_sizes_threw = true;
+  }
+  suite.require(mismatched_sizes_threw, "size mismatch should raise invalid_argument");
+
+  bool missing_level_threw = false;
+  try {
+    (void)compute_track_phase_weights(std::vector<int>{12, 111, 211}, catalogs);
+  } catch (const std::runtime_error&) {
+    missing_level_threw = true;
+  }
+  suite.require(missing_level_threw, "unknown current level should raise runtime_error");
+}
+
 } // namespace
 
 int main() {
   TestSuite suite;
+
+  test_track_selector(suite);
 
   {
     auto engine1 = ear::make_engine();
@@ -304,6 +370,7 @@ int main() {
     auto engine = ear::make_engine();
     auto spec = make_spec("melody", "adaptive", 4242, 2);
     spec.adaptive = true;
+    spec.track_levels = {11, 0, 0};
     spec.sampler_params = nlohmann::json::object();
     nlohmann::json drills = nlohmann::json::array();
     drills.push_back("melody");
@@ -339,6 +406,7 @@ int main() {
 
     auto spec = make_spec("melody", "adaptive", 9999, 6);
     spec.adaptive = true;
+    spec.track_levels = {11, 0, 0};
     spec.sampler_params = nlohmann::json::object();
     nlohmann::json drills = nlohmann::json::array();
     drills.push_back("melody");
@@ -385,6 +453,7 @@ int main() {
 
     auto spec = make_spec("melody", "adaptive", 7777, 4);
     spec.adaptive = true;
+    spec.track_levels = {11, 0, 0};
     spec.sampler_params = nlohmann::json::object();
     nlohmann::json drills = nlohmann::json::array();
     drills.push_back("melody");

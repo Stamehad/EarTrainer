@@ -154,50 +154,6 @@ drills:
       range_above_semitones: 12
       avoid_repeat: true
 
-  - id: MELODY2_60_STEP1
-    family: melody
-    level: 4
-    tier: 0
-    defaults:
-      tempo_bpm: 60
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 2, TempoDown: 1 }
-    params:
-      melody_length: 2
-      melody_max_step: 1      # 1 = stepwise only
-      range_below_semitones: 0
-      range_above_semitones: 12
-  
-  - id: MELODY2_60_STEP2
-    family: melody
-    level: 4
-    tier: 1
-    defaults:
-      tempo_bpm: 60
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 2, TempoDown: 1 }
-    params:
-      melody_length: 2
-      melody_max_step: 2
-      range_below_semitones: 0
-      range_above_semitones: 12
-
-  - id: MELODY2_60
-    family: melody
-    level: 4
-    tier: 2
-    defaults:
-      tempo_bpm: 60
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 2, TempoDown: 1 }
-    params:
-      melody_length: [2, 3]
-      melody_max_step: 2
-      range_below_semitones: 0
-      range_above_semitones: 12
       
 
   # - id: INTERVAL_STEPWISE_72

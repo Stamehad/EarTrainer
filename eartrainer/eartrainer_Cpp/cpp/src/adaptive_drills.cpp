@@ -1,9 +1,13 @@
 #include "ear/adaptive_drills.hpp"
 
 #include "ear/adaptive_catalog.hpp"
+#include "ear/track_selector.hpp"
 #include "ear/drill_factory.hpp"
 #include "rng.hpp"
 
+#include <algorithm>
+#include <cmath>
+#include <filesystem>
 #include <stdexcept>
 #include <mutex>
 #include <sstream>
@@ -28,20 +32,218 @@ AdaptiveDrills::AdaptiveDrills(std::string catalog_path, std::uint64_t seed)
       master_rng_(seed == 0 ? 1 : seed),
       factory_(DrillFactory::instance()) {
   ensure_factory_registered();
-}
 
-void AdaptiveDrills::set_bout(int level) {
-  auto specs = adaptive::load_level_catalog(catalog_path_, level);
-  initialize_bout(level, specs);
-}
-
-void AdaptiveDrills::set_bout_from_json(int level, const nlohmann::json& document) {
-  auto specs = DrillSpec::load_json(document);
-  auto filtered = DrillSpec::filter_by_level(specs, level);
-  if (filtered.empty()) {
-    throw std::runtime_error("No adaptive drills configured for level " + std::to_string(level));
+  std::filesystem::path resolved_catalog = catalog_path_;
+  if (!resolved_catalog.is_absolute()) {
+    resolved_catalog = std::filesystem::current_path() / resolved_catalog;
   }
-  initialize_bout(level, filtered);
+  catalog_path_ = resolved_catalog.string();
+
+  std::filesystem::path resources_dir = resolved_catalog.parent_path();
+  if (resources_dir.empty()) {
+    resources_dir = resolved_catalog;
+  }
+
+  std::vector<adaptive::TrackCatalogDescriptor> descriptors = {
+      {"degree", resolved_catalog},
+      {"melody", resources_dir / "melody_levels.yml"},
+      {"chord",  resources_dir / "chord_levels.yml"},
+  };
+
+  try {
+    track_phase_catalogs_ = adaptive::load_track_phase_catalogs(descriptors);
+  } catch (const std::exception& ex) {
+    track_phase_catalogs_.clear();
+    track_catalog_error_ = ex.what();
+  }
+}
+
+int AdaptiveDrills::weighted_pick(const std::vector<int>& weights, std::uint64_t& rng_state) {
+  long long total = 0;
+  for (int w : weights) total += (w > 0 ? w : 0);
+  if (total <= 0) return -1;
+  long long r = rand_int(rng_state, 1, static_cast<int>(total));
+  long long acc = 0;
+  for (std::size_t i = 0; i < weights.size(); ++i) {
+    if (weights[i] <= 0) continue;
+    acc += weights[i];
+    if (r <= acc) return static_cast<int>(i);
+  }
+  return -1;
+}
+
+std::vector<int> AdaptiveDrills::levels_in_scope_for_track(int track_index, int current_level, int phase_digit) const {
+  std::vector<int> out;
+  if (track_index < 0 || static_cast<std::size_t>(track_index) >= track_phase_catalogs_.size()) return out;
+  const auto& summary = track_phase_catalogs_[static_cast<std::size_t>(track_index)];
+  auto it = summary.phases.find(phase_digit);
+  if (it == summary.phases.end()) return out;
+  const auto& phase_levels = it->second;
+
+  const int level_phase = (current_level >= 0) ? ((current_level / 10) % 10) : ((-current_level / 10) % 10);
+  if (level_phase < phase_digit) {
+    // Behind the phase: all phase levels are pending
+    out = phase_levels;
+  } else if (level_phase == phase_digit) {
+    // In the phase: levels from current and above
+    auto lb = std::lower_bound(phase_levels.begin(), phase_levels.end(), current_level);
+    out.assign(lb, phase_levels.end());
+  } else {
+    // Ahead of the phase: none
+  }
+  return out;
+}
+
+int AdaptiveDrills::first_level_for_track(int track_index) const {
+  if (track_index < 0 || static_cast<std::size_t>(track_index) >= track_phase_catalogs_.size()) {
+    return 0;
+  }
+  const auto& summary = track_phase_catalogs_[static_cast<std::size_t>(track_index)];
+  for (const auto& [phase, levels] : summary.phases) {
+    if (!levels.empty()) {
+      return levels.front();
+    }
+  }
+  return 0;
+}
+
+std::vector<int> AdaptiveDrills::normalize_track_levels(const std::vector<int>& track_levels) const {
+  std::vector<int> normalized = track_levels;
+  const std::size_t tracks = track_phase_catalogs_.size();
+  if (tracks == 0) {
+    return normalized;
+  }
+  if (normalized.size() < tracks) {
+    normalized.resize(tracks, 0);
+  } else if (normalized.size() > tracks) {
+    normalized.resize(tracks);
+  }
+  for (std::size_t i = 0; i < tracks; ++i) {
+    if (normalized[i] <= 0) {
+      int fallback = first_level_for_track(static_cast<int>(i));
+      if (fallback > 0) {
+        normalized[i] = fallback;
+      }
+    }
+  }
+  return normalized;
+}
+
+AdaptiveDrills::TrackPick AdaptiveDrills::pick_track(const std::vector<int>& current_levels) {
+  AdaptiveDrills::TrackPick pick;
+  if (current_levels.size() != track_phase_catalogs_.size()) {
+    throw std::invalid_argument("pick_track: current_levels size must match number of tracks");
+  }
+
+  phase_consistent_.reset();
+  last_track_levels_ = current_levels;
+
+  std::optional<int> observed_phase;
+  bool consistent = true;
+  for (int level : current_levels) {
+    if (level <= 0) continue;
+    int phase = (std::abs(level) / 10) % 10;
+    if (!observed_phase.has_value()) {
+      observed_phase = phase;
+    } else if (*observed_phase != phase) {
+      consistent = false;
+      if (phase < *observed_phase) {
+        observed_phase = phase; // keep smallest phase as reference
+      }
+    }
+  }
+  phase_consistent_ = consistent;
+
+  auto sel = adaptive::compute_track_phase_weights(current_levels, track_phase_catalogs_);
+  pick.phase_digit = sel.phase_digit;
+  pick.weights = std::move(sel.weights);
+  int idx = weighted_pick(pick.weights, master_rng_);
+  pick.picked_track = idx;
+
+  last_phase_digit_ = pick.phase_digit;
+  last_track_weights_ = pick.weights;
+  last_track_pick_ = (idx >= 0 ? std::optional<int>(idx) : std::nullopt);
+  return pick;
+}
+
+void AdaptiveDrills::set_bout(const std::vector<int>& track_levels) {
+  if (track_phase_catalogs_.empty()) {
+    if (track_catalog_error_.has_value()) {
+      throw std::runtime_error("AdaptiveDrills: track catalogs unavailable (" + *track_catalog_error_ + ")");
+    }
+    throw std::runtime_error("AdaptiveDrills: no track catalogs available");
+  }
+
+  auto normalized_levels = normalize_track_levels(track_levels);
+  auto pick = pick_track(normalized_levels);
+  if (pick.phase_digit < 0) {
+    throw std::runtime_error("AdaptiveDrills: unable to determine active phase from levels");
+  }
+  if (pick.picked_track < 0) {
+    throw std::runtime_error("AdaptiveDrills: no eligible track could be selected");
+  }
+
+  int track_index = pick.picked_track;
+  int current_level = normalized_levels[static_cast<std::size_t>(track_index)];
+  auto scope = levels_in_scope_for_track(track_index, current_level, pick.phase_digit);
+  if (scope.empty()) {
+    throw std::runtime_error("AdaptiveDrills: selected track has no pending levels in current phase");
+  }
+  int target_level = scope.front();
+
+  const auto& descriptor = track_phase_catalogs_[static_cast<std::size_t>(track_index)];
+  catalog_path_ = descriptor.resolved_path.string();
+  auto specs = adaptive::load_level_catalog(descriptor.resolved_path.string(), target_level);
+  initialize_bout(target_level, specs);
+}
+
+void AdaptiveDrills::set_bout_from_json(const std::vector<int>& track_levels, const nlohmann::json& document) {
+  auto normalized_levels = normalize_track_levels(track_levels);
+  if (track_phase_catalogs_.empty()) {
+    if (normalized_levels.empty()) {
+      throw std::runtime_error("AdaptiveDrills: track levels required when catalogs unavailable");
+    }
+    last_track_levels_ = normalized_levels;
+    last_track_weights_.assign(normalized_levels.size(), 0);
+    last_track_pick_.reset();
+    last_phase_digit_.reset();
+    phase_consistent_.reset();
+
+    int target_level = normalized_levels.front();
+    if (target_level <= 0) {
+      throw std::runtime_error("AdaptiveDrills: invalid target level");
+    }
+
+    auto specs = DrillSpec::load_json(document);
+    auto filtered = DrillSpec::filter_by_level(specs, target_level);
+    if (filtered.empty()) {
+      throw std::runtime_error("No adaptive drills configured for level " + std::to_string(target_level));
+    }
+    initialize_bout(target_level, filtered);
+    return;
+  }
+  auto pick = pick_track(normalized_levels);
+  if (pick.phase_digit < 0 || pick.picked_track < 0) {
+    throw std::runtime_error("AdaptiveDrills: cannot evaluate track selection for JSON bout");
+  }
+
+  int track_index = pick.picked_track;
+  int current_level = normalized_levels[static_cast<std::size_t>(track_index)];
+  auto scope = levels_in_scope_for_track(track_index, current_level, pick.phase_digit);
+  if (scope.empty()) {
+    throw std::runtime_error("AdaptiveDrills: selected track has no pending levels in current phase");
+  }
+  int target_level = scope.front();
+
+  const auto& descriptor = track_phase_catalogs_[static_cast<std::size_t>(track_index)];
+  catalog_path_ = descriptor.resolved_path.string();
+
+  auto specs = DrillSpec::load_json(document);
+  auto filtered = DrillSpec::filter_by_level(specs, target_level);
+  if (filtered.empty()) {
+    throw std::runtime_error("No adaptive drills configured for level " + std::to_string(target_level));
+  }
+  initialize_bout(target_level, filtered);
 }
 
 void AdaptiveDrills::initialize_bout(int level, const std::vector<DrillSpec>& specs) {
@@ -110,6 +312,31 @@ nlohmann::json AdaptiveDrills::diagnostic() const {
   info["level"] = current_level_;
   info["slots"] = static_cast<int>(slots_.size());
   info["questions_emitted"] = static_cast<int>(question_counter_);
+  if (track_catalog_error_.has_value()) info["track_catalog_error"] = *track_catalog_error_;
+  if (last_phase_digit_.has_value()) info["phase_digit"] = *last_phase_digit_; else info["phase_digit"] = nullptr;
+  if (phase_consistent_.has_value()) info["phase_consistent"] = *phase_consistent_; else info["phase_consistent"] = nullptr;
+  nlohmann::json weights_json = nlohmann::json::array();
+  for (int w : last_track_weights_) {
+    weights_json.push_back(w);
+  }
+  info["track_weights"] = weights_json;
+  nlohmann::json level_json = nlohmann::json::array();
+  for (int level : last_track_levels_) {
+    level_json.push_back(level);
+  }
+  info["track_levels"] = level_json;
+  if (last_track_pick_.has_value()) {
+    info["last_track_pick"] = *last_track_pick_;
+    if (*last_track_pick_ >= 0 &&
+        static_cast<std::size_t>(*last_track_pick_) < track_phase_catalogs_.size()) {
+      info["current_track"] = track_phase_catalogs_[static_cast<std::size_t>(*last_track_pick_)].descriptor.name;
+    } else {
+      info["current_track"] = nullptr;
+    }
+  } else {
+    info["last_track_pick"] = nullptr;
+    info["current_track"] = nullptr;
+  }
   if (last_pick_.has_value()) {
     info["last_pick"] = static_cast<int>(*last_pick_);
   } else {
@@ -126,6 +353,30 @@ nlohmann::json AdaptiveDrills::diagnostic() const {
   info["ids"] = ids;
   info["families"] = families;
   info["pick_counts"] = counts;
+
+  // Add drills-in-scope per track for the last known phase and current level hints.
+  if (last_phase_digit_.has_value()) {
+    nlohmann::json tracks = nlohmann::json::array();
+    for (std::size_t i = 0; i < track_phase_catalogs_.size(); ++i) {
+      nlohmann::json t = nlohmann::json::object();
+      t["name"] = track_phase_catalogs_[i].descriptor.name;
+      int current_level_hint = 0;
+      if (i < last_track_levels_.size()) {
+        current_level_hint = last_track_levels_[i];
+      } else {
+        current_level_hint = current_level_;
+      }
+      auto scope = levels_in_scope_for_track(static_cast<int>(i), current_level_hint, *last_phase_digit_);
+      nlohmann::json lvls = nlohmann::json::array();
+      for (int v : scope) lvls.push_back(v);
+      t["levels_in_scope"] = lvls;
+      t["current_level"] = current_level_hint;
+      int weight = (i < last_track_weights_.size()) ? last_track_weights_[i] : 0;
+      t["weight"] = weight;
+      tracks.push_back(t);
+    }
+    info["tracks"] = tracks;
+  }
   return info;
 }
 

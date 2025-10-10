@@ -8,6 +8,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_library(ear_core STATIC
     src/adaptive_catalog.cpp
     src/adaptive_drills.cpp
+    src/track_selector.cpp
     src/session_engine.cpp
     src/drill_factory.cpp
     src/json_bridge.cpp

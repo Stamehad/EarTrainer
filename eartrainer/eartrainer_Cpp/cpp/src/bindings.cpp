@@ -145,11 +145,27 @@ PYBIND11_MODULE(_earcore, m) {
       .def(py::init<std::string, std::uint64_t>(),
            py::arg("catalog_path") = std::string("eartrainer/eartrainer_Cpp/resources/adaptive_levels.yml"),
            py::arg("seed") = 1)
-      .def("set_bout", &ear::AdaptiveDrills::set_bout, py::arg("level"))
+      .def("set_bout",
+           [](ear::AdaptiveDrills& ad, const std::vector<int>& levels) {
+             ad.set_bout(levels);
+           },
+           py::arg("levels"))
+      .def("set_bout",
+           [](ear::AdaptiveDrills& ad, int level) {
+             ad.set_bout(std::vector<int>{level});
+           },
+           py::arg("level"))
+      .def("set_bout_from_catalog",
+           [](ear::AdaptiveDrills& ad, const std::vector<int>& levels, py::object catalog_obj) {
+             auto json_doc = py_to_json(catalog_obj);
+             ad.set_bout_from_json(levels, json_doc);
+           },
+           py::arg("levels"),
+           py::arg("catalog_data"))
       .def("set_bout_from_catalog",
            [](ear::AdaptiveDrills& ad, int level, py::object catalog_obj) {
              auto json_doc = py_to_json(catalog_obj);
-             ad.set_bout_from_json(level, json_doc);
+             ad.set_bout_from_json(std::vector<int>{level}, json_doc);
            },
            py::arg("level"),
            py::arg("catalog_data"))

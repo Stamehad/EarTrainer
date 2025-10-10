@@ -1,0 +1,14 @@
+drills:
+  - id: DEG_PHASE1_1
+    family: test
+    level: 11
+  - id: DEG_PHASE1_2
+    family: test
+    level: 14
+  - id: DEG_PHASE1_3
+    family: test
+    level: 19
+  - id: DEG_PHASE2_1
+    family: test
+    level: 21
+
