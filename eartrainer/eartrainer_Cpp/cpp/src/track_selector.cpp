@@ -36,11 +36,19 @@ std::vector<DrillSpec> load_catalog_specs(const std::filesystem::path& catalog_p
 
 const std::vector<TrackCatalogDescriptor>& default_track_catalogs() {
   static const std::vector<TrackCatalogDescriptor> descriptors = {
-      {"degree", std::filesystem::path("resources") / "adaptive_levels.yml"},
+      {"degree", std::filesystem::path("resources") / "degree_levels.yml"},
       {"melody", std::filesystem::path("resources") / "melody_levels.yml"},
       {"chord",  std::filesystem::path("resources") / "chord_levels.yml"},
   };
   return descriptors;
+}
+
+std::vector<TrackCatalogDescriptor> track_catalogs_from_resources(const std::filesystem::path& resources_dir) {
+  return {
+      {"degree", resources_dir / "degree_levels.yml"},
+      {"melody", resources_dir / "melody_levels.yml"},
+      {"chord",  resources_dir / "chord_levels.yml"},
+  };
 }
 
 TrackSelectionResult compute_track_phase_weights(

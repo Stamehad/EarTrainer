@@ -143,7 +143,7 @@ PYBIND11_MODULE(_earcore, m) {
 
   py::class_<ear::AdaptiveDrills>(m, "AdaptiveDrills")
       .def(py::init<std::string, std::uint64_t>(),
-           py::arg("catalog_path") = std::string("eartrainer/eartrainer_Cpp/resources/adaptive_levels.yml"),
+           py::arg("resources_dir") = std::string("eartrainer/eartrainer_Cpp/resources"),
            py::arg("seed") = 1)
       .def("set_bout",
            [](ear::AdaptiveDrills& ad, const std::vector<int>& levels) {

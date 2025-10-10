@@ -42,29 +42,66 @@ def format_entry(entry: Dict[str, Any]) -> str:
     return s+ f" | allowed_degrees=[{allowed_str}]"
 
 
+def iter_catalog_files(path: pathlib.Path) -> Iterable[pathlib.Path]:
+    if path.is_file():
+        yield path
+        return
+
+    if not path.is_dir():
+        raise FileNotFoundError(f"Catalog path is neither file nor directory: {path}")
+
+    for candidate in sorted(path.glob("*_levels.yml")):
+        if candidate.is_file():
+            yield candidate
+
+
+def print_catalog(title: str, path: pathlib.Path) -> None:
+    data = load_catalog(path)
+    drills = data.get("drills", [])
+
+    print(f"# Track: {title}") # ({path})")
+    for i, entry in enumerate(drills):
+        if not isinstance(entry, dict):
+            continue
+        print(f"  {i})", format_entry(entry))
+    print()
+
+
 def main(argv: Iterable[str]) -> int:
     parser = argparse.ArgumentParser(description="List adaptive drill catalog entries")
     parser.add_argument(
         "catalog",
         nargs="?",
-        default=pathlib.Path(__file__).with_name("resources") / "adaptive_levels.yml",
+        default=pathlib.Path(__file__).with_name("resources"),
         type=pathlib.Path,
-        help="Path to adaptive_levels.yml (defaults to resources/adaptive_levels.yml).",
+        help=(
+            "Path to a catalog file or directory containing *_levels.yml files "
+            "(defaults to resources/)."
+        ),
     )
     args = parser.parse_args(list(argv))
 
-    catalog_path = args.catalog
+    catalog_path = args.catalog.resolve()
     if not catalog_path.exists():
-        print(f"Catalog file not found: {catalog_path}", file=sys.stderr)
+        print(f"Catalog path not found: {catalog_path}", file=sys.stderr)
         return 1
 
-    data = load_catalog(catalog_path)
-    drills = data.get("drills", [])
+    try:
+        files = list(iter_catalog_files(catalog_path))
+    except FileNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
-    for i, entry in enumerate(drills):
-        if not isinstance(entry, dict):
-            continue
-        print(f"{i})", format_entry(entry))
+    if not files:
+        print(f"No *_levels.yml files found in {catalog_path}", file=sys.stderr)
+        return 1
+
+    for catalog_file in files:
+        track_name = catalog_file.stem.replace("_levels", "")
+        try:
+            print_catalog(track_name, catalog_file)
+        except Exception as exc:
+            print(f"Failed to load {catalog_file}: {exc}", file=sys.stderr)
 
     return 0
 

@@ -27,28 +27,18 @@ void ensure_factory_registered() {
 
 } // namespace
 
-AdaptiveDrills::AdaptiveDrills(std::string catalog_path, std::uint64_t seed)
-    : catalog_path_(std::move(catalog_path)),
+AdaptiveDrills::AdaptiveDrills(std::string resources_dir, std::uint64_t seed)
+    : resources_dir_(std::move(resources_dir)),
       master_rng_(seed == 0 ? 1 : seed),
       factory_(DrillFactory::instance()) {
   ensure_factory_registered();
 
-  std::filesystem::path resolved_catalog = catalog_path_;
-  if (!resolved_catalog.is_absolute()) {
-    resolved_catalog = std::filesystem::current_path() / resolved_catalog;
-  }
-  catalog_path_ = resolved_catalog.string();
-
-  std::filesystem::path resources_dir = resolved_catalog.parent_path();
-  if (resources_dir.empty()) {
-    resources_dir = resolved_catalog;
+  if (!resources_dir_.is_absolute()) {
+    resources_dir_ = std::filesystem::current_path() / resources_dir_;
   }
 
-  std::vector<adaptive::TrackCatalogDescriptor> descriptors = {
-      {"degree", resolved_catalog},
-      {"melody", resources_dir / "melody_levels.yml"},
-      {"chord",  resources_dir / "chord_levels.yml"},
-  };
+  std::vector<adaptive::TrackCatalogDescriptor> descriptors;
+  descriptors = adaptive::track_catalogs_from_resources(resources_dir_);
 
   try {
     track_phase_catalogs_ = adaptive::load_track_phase_catalogs(descriptors);
@@ -192,7 +182,6 @@ void AdaptiveDrills::set_bout(const std::vector<int>& track_levels) {
   int target_level = scope.front();
 
   const auto& descriptor = track_phase_catalogs_[static_cast<std::size_t>(track_index)];
-  catalog_path_ = descriptor.resolved_path.string();
   auto specs = adaptive::load_level_catalog(descriptor.resolved_path.string(), target_level);
   initialize_bout(target_level, specs);
 }
@@ -236,7 +225,6 @@ void AdaptiveDrills::set_bout_from_json(const std::vector<int>& track_levels, co
   int target_level = scope.front();
 
   const auto& descriptor = track_phase_catalogs_[static_cast<std::size_t>(track_index)];
-  catalog_path_ = descriptor.resolved_path.string();
 
   auto specs = DrillSpec::load_json(document);
   auto filtered = DrillSpec::filter_by_level(specs, target_level);
@@ -308,7 +296,7 @@ std::string AdaptiveDrills::make_question_id() {
 
 nlohmann::json AdaptiveDrills::diagnostic() const {
   nlohmann::json info = nlohmann::json::object();
-  info["catalog_path"] = catalog_path_;
+  info["resources_dir"] = resources_dir_.string();
   info["level"] = current_level_;
   info["slots"] = static_cast<int>(slots_.size());
   info["questions_emitted"] = static_cast<int>(question_counter_);

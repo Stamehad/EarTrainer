@@ -5,6 +5,7 @@
 #include "ear/types.hpp"
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -16,7 +17,7 @@ namespace ear {
 
 class AdaptiveDrills {
 public:
-  explicit AdaptiveDrills(std::string catalog_path = "resources/adaptive_levels.yml",
+  explicit AdaptiveDrills(std::string resources_dir = "resources",
                           std::uint64_t seed = 1);
 
   void set_bout(const std::vector<int>& track_levels);
@@ -47,7 +48,7 @@ private:
   std::string make_question_id();
   void initialize_bout(int level, const std::vector<DrillSpec>& specs);
 
-  std::string catalog_path_;
+  std::filesystem::path resources_dir_;
   std::uint64_t master_rng_;
   std::size_t question_counter_ = 0;
   int current_level_ = 0;

@@ -170,6 +170,11 @@ nlohmann::json to_json(const SessionSpec& spec) {
   }
   json_spec["assistance_policy"] = assistance;
   json_spec["sampler_params"] = spec.sampler_params;
+  if (!spec.track_levels.empty()) {
+    nlohmann::json track_levels = nlohmann::json::array();
+    for (int level : spec.track_levels) track_levels.push_back(level);
+    json_spec["track_levels"] = track_levels;
+  }
   json_spec["seed"] = static_cast<std::int64_t>(spec.seed);
   json_spec["adaptive"] = spec.adaptive;
   nlohmann::json track_levels = nlohmann::json::array();
@@ -202,6 +207,17 @@ SessionSpec session_spec_from_json(const nlohmann::json& json_spec) {
     spec.assistance_policy[entry.first] = entry.second.get<int>();
   }
   spec.sampler_params = json_spec.value("sampler_params", nlohmann::json::object());
+  if (json_spec.contains("track_levels")) {
+    const auto& levels = json_spec["track_levels"];
+    if (levels.is_array()) {
+      spec.track_levels.clear();
+      for (const auto& entry : levels.get_array()) {
+        if (entry.is_number_integer()) {
+          spec.track_levels.push_back(entry.get<int>());
+        }
+      }
+    }
+  }
   spec.seed = static_cast<std::uint64_t>(json_spec["seed"].get<long long>());
   if (json_spec.contains("adaptive")) {
     spec.adaptive = json_spec["adaptive"].get<bool>();

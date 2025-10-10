@@ -24,6 +24,7 @@ struct TrackPhaseCatalog {
 };
 
 const std::vector<TrackCatalogDescriptor>& default_track_catalogs();
+std::vector<TrackCatalogDescriptor> track_catalogs_from_resources(const std::filesystem::path& resources_dir);
 
 TrackSelectionResult compute_track_phase_weights(
     const std::vector<int>& current_levels,

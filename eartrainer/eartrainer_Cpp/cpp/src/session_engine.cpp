@@ -497,8 +497,8 @@ std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) 
   }
 
   // Initialize AdaptiveDrills with catalog path and track levels
-  std::string catalog = "eartrainer/eartrainer_Cpp/resources/adaptive_levels.yml";
-  session.adaptive_drills = std::make_unique<AdaptiveDrills>(catalog, spec.seed);
+  std::string resources_dir = "eartrainer/eartrainer_Cpp/resources";
+  session.adaptive_drills = std::make_unique<AdaptiveDrills>(resources_dir, spec.seed);
   auto track_count = session.adaptive_drills->track_count();
 
   session.track_levels = spec.track_levels;
