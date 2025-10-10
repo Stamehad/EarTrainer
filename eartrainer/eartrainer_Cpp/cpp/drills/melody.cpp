@@ -112,8 +112,29 @@ int choose_step(std::uint64_t& rng_state, const std::vector<double>& probs) {
 
 std::vector<int> generate_degrees(const DrillSpec& spec, std::uint64_t& rng_state) {
   int length = kDefaultLength;
-  if (spec.params.contains("melody_length")) {
-    length = std::max(1, spec.params["melody_length"].get<int>());
+  auto sample_lengths = [&](const nlohmann::json& arr) -> bool {
+    if (!arr.is_array()) return false;
+    std::vector<int> candidates;
+    for (const auto& entry : arr.get_array()) {
+      if (entry.is_number_integer()) {
+        candidates.push_back(std::max(1, entry.get<int>()));
+      }
+    }
+    if (candidates.empty()) {
+      return false;
+    }
+    int idx = rand_int(rng_state, 0, static_cast<int>(candidates.size()) - 1);
+    length = candidates[static_cast<std::size_t>(idx)];
+    return true;
+  };
+
+  if (spec.params.contains("melody_lengths") && sample_lengths(spec.params["melody_lengths"])) {
+    // length set via melody_lengths array
+  } else if (spec.params.contains("melody_length")) {
+    const auto& value = spec.params["melody_length"];
+    if (!sample_lengths(value)) {
+      length = std::max(1, value.get<int>());
+    }
   }
 
   int max_step = 7;

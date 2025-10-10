@@ -106,6 +106,7 @@ Weighted diatonic step model with musical modifiers and recent‑sequence suppre
 
 Parameters (`params`):
 - `melody_length: int` — number of steps (default: 3; minimum: 1).
+- `melody_lengths: [int]` — optional list of allowed lengths; one is chosen uniformly each question.
 
 Prompt shape:
 - Sequence of notes, `count_in: true`; per-note durations are fixed internally today.

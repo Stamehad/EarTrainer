@@ -26,18 +26,20 @@ def load_catalog(path: pathlib.Path) -> Dict[str, Any]:
 def format_entry(entry: Dict[str, Any]) -> str:
     drill_id = entry.get("id", "<unknown>")
     level = entry.get("level", "<n/a>")
+    tier = entry.get("tier", "<n/a>")
 
     defaults = entry.get("defaults", {}) or {}
     tempo = defaults.get("tempo_bpm", "n/a")
 
     params = entry.get("params") or entry.get("sampler_params") or {}
     allowed = params.get("allowed_degrees")
+    s = f"{drill_id} | L={level}, T={tier} | bpm={tempo}"
     if isinstance(allowed, Iterable) and not isinstance(allowed, (str, bytes)):
         allowed_str = ",".join(str(d) for d in allowed)
     else:
-        return f"{drill_id} | L={level} | bpm={tempo}"
+        return s
 
-    return f"{drill_id} | L={level} | bpm={tempo} | allowed_degrees=[{allowed_str}]"
+    return s+ f" | allowed_degrees=[{allowed_str}]"
 
 
 def main(argv: Iterable[str]) -> int:
