@@ -22,8 +22,12 @@ using nlohmann::json;
 
 void DrillSpec::apply_defaults() {
   key = "C";
-  range_min = 60;
-  range_max = 72;
+  // Use a wide default absolute range so catalogs can rely on
+  // relative range controls (range_below/above or note_range_semitones)
+  // without being clipped by a tight absolute window.
+  // C2 (36) .. C7 (96)
+  range_min = 36;
+  range_max = 96;
   tempo_bpm.reset();
   assistance_policy.clear();
   nlohmann::json merged_params = params.is_object() ? params : nlohmann::json::object();

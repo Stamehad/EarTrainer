@@ -8,9 +8,6 @@ drills:
     transition: true
     defaults:
       tempo_bpm: 80
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 2, GuideTone: 1 }
     params:
       avoid_repeat: true
       allowed_degrees: [0, 1, 2, 3] # I–IV
@@ -28,9 +25,6 @@ drills:
     transition: true
     defaults:
       tempo_bpm: 80
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 3, GuideTone: 1 }
     params:
       avoid_repeat: true
       allowed_degrees: [4, 5, 6] # V–VII
@@ -47,9 +41,6 @@ drills:
     tier: 2
     defaults:
       tempo_bpm: 80
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 3, GuideTone: 1 }
     params:
       avoid_repeat: true
       range_below_semitones: 0
@@ -66,9 +57,6 @@ drills:
     transition: true
     defaults:
       tempo_bpm: 72
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 3 }
     params:
       allowed_degrees: [0, 1, 2, 3] # I–IV
       range_below_semitones: 0
@@ -82,9 +70,6 @@ drills:
     transition: true
     defaults:
       tempo_bpm: 72
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 3 }
     params:
       allowed_degrees: [4, 5, 6] # V–VII
       range_below_semitones: 0
@@ -97,9 +82,6 @@ drills:
     tier: 2
     defaults:
       tempo_bpm: 72
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 3 }
     params:
       range_below_semitones: 0
       range_above_semitones: 11
@@ -111,9 +93,6 @@ drills:
     tier: 0
     defaults:
       tempo_bpm: 72
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 3 }
     params:
       allowed_degrees: [1, 2, 3, 4, 5, 6]
       tonic_anchor: "after"
@@ -127,9 +106,6 @@ drills:
     tier: 1
     defaults:
       tempo_bpm: 72
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 3 }
     params:
       allowed_degrees: [1, 2, 3, 4, 5, 6]
       tonic_anchor: "before"
@@ -143,9 +119,6 @@ drills:
     tier: 2
     defaults:
       tempo_bpm: 72
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 3 }
     params:
       allowed_degrees: [1, 2, 3, 4, 5, 6]
       tonic_anchor: "both"
@@ -160,9 +133,6 @@ drills:
     tier: 0
     defaults:
       tempo_bpm: 120
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 3, GuideTone: 1 }
     params:
       avoid_repeat: true
       range_below_semitones: 12
@@ -178,9 +148,6 @@ drills:
     tier: 1
     defaults:
       tempo_bpm: 120
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 3 }
     params:
       allowed_degrees: [1, 2, 3, 4, 5, 6]
       tonic_anchor: "both"
@@ -195,9 +162,6 @@ drills:
     tier: 2
     defaults:
       tempo_bpm: 72
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 3 }
     params:
       range_below_semitones: 12
       range_above_semitones: 12

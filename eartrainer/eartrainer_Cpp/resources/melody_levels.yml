@@ -6,9 +6,6 @@ drills:
     tier: 0
     defaults:
       tempo_bpm: 60
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 2, TempoDown: 1 }
     params:
       melody_length: 2
       melody_max_step: 1      # 1 = stepwise only
@@ -21,9 +18,6 @@ drills:
     tier: 1
     defaults:
       tempo_bpm: 60
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 2, TempoDown: 1 }
     params:
       melody_length: 2
       melody_max_step: 2
@@ -36,9 +30,6 @@ drills:
     tier: 2
     defaults:
       tempo_bpm: 60
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 2, TempoDown: 1 }
     params:
       melody_length: 2
       range_below_semitones: 0
@@ -50,9 +41,6 @@ drills:
     tier: 0
     defaults:
       tempo_bpm: 90
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 2, TempoDown: 1 }
     params:
       melody_length: [2, 3]
       melody_max_step: 1      # 1 = stepwise only
@@ -65,9 +53,6 @@ drills:
     tier: 1
     defaults:
       tempo_bpm: 60
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 2, TempoDown: 1 }
     params:
       melody_length: [2, 3]
       melody_max_step: 2
@@ -80,9 +65,6 @@ drills:
     tier: 2
     defaults:
       tempo_bpm: 60
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 2, TempoDown: 1 }
     params:
       melody_length: [2, 3]
       range_below_semitones: 0
@@ -94,9 +76,6 @@ drills:
     tier: 0
     defaults:
       tempo_bpm: 90
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 2, TempoDown: 1 }
     params:
       melody_length: [2, 3, 4]
       melody_max_step: 1      # 1 = stepwise only
@@ -109,9 +88,6 @@ drills:
     tier: 1
     defaults:
       tempo_bpm: 60
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 2, TempoDown: 1 }
     params:
       melody_length: [2, 3, 4]
       melody_max_step: 2
@@ -124,9 +100,6 @@ drills:
     tier: 2
     defaults:
       tempo_bpm: 60
-      range_min: 60
-      range_max: 72
-      assistance_policy: { Replay: 2, TempoDown: 1 }
     params:
       melody_length: [2, 3, 4]
       range_below_semitones: 0
