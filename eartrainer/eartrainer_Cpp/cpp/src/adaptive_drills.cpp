@@ -184,6 +184,7 @@ void AdaptiveDrills::set_bout(const std::vector<int>& track_levels) {
   const auto& descriptor = track_phase_catalogs_[static_cast<std::size_t>(track_index)];
   auto specs = adaptive::load_level_catalog(descriptor.resolved_path.string(), target_level);
   initialize_bout(target_level, specs);
+  active_track_index_ = track_index;
 }
 
 void AdaptiveDrills::set_bout_from_json(const std::vector<int>& track_levels, const nlohmann::json& document) {
@@ -208,6 +209,7 @@ void AdaptiveDrills::set_bout_from_json(const std::vector<int>& track_levels, co
     if (filtered.empty()) {
       throw std::runtime_error("No adaptive drills configured for level " + std::to_string(target_level));
     }
+    active_track_index_.reset();
     initialize_bout(target_level, filtered);
     return;
   }
@@ -232,6 +234,7 @@ void AdaptiveDrills::set_bout_from_json(const std::vector<int>& track_levels, co
     throw std::runtime_error("No adaptive drills configured for level " + std::to_string(target_level));
   }
   initialize_bout(target_level, filtered);
+  active_track_index_ = track_index;
 }
 
 void AdaptiveDrills::initialize_bout(int level, const std::vector<DrillSpec>& specs) {
@@ -244,6 +247,7 @@ void AdaptiveDrills::initialize_bout(int level, const std::vector<DrillSpec>& sp
   bout_score_sum_ = 0.0;
   bout_score_count_ = 0;
   drill_scores_.clear();
+  active_track_index_.reset();
 
   if (specs.empty()) {
     throw std::runtime_error("Adaptive bout has no drills configured");
@@ -330,6 +334,36 @@ AdaptiveDrills::ScoreSnapshot AdaptiveDrills::submit_feedback(const ResultReport
   return snapshot;
 }
 
+std::optional<int> AdaptiveDrills::next_level_for_track(int track_index) const {
+  if (track_index < 0 || static_cast<std::size_t>(track_index) >= track_phase_catalogs_.size()) {
+    return std::nullopt;
+  }
+  const auto& catalog = track_phase_catalogs_[static_cast<std::size_t>(track_index)];
+  const std::vector<int>* levels = nullptr;
+  if (last_phase_digit_.has_value()) {
+    auto phase_it = catalog.phases.find(*last_phase_digit_);
+    if (phase_it != catalog.phases.end()) {
+      levels = &phase_it->second;
+    }
+  }
+  if (!levels) {
+    for (const auto& [phase_key, phase_levels] : catalog.phases) {
+      if (std::find(phase_levels.begin(), phase_levels.end(), current_level_) != phase_levels.end()) {
+        levels = &phase_levels;
+        break;
+      }
+    }
+  }
+  if (!levels) {
+    return std::nullopt;
+  }
+  auto it = std::upper_bound(levels->begin(), levels->end(), current_level_);
+  if (it != levels->end()) {
+    return *it;
+  }
+  return std::nullopt;
+}
+
 double AdaptiveDrills::bout_average_score() const {
   if (bout_score_count_ == 0) {
     return 0.0;
@@ -338,15 +372,48 @@ double AdaptiveDrills::bout_average_score() const {
 }
 
 AdaptiveDrills::BoutOutcome AdaptiveDrills::current_bout_outcome() const {
+  const auto report = end_bout();
   BoutOutcome outcome;
-  outcome.graduate_threshold = kLevelUpThreshold;
-  if (bout_score_count_ == 0) {
-    return outcome;
+  outcome.graduate_threshold = report.graduate_threshold;
+  if (report.has_score) {
+    outcome.has_score = true;
+    outcome.bout_average = report.bout_average;
+    outcome.level_up = report.level_up;
   }
-  outcome.has_score = true;
-  outcome.bout_average = bout_average_score();
-  outcome.level_up = outcome.bout_average >= kLevelUpThreshold;
   return outcome;
+}
+
+AdaptiveDrills::BoutReport AdaptiveDrills::end_bout() const {
+  BoutReport report;
+  report.graduate_threshold = kLevelUpThreshold;
+  if (bout_score_count_ > 0) {
+    report.has_score = true;
+    report.bout_average = bout_average_score();
+    report.level_up = report.bout_average >= kLevelUpThreshold;
+  }
+  report.drill_scores.reserve(slots_.size());
+  for (std::size_t i = 0; i < slots_.size(); ++i) {
+    DrillReport entry;
+    entry.id = slots_[i].id;
+    entry.family = slots_[i].family;
+    if (i < drill_scores_.size()) {
+      entry.score = drill_scores_[i];
+    }
+    report.drill_scores.push_back(std::move(entry));
+  }
+  if (active_track_index_.has_value()) {
+    LevelRecommendation recommendation;
+    recommendation.track_index = *active_track_index_;
+    if (*active_track_index_ >= 0 &&
+        static_cast<std::size_t>(*active_track_index_) < track_phase_catalogs_.size()) {
+      recommendation.track_name =
+          track_phase_catalogs_[static_cast<std::size_t>(*active_track_index_)].descriptor.name;
+    }
+    recommendation.current_level = current_level_;
+    recommendation.suggested_level = next_level_for_track(*active_track_index_);
+    report.level = std::move(recommendation);
+  }
+  return report;
 }
 
 nlohmann::json AdaptiveDrills::diagnostic() const {
@@ -355,18 +422,28 @@ nlohmann::json AdaptiveDrills::diagnostic() const {
   info["level"] = current_level_;
   info["slots"] = static_cast<int>(slots_.size());
   info["questions_emitted"] = static_cast<int>(question_counter_);
-  info["bout_score_average"] = bout_average_score();
-  const auto outcome = current_bout_outcome();
-  info["level_up_threshold"] = outcome.graduate_threshold;
-  if (outcome.has_score) {
-    info["level_up_ready"] = outcome.level_up;
+  const auto report = end_bout();
+  info["bout_score_average"] = report.bout_average;
+  info["level_up_threshold"] = report.graduate_threshold;
+  if (report.has_score) {
+    info["level_up_ready"] = report.level_up;
   } else {
     info["level_up_ready"] = nullptr;
   }
+  if (report.level.has_value()) {
+    info["level_track_index"] = report.level->track_index;
+    info["level_track_name"] = report.level->track_name;
+    info["level_current"] = report.level->current_level;
+    if (report.level->suggested_level.has_value()) {
+      info["level_suggested"] = *report.level->suggested_level;
+    } else {
+      info["level_suggested"] = nullptr;
+    }
+  }
   nlohmann::json drill_scores = nlohmann::json::array();
-  for (const auto& score : drill_scores_) {
-    if (score.has_value()) {
-      drill_scores.push_back(score.value());
+  for (const auto& entry : report.drill_scores) {
+    if (entry.score.has_value()) {
+      drill_scores.push_back(entry.score.value());
     } else {
       drill_scores.push_back(nullptr);
     }

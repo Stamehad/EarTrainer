@@ -91,6 +91,29 @@ struct SessionSummary {
   nlohmann::json results;
 };
 
+struct MemoryPackage {
+  SessionSummary summary;
+  struct AdaptiveData {
+    bool has_score = false;
+    double bout_average = 0.0;
+    double graduate_threshold = 0.0;
+    bool level_up = false;
+    struct DrillInfo {
+      std::string family;
+      std::optional<double> ema_score;
+    };
+    std::unordered_map<std::string, DrillInfo> drills;
+    struct LevelProposal {
+      int track_index = -1;
+      std::string track_name;
+      int current_level = 0;
+      std::optional<int> suggested_level;
+    };
+    std::optional<LevelProposal> level;
+  };
+  std::optional<AdaptiveData> adaptive;
+};
+
 inline double ResultReport::score(double attempts_weight, int fast_rt_ms, int mid_rt_ms) const {
   if (!correct) {
     return 0.0;

@@ -45,6 +45,26 @@ public:
     bool level_up = false;
   };
   BoutOutcome current_bout_outcome() const;
+  struct DrillReport {
+    std::string id;
+    std::string family;
+    std::optional<double> score;
+  };
+  struct LevelRecommendation {
+    int track_index = -1;
+    std::string track_name;
+    int current_level = 0;
+    std::optional<int> suggested_level;
+  };
+  struct BoutReport {
+    bool has_score = false;
+    double bout_average = 0.0;
+    double graduate_threshold = 0.0;
+    bool level_up = false;
+    std::vector<DrillReport> drill_scores;
+    std::optional<LevelRecommendation> level;
+  };
+  BoutReport end_bout() const;
 
   bool empty() const { return slots_.empty(); }
   std::size_t size() const { return slots_.size(); }
@@ -84,12 +104,14 @@ private:
   double bout_score_sum_ = 0.0;
   std::size_t bout_score_count_ = 0;
   std::vector<std::optional<double>> drill_scores_;
+  std::optional<int> active_track_index_;
 
   // helpers
   static int weighted_pick(const std::vector<int>& weights, std::uint64_t& rng_state);
   std::vector<int> levels_in_scope_for_track(int track_index, int current_level, int phase_digit) const;
   int first_level_for_track(int track_index) const;
   std::vector<int> normalize_track_levels(const std::vector<int>& track_levels) const;
+  std::optional<int> next_level_for_track(int track_index) const;
 
   static constexpr double kScoreEmaAlpha = 0.2;
   static constexpr double kLevelUpThreshold = 0.8;

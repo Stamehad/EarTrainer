@@ -163,16 +163,32 @@ void attach_adaptive_summary(SessionData& session) {
   if (!session.adaptive || !session.adaptive_drills) {
     return;
   }
-  auto outcome = session.adaptive_drills->current_bout_outcome();
+  const auto report = session.adaptive_drills->end_bout();
+  AdaptiveDrills::BoutOutcome outcome;
+  outcome.graduate_threshold = report.graduate_threshold;
+  if (report.has_score) {
+    outcome.has_score = true;
+    outcome.bout_average = report.bout_average;
+    outcome.level_up = report.level_up;
+  }
   session.adaptive_bout_outcome = outcome;
-  if (outcome.has_score) {
+  if (report.has_score) {
     session.adaptive_bout_score_valid = true;
-    session.adaptive_bout_score = outcome.bout_average;
-    session.summary_cache.totals["adaptive_bout_score"] = outcome.bout_average;
-    session.summary_cache.totals["adaptive_level_up"] = outcome.level_up;
-    session.summary_cache.totals["adaptive_level_up_threshold"] = outcome.graduate_threshold;
+    session.adaptive_bout_score = report.bout_average;
+    session.summary_cache.totals["adaptive_bout_score"] = report.bout_average;
+    session.summary_cache.totals["adaptive_level_up"] = report.level_up;
+    session.summary_cache.totals["adaptive_level_up_threshold"] = report.graduate_threshold;
   } else if (session.adaptive_bout_score_valid) {
     session.summary_cache.totals["adaptive_bout_score"] = session.adaptive_bout_score;
+  }
+  if (report.level.has_value()) {
+    session.summary_cache.totals["adaptive_level_track"] = report.level->track_name;
+    session.summary_cache.totals["adaptive_level_current"] = report.level->current_level;
+    if (report.level->suggested_level.has_value()) {
+      session.summary_cache.totals["adaptive_level_suggested"] = *report.level->suggested_level;
+    } else {
+      session.summary_cache.totals["adaptive_level_suggested"] = nullptr;
+    }
   }
   if (!session.adaptive_drill_scores.empty()) {
     nlohmann::json drills = nlohmann::json::array();
@@ -185,6 +201,14 @@ void attach_adaptive_summary(SessionData& session) {
     }
     session.summary_cache.totals["adaptive_drill_scores"] = drills;
   }
+  nlohmann::json drill_map = nlohmann::json::object();
+  for (const auto& entry : report.drill_scores) {
+    nlohmann::json value = nlohmann::json::object();
+    value["family"] = entry.family;
+    value["ema_score"] = entry.score.has_value() ? nlohmann::json(*entry.score) : nlohmann::json(nullptr);
+    drill_map[entry.id] = std::move(value);
+  }
+  session.summary_cache.totals["adaptive_drill_score_map"] = std::move(drill_map);
 }
 
 std::string normalize_kind(const std::string& kind) {
@@ -497,6 +521,53 @@ public:
     }
 
     return info;
+  }
+
+  MemoryPackage end_session(const std::string& session_id) override {
+    auto& session = get_session(session_id);
+    if (!session.summary_ready) {
+      if (session.adaptive) {
+        if (!session.summary_ready) {
+          session.summary_cache =
+              build_summary(session_id, session.spec.drill_kind, session.result_log);
+          session.summary_ready = true;
+        }
+        attach_adaptive_summary(session);
+      } else {
+        session.summary_cache =
+            build_summary(session_id, session.spec.drill_kind, session.result_log);
+        session.summary_ready = true;
+      }
+    } else if (session.adaptive) {
+      attach_adaptive_summary(session);
+    }
+
+    MemoryPackage package;
+    package.summary = session.summary_cache;
+    if (session.adaptive && session.adaptive_drills) {
+      const auto report = session.adaptive_drills->end_bout();
+      MemoryPackage::AdaptiveData adaptive;
+      adaptive.has_score = report.has_score;
+      adaptive.bout_average = report.bout_average;
+      adaptive.graduate_threshold = report.graduate_threshold;
+      adaptive.level_up = report.level_up;
+      for (const auto& entry : report.drill_scores) {
+        MemoryPackage::AdaptiveData::DrillInfo info;
+        info.family = entry.family;
+        info.ema_score = entry.score;
+        adaptive.drills.emplace(entry.id, std::move(info));
+      }
+      if (report.level.has_value()) {
+        MemoryPackage::AdaptiveData::LevelProposal proposal;
+        proposal.track_index = report.level->track_index;
+        proposal.track_name = report.level->track_name;
+        proposal.current_level = report.level->current_level;
+        proposal.suggested_level = report.level->suggested_level;
+        adaptive.level = std::move(proposal);
+      }
+      package.adaptive = std::move(adaptive);
+    }
+    return package;
   }
 
 private:

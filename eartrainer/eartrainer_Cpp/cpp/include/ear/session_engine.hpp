@@ -28,6 +28,8 @@ public:
   virtual Next submit_result(const std::string& session_id,
                              const ResultReport& report) = 0;
 
+  virtual MemoryPackage end_session(const std::string& session_id) = 0;
+
   virtual nlohmann::json debug_state(const std::string& session_id) = 0;
 
   virtual nlohmann::json capabilities() const = 0;
