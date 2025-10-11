@@ -5,7 +5,6 @@ drills:
     family: note
     level: 1
     tier: 0
-    transition: true
     defaults:
       tempo_bpm: 80
     params:
@@ -22,7 +21,6 @@ drills:
     family: note
     level: 1
     tier: 1
-    transition: true
     defaults:
       tempo_bpm: 80
     params:
@@ -35,26 +33,25 @@ drills:
       pathway_step_beats: 1.0
       pathway_rest_beats: 0.5
 
-  - id: PATHWAYS
-    family: note
-    level: 1
-    tier: 2
-    defaults:
-      tempo_bpm: 80
-    params:
-      avoid_repeat: true
-      range_below_semitones: 0
-      range_above_semitones: 12
-      use_pathway: true
-      pathway_repeat_lead: false
-      pathway_step_beats: 1.0
-      pathway_rest_beats: 0.5
+  # - id: PATHWAYS
+  #   family: note
+  #   level: 1
+  #   tier: 2
+  #   defaults:
+  #     tempo_bpm: 80
+  #   params:
+  #     avoid_repeat: true
+  #     range_below_semitones: 0
+  #     range_above_semitones: 12
+  #     use_pathway: true
+  #     pathway_repeat_lead: false
+  #     pathway_step_beats: 1.0
+  #     pathway_rest_beats: 0.5
 
   - id: NOTE_1_4
     family: note
     level: 2
     tier: 0
-    transition: true
     defaults:
       tempo_bpm: 72
     params:
@@ -67,7 +64,6 @@ drills:
     family: note
     level: 2
     tier: 1
-    transition: true
     defaults:
       tempo_bpm: 72
     params:
@@ -76,16 +72,16 @@ drills:
       range_above_semitones: 11
       avoid_repeat: true
   
-  - id: NOTE
-    family: note
-    level: 2
-    tier: 2
-    defaults:
-      tempo_bpm: 72
-    params:
-      range_below_semitones: 0
-      range_above_semitones: 11
-      avoid_repeat: true
+  # - id: NOTE
+  #   family: note
+  #   level: 2
+  #   tier: 2
+  #   defaults:
+  #     tempo_bpm: 72
+  #   params:
+  #     range_below_semitones: 0
+  #     range_above_semitones: 11
+  #     avoid_repeat: true
   
   - id: NOTE_TO_TONIC
     family: note
@@ -113,19 +109,19 @@ drills:
       range_above_semitones: 12
       avoid_repeat: true
 
-  - id: NOTE_WITH_TONIC
-    family: note
-    level: 3
-    tier: 2
-    defaults:
-      tempo_bpm: 72
-    params:
-      allowed_degrees: [1, 2, 3, 4, 5, 6]
-      tonic_anchor: "both"
-      tonic_anchor_include_octave: true
-      range_below_semitones: 0
-      range_above_semitones: 12
-      avoid_repeat: true
+  # - id: NOTE_WITH_TONIC
+  #   family: note
+  #   level: 3
+  #   tier: 2
+  #   defaults:
+  #     tempo_bpm: 72
+  #   params:
+  #     allowed_degrees: [1, 2, 3, 4, 5, 6]
+  #     tonic_anchor: "both"
+  #     tonic_anchor_include_octave: true
+  #     range_below_semitones: 0
+  #     range_above_semitones: 12
+  #     avoid_repeat: true
 
   - id: PATHWAYS_2OCT
     family: note
