@@ -50,6 +50,7 @@ struct QuestionState {
   std::optional<DrillOutput> output;
   bool served = false;
   bool answered = false;
+  std::optional<std::string> adaptive_question_id;
 };
 
 struct SubmitCache {
@@ -83,6 +84,10 @@ struct SessionData {
   std::size_t adaptive_asked = 0;
   std::unordered_map<std::string, SessionSpec> adaptive_specs;
   std::unordered_map<std::string, std::size_t> adaptive_counts;
+  bool adaptive_bout_score_valid = false;
+  double adaptive_bout_score = 0.0;
+  std::vector<std::optional<double>> adaptive_drill_scores;
+  std::optional<AdaptiveDrills::BoutOutcome> adaptive_bout_outcome;
 };
 
 QuestionBundle make_bundle(SessionData& session, QuestionState& state) {
@@ -152,6 +157,34 @@ SessionSummary build_summary(const std::string& session_id, const std::string& l
   }
   summary.results = res;
   return summary;
+}
+
+void attach_adaptive_summary(SessionData& session) {
+  if (!session.adaptive || !session.adaptive_drills) {
+    return;
+  }
+  auto outcome = session.adaptive_drills->current_bout_outcome();
+  session.adaptive_bout_outcome = outcome;
+  if (outcome.has_score) {
+    session.adaptive_bout_score_valid = true;
+    session.adaptive_bout_score = outcome.bout_average;
+    session.summary_cache.totals["adaptive_bout_score"] = outcome.bout_average;
+    session.summary_cache.totals["adaptive_level_up"] = outcome.level_up;
+    session.summary_cache.totals["adaptive_level_up_threshold"] = outcome.graduate_threshold;
+  } else if (session.adaptive_bout_score_valid) {
+    session.summary_cache.totals["adaptive_bout_score"] = session.adaptive_bout_score;
+  }
+  if (!session.adaptive_drill_scores.empty()) {
+    nlohmann::json drills = nlohmann::json::array();
+    for (const auto& value : session.adaptive_drill_scores) {
+      if (value.has_value()) {
+        drills.push_back(value.value());
+      } else {
+        drills.push_back(nullptr);
+      }
+    }
+    session.summary_cache.totals["adaptive_drill_scores"] = drills;
+  }
 }
 
 std::string normalize_kind(const std::string& kind) {
@@ -436,6 +469,24 @@ public:
         counts[kv.first] = static_cast<int>(kv.second);
       }
       info["drill_counts"] = counts;
+      if (session.adaptive_bout_score_valid) {
+        info["adaptive_bout_score"] = session.adaptive_bout_score;
+      }
+      if (session.adaptive_bout_outcome.has_value()) {
+        info["adaptive_level_up_threshold"] = session.adaptive_bout_outcome->graduate_threshold;
+        info["adaptive_level_up"] = session.adaptive_bout_outcome->level_up;
+      }
+      if (!session.adaptive_drill_scores.empty()) {
+        nlohmann::json drill_scores = nlohmann::json::array();
+        for (const auto& value : session.adaptive_drill_scores) {
+          if (value.has_value()) {
+            drill_scores.push_back(value.value());
+          } else {
+            drill_scores.push_back(nullptr);
+          }
+        }
+        info["adaptive_drill_scores"] = drill_scores;
+      }
       if (session.adaptive_drills) {
         info["adaptive_drills"] = session.adaptive_drills->diagnostic();
       }
@@ -545,6 +596,7 @@ SessionEngine::Next SessionEngineImpl::next_question_adaptive(const std::string&
   if (session.summary_ready &&
       session.result_log.size() >= session.adaptive_target_questions &&
       session.adaptive_target_questions != 0) {
+    attach_adaptive_summary(session);
     return session.summary_cache;
   }
 
@@ -563,6 +615,7 @@ SessionEngine::Next SessionEngineImpl::next_question_adaptive(const std::string&
       session.summary_cache =
           build_summary(session_id, session.spec.drill_kind, session.result_log);
       session.summary_ready = true;
+      attach_adaptive_summary(session);
     }
     return session.summary_cache;
   }
@@ -576,6 +629,7 @@ SessionEngine::Next SessionEngineImpl::next_question_adaptive(const std::string&
 
   QuestionState state;
   state.id = question_id;
+  state.adaptive_question_id = bundle_from_ad.question_id;
   state.output = DrillOutput{bundle_from_ad.question,
                              bundle_from_ad.correct_answer,
                              bundle_from_ad.prompt,
@@ -613,6 +667,15 @@ SessionEngine::Next SessionEngineImpl::submit_result_adaptive(const std::string&
     throw std::runtime_error("Cannot submit result for unserved question");
   }
   if (!state.answered) {
+    if (session.adaptive_drills && state.adaptive_question_id.has_value()) {
+      ResultReport adaptive_report = report;
+      adaptive_report.question_id = state.adaptive_question_id.value();
+      auto snapshot = session.adaptive_drills->submit_feedback(adaptive_report);
+      session.adaptive_bout_score = snapshot.bout_average;
+      session.adaptive_bout_score_valid = true;
+      session.adaptive_drill_scores = snapshot.drill_scores;
+      session.adaptive_bout_outcome = session.adaptive_drills->current_bout_outcome();
+    }
     session.result_log.push_back(report);
     state.answered = true;
     if (session.active_question == id_it->second) {
@@ -632,7 +695,9 @@ SessionEngine::Next SessionEngineImpl::submit_result_adaptive(const std::string&
       session.summary_cache =
           build_summary(session_id, session.spec.drill_kind, session.result_log);
       session.summary_ready = true;
+      attach_adaptive_summary(session);
     }
+    attach_adaptive_summary(session);
     response = session.summary_cache;
     submit_cache.is_summary = true;
     submit_cache.summary = session.summary_cache;

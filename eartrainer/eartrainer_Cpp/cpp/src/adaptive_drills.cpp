@@ -240,6 +240,10 @@ void AdaptiveDrills::initialize_bout(int level, const std::vector<DrillSpec>& sp
   current_level_ = level;
   pick_counts_.clear();
   last_pick_.reset();
+  question_slot_index_.clear();
+  bout_score_sum_ = 0.0;
+  bout_score_count_ = 0;
+  drill_scores_.clear();
 
   if (specs.empty()) {
     throw std::runtime_error("Adaptive bout has no drills configured");
@@ -262,6 +266,7 @@ void AdaptiveDrills::initialize_bout(int level, const std::vector<DrillSpec>& sp
   if (slots_.empty()) {
     throw std::runtime_error("Adaptive bout initialization produced zero drills");
   }
+  drill_scores_.assign(slots_.size(), std::nullopt);
 }
 
 QuestionBundle AdaptiveDrills::next() {
@@ -277,7 +282,9 @@ QuestionBundle AdaptiveDrills::next() {
   auto output = slot.module->next_question(slot.rng_state);
 
   QuestionBundle bundle;
-  bundle.question_id = make_question_id();
+  std::string question_id = make_question_id();
+  question_slot_index_[question_id] = static_cast<std::size_t>(pick);
+  bundle.question_id = std::move(question_id);
   bundle.question = std::move(output.question);
   bundle.correct_answer = std::move(output.correct_answer);
   bundle.prompt = std::move(output.prompt);
@@ -294,12 +301,77 @@ std::string AdaptiveDrills::make_question_id() {
   return oss.str();
 }
 
+AdaptiveDrills::ScoreSnapshot AdaptiveDrills::submit_feedback(const ResultReport& report) {
+  auto it = question_slot_index_.find(report.question_id);
+  if (it == question_slot_index_.end()) {
+    throw std::invalid_argument("AdaptiveDrills::submit_feedback unknown question_id: " + report.question_id);
+  }
+  const std::size_t slot_index = it->second;
+  question_slot_index_.erase(it);
+
+  const double score = report.score();
+  bout_score_sum_ += score;
+  bout_score_count_ += 1;
+
+  if (slot_index >= drill_scores_.size()) {
+    throw std::out_of_range("AdaptiveDrills::submit_feedback slot index out of range");
+  }
+
+  auto& current_score = drill_scores_[slot_index];
+  if (current_score.has_value()) {
+    current_score = kScoreEmaAlpha * score + (1.0 - kScoreEmaAlpha) * current_score.value();
+  } else {
+    current_score = score;
+  }
+
+  ScoreSnapshot snapshot;
+  snapshot.bout_average = bout_average_score();
+  snapshot.drill_scores = drill_scores_;
+  return snapshot;
+}
+
+double AdaptiveDrills::bout_average_score() const {
+  if (bout_score_count_ == 0) {
+    return 0.0;
+  }
+  return bout_score_sum_ / static_cast<double>(bout_score_count_);
+}
+
+AdaptiveDrills::BoutOutcome AdaptiveDrills::current_bout_outcome() const {
+  BoutOutcome outcome;
+  outcome.graduate_threshold = kLevelUpThreshold;
+  if (bout_score_count_ == 0) {
+    return outcome;
+  }
+  outcome.has_score = true;
+  outcome.bout_average = bout_average_score();
+  outcome.level_up = outcome.bout_average >= kLevelUpThreshold;
+  return outcome;
+}
+
 nlohmann::json AdaptiveDrills::diagnostic() const {
   nlohmann::json info = nlohmann::json::object();
   info["resources_dir"] = resources_dir_.string();
   info["level"] = current_level_;
   info["slots"] = static_cast<int>(slots_.size());
   info["questions_emitted"] = static_cast<int>(question_counter_);
+  info["bout_score_average"] = bout_average_score();
+  const auto outcome = current_bout_outcome();
+  info["level_up_threshold"] = outcome.graduate_threshold;
+  if (outcome.has_score) {
+    info["level_up_ready"] = outcome.level_up;
+  } else {
+    info["level_up_ready"] = nullptr;
+  }
+  nlohmann::json drill_scores = nlohmann::json::array();
+  for (const auto& score : drill_scores_) {
+    if (score.has_value()) {
+      drill_scores.push_back(score.value());
+    } else {
+      drill_scores.push_back(nullptr);
+    }
+  }
+  info["drill_scores"] = std::move(drill_scores);
   if (track_catalog_error_.has_value()) info["track_catalog_error"] = *track_catalog_error_;
   if (last_phase_digit_.has_value()) info["phase_digit"] = *last_phase_digit_; else info["phase_digit"] = nullptr;
   if (phase_consistent_.has_value()) info["phase_consistent"] = *phase_consistent_; else info["phase_consistent"] = nullptr;

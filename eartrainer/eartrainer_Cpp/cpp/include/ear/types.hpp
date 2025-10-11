@@ -76,12 +76,12 @@ struct ResultReport {
   struct Metrics {
     int rt_ms;
     int attempts;
+    int question_count;
     std::unordered_map<std::string, int> assists_used;
     std::optional<int> first_input_rt_ms;
   } metrics;
 
-  double score(int question_count, double attempts_weight = 0.7, int fast_rt_ms = 1000,
-               int mid_rt_ms = 5000) const;
+  double score(double attempts_weight = 0.7, int fast_rt_ms = 1000, int mid_rt_ms = 5000) const;
 };
 
 struct SessionSummary {
@@ -91,18 +91,18 @@ struct SessionSummary {
   nlohmann::json results;
 };
 
-inline double ResultReport::score(int question_count, double attempts_weight, int fast_rt_ms,
-                                  int mid_rt_ms) const {
+inline double ResultReport::score(double attempts_weight, int fast_rt_ms, int mid_rt_ms) const {
   if (!correct) {
     return 0.0;
   }
-  if (question_count <= 0 || metrics.attempts <= 0) {
+  if (metrics.question_count <= 0 || metrics.attempts <= 0) {
     return 0.0;
   }
 
   const double weight = detail::clip01(attempts_weight);
   const double attempts_score =
-      detail::clip01(static_cast<double>(question_count) / static_cast<double>(metrics.attempts));
+      detail::clip01(static_cast<double>(metrics.question_count) /
+                     static_cast<double>(metrics.attempts));
 
   double rt_score = 1.0;
   if (mid_rt_ms > fast_rt_ms) {

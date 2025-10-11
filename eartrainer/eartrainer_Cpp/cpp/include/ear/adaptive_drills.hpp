@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <unordered_map>
 
 #include <nlohmann/json.hpp>
 
@@ -30,6 +31,20 @@ public:
   TrackPick pick_track(const std::vector<int>& current_levels);
   QuestionBundle next();
   nlohmann::json diagnostic() const;
+  struct ScoreSnapshot {
+    double bout_average = 0.0;
+    std::vector<std::optional<double>> drill_scores;
+  };
+  ScoreSnapshot submit_feedback(const ResultReport& report);
+  double bout_average_score() const;
+  const std::vector<std::optional<double>>& drill_running_scores() const { return drill_scores_; }
+  struct BoutOutcome {
+    bool has_score = false;
+    double bout_average = 0.0;
+    double graduate_threshold = 0.0;
+    bool level_up = false;
+  };
+  BoutOutcome current_bout_outcome() const;
 
   bool empty() const { return slots_.empty(); }
   std::size_t size() const { return slots_.size(); }
@@ -65,12 +80,19 @@ private:
   std::optional<bool> phase_consistent_;
   std::vector<int> last_track_levels_;
   std::optional<std::string> track_catalog_error_;
+  std::unordered_map<std::string, std::size_t> question_slot_index_;
+  double bout_score_sum_ = 0.0;
+  std::size_t bout_score_count_ = 0;
+  std::vector<std::optional<double>> drill_scores_;
 
   // helpers
   static int weighted_pick(const std::vector<int>& weights, std::uint64_t& rng_state);
   std::vector<int> levels_in_scope_for_track(int track_index, int current_level, int phase_digit) const;
   int first_level_for_track(int track_index) const;
   std::vector<int> normalize_track_levels(const std::vector<int>& track_levels) const;
+
+  static constexpr double kScoreEmaAlpha = 0.2;
+  static constexpr double kLevelUpThreshold = 0.8;
 };
 
 } // namespace ear
