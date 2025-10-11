@@ -17,12 +17,15 @@ class SessionSpec:
     assistance_policy: Dict[str, int] = field(default_factory=dict)
     sampler_params: Dict[str, Any] = field(default_factory=dict)
     seed: int = 1
+    adaptive: bool = False
+    track_levels: List[int] = field(default_factory=list)
 
     def to_json(self) -> Dict[str, Any]:
         data = asdict(self)
         data["range"] = list(self.range)
         data["tempo_bpm"] = self.tempo_bpm
         data["sampler_params"] = dict(self.sampler_params)
+        data["track_levels"] = list(self.track_levels)
         return data
 
     @classmethod
@@ -39,6 +42,8 @@ class SessionSpec:
             assistance_policy=dict(data.get("assistance_policy", {})),
             sampler_params=dict(data.get("sampler_params", {})),
             seed=int(data.get("seed", 1)),
+            adaptive=bool(data.get("adaptive", False)),
+            track_levels=list(data.get("track_levels", [])),
         )
 
 
@@ -178,6 +183,7 @@ class AssistBundle:
 class ResultMetrics:
     rt_ms: int
     attempts: int
+    question_count: int = 1
     assists_used: Dict[str, int] = field(default_factory=dict)
     first_input_rt_ms: Optional[int] = None
 
@@ -185,6 +191,7 @@ class ResultMetrics:
         return {
             "rt_ms": self.rt_ms,
             "attempts": self.attempts,
+            "question_count": self.question_count,
             "assists_used": dict(self.assists_used),
             "first_input_rt_ms": self.first_input_rt_ms,
         }
@@ -224,3 +231,76 @@ class SessionSummary:
             by_category=list(data.get("by_category", [])),
             results=list(data.get("results", [])),
         )
+
+
+@dataclass
+class AdaptiveDrillMemory:
+    family: str
+    ema_score: Optional[float]
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "AdaptiveDrillMemory":
+        return cls(
+            family=str(data.get("family", "")),
+            ema_score=data.get("ema_score"),
+        )
+
+
+@dataclass
+class AdaptiveLevelProposal:
+    track_index: int
+    track_name: str
+    current_level: int
+    suggested_level: Optional[int]
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "AdaptiveLevelProposal":
+        return cls(
+            track_index=int(data.get("track_index", -1)),
+            track_name=str(data.get("track_name", "")),
+            current_level=int(data.get("current_level", 0)),
+            suggested_level=data.get("suggested_level"),
+        )
+
+
+@dataclass
+class AdaptiveMemory:
+    has_score: bool
+    bout_average: float
+    graduate_threshold: float
+    level_up: bool
+    drills: Dict[str, AdaptiveDrillMemory] = field(default_factory=dict)
+    level: Optional[AdaptiveLevelProposal] = None
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "AdaptiveMemory":
+        drills_data = data.get("drills", {})
+        drills = {
+            key: AdaptiveDrillMemory.from_json(value if isinstance(value, dict) else {})
+            for key, value in drills_data.items()
+        }
+        level_data = data.get("level")
+        level = None
+        if isinstance(level_data, dict):
+            level = AdaptiveLevelProposal.from_json(level_data)
+        return cls(
+            has_score=bool(data.get("has_score", False)),
+            bout_average=float(data.get("bout_average", 0.0)),
+            graduate_threshold=float(data.get("graduate_threshold", 0.0)),
+            level_up=bool(data.get("level_up", False)),
+            drills=drills,
+            level=level,
+        )
+
+
+@dataclass
+class MemoryPackage:
+    summary: SessionSummary
+    adaptive: Optional[AdaptiveMemory] = None
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "MemoryPackage":
+        summary = SessionSummary.from_json(data.get("summary", {}))
+        adaptive_data = data.get("adaptive")
+        adaptive = AdaptiveMemory.from_json(adaptive_data) if isinstance(adaptive_data, dict) else None
+        return cls(summary=summary, adaptive=adaptive)

@@ -116,12 +116,26 @@ public:
     return json_to_py(ear::bridge::to_json(std::get<ear::SessionSummary>(next)));
   }
 
+  std::string session_key(const std::string& session_id) {
+    return engine_->session_key(session_id);
+  }
+
+  py::object orientation_prompt(const std::string& session_id) {
+    auto plan = engine_->orientation_prompt(session_id);
+    return json_to_py(ear::bridge::to_json(plan));
+  }
+
   py::object capabilities() const {
     return json_to_py(engine_->capabilities());
   }
 
   py::object debug_state(const std::string& session_id) {
     return json_to_py(engine_->debug_state(session_id));
+  }
+
+  py::object end_session(const std::string& session_id) {
+    auto package = engine_->end_session(session_id);
+    return json_to_py(ear::bridge::to_json(package));
   }
 
 private:
@@ -138,6 +152,9 @@ PYBIND11_MODULE(_earcore, m) {
       .def("assist", &PySessionEngine::assist)
       .def("session_assist", &PySessionEngine::session_assist)
       .def("submit_result", &PySessionEngine::submit_result)
+      .def("session_key", &PySessionEngine::session_key)
+      .def("orientation_prompt", &PySessionEngine::orientation_prompt)
+      .def("end_session", &PySessionEngine::end_session)
       .def("capabilities", &PySessionEngine::capabilities)
       .def("debug_state", &PySessionEngine::debug_state);
 

@@ -10,7 +10,9 @@
 #include "rng.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <filesystem>
 #include <mutex>
 #include <memory>
 #include <optional>
@@ -21,6 +23,9 @@
 
 namespace ear {
 namespace {
+
+const std::array<std::string, 12> kChromaticKeys = {
+    "C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"};
 
 std::string make_question_id(std::size_t index) {
   std::ostringstream oss;
@@ -570,6 +575,10 @@ public:
     return package;
   }
 
+  std::string session_key(const std::string& session_id) override;
+
+  PromptPlan orientation_prompt(const std::string& session_id) override;
+
 private:
   std::string create_adaptive_session(const SessionSpec& spec);
   Next next_question_adaptive(const std::string& session_id, SessionData& session);
@@ -608,6 +617,22 @@ std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) 
   session.summary_cache.by_category = nlohmann::json::array();
   session.summary_cache.results = nlohmann::json::array();
 
+  if (session.spec.range_min >= session.spec.range_max) {
+    session.spec.range_min = 48;
+    session.spec.range_max = 72;
+  }
+  if (!session.spec.tempo_bpm.has_value()) {
+    session.spec.tempo_bpm = 96;
+  }
+  if (session.spec.assistance_policy.empty()) {
+    session.spec.assistance_policy["Replay"] = 0;
+  }
+  if (session.spec.key.empty()) {
+    std::uint64_t key_state = spec.seed == 0 ? 1 : spec.seed;
+    const int index = rand_int(key_state, 0, static_cast<int>(kChromaticKeys.size()) - 1);
+    session.spec.key = kChromaticKeys[static_cast<std::size_t>(index)] + " major";
+  }
+
   session.adaptive_target_questions = spec.n_questions > 0 ? static_cast<std::size_t>(spec.n_questions)
                                                           : static_cast<std::size_t>(0);
 
@@ -619,8 +644,11 @@ std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) 
   }
 
   // Initialize AdaptiveDrills with catalog path and track levels
-  std::string resources_dir = "eartrainer/eartrainer_Cpp/resources";
-  session.adaptive_drills = std::make_unique<AdaptiveDrills>(resources_dir, spec.seed);
+  std::filesystem::path resources_dir = "resources";
+  if (!std::filesystem::exists(resources_dir)) {
+    resources_dir = std::filesystem::path("eartrainer/eartrainer_Cpp/resources");
+  }
+  session.adaptive_drills = std::make_unique<AdaptiveDrills>(resources_dir.string(), spec.seed);
   auto track_count = session.adaptive_drills->track_count();
 
   session.track_levels = spec.track_levels;
@@ -654,6 +682,7 @@ std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) 
   session.adaptive_drills->set_bout(session.track_levels);
   session.track_levels = session.adaptive_drills->last_used_track_levels();
   session.spec.track_levels = session.track_levels;
+  session.drill_hub = std::make_unique<DrillHub>();
 
   std::string session_id = generate_session_id();
   session.summary_cache.session_id = session_id;
@@ -781,6 +810,16 @@ SessionEngine::Next SessionEngineImpl::submit_result_adaptive(const std::string&
 
   session.submit_cache[report.question_id] = submit_cache;
   return response;
+}
+
+std::string SessionEngineImpl::session_key(const std::string& session_id) {
+  auto& session = get_session(session_id);
+  return session.spec.key;
+}
+
+PromptPlan SessionEngineImpl::orientation_prompt(const std::string& session_id) {
+  auto& session = get_session(session_id);
+  return make_scale_arpeggio_prompt(session.spec);
 }
 
 } // namespace ear

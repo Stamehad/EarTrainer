@@ -7,20 +7,7 @@ namespace {
 
 // Convert the legacy PromptPlan (sequential notes with dur_ms) into a
 // "midi-clip" JSON object ready for direct playback.
-// Shape:
-// {
-//   "modality": "midi-clip",
-//   "midi_clip": {
-//     "format": "midi-clip/v1",
-//     "ppq": 480,
-//     "tempo_bpm": 90,
-//     "length_ticks": 960,
-//     "tracks": [{ "name":"prompt", "channel":0, "program":0,
-//                   "events":[{"t":0,"type":"note_on","note":60,"vel":90},
-//                              {"t":480,"type":"note_off","note":60}, ...]}]
-//   }
-// }
-nlohmann::json to_json(const PromptPlan& plan) {
+nlohmann::json prompt_plan_to_json_impl(const PromptPlan& plan) {
   const int tempo = plan.tempo_bpm.has_value() ? plan.tempo_bpm.value() : 90;
   const int ppq = 480;
   const double ticks_per_ms = (tempo * ppq) / 60000.0; // ticks = dur_ms * ticks_per_ms
@@ -119,7 +106,7 @@ nlohmann::json to_json(const PromptPlan& plan) {
   return json_plan;
 }
 
-PromptPlan prompt_from_json(const nlohmann::json& json_plan) {
+PromptPlan prompt_from_json_impl(const nlohmann::json& json_plan) {
   // Legacy loader retained only for round-trips if needed. Not used by Python UI.
   PromptPlan plan;
   if (json_plan.contains("modality")) {
@@ -242,7 +229,7 @@ nlohmann::json to_json(const QuestionBundle& bundle) {
   json_bundle["question"] = typed_to_json(bundle.question);
   json_bundle["correct_answer"] = typed_to_json(bundle.correct_answer);
   if (bundle.prompt.has_value()) {
-    json_bundle["prompt"] = to_json(bundle.prompt.value());
+    json_bundle["prompt"] = prompt_plan_to_json_impl(bundle.prompt.value());
   } else {
     json_bundle["prompt"] = nullptr;
   }
@@ -256,7 +243,7 @@ QuestionBundle question_bundle_from_json(const nlohmann::json& json_bundle) {
   bundle.question = typed_from_json(json_bundle["question"]);
   bundle.correct_answer = typed_from_json(json_bundle["correct_answer"]);
   if (!json_bundle["prompt"].is_null()) {
-    bundle.prompt = prompt_from_json(json_bundle["prompt"]);
+    bundle.prompt = prompt_from_json_impl(json_bundle["prompt"]);
   }
   bundle.ui_hints = json_bundle["ui_hints"];
   return bundle;
@@ -267,7 +254,7 @@ nlohmann::json to_json(const AssistBundle& bundle) {
   json_bundle["question_id"] = bundle.question_id;
   json_bundle["kind"] = bundle.kind;
   if (bundle.prompt.has_value()) {
-    json_bundle["prompt"] = to_json(bundle.prompt.value());
+    json_bundle["prompt"] = prompt_plan_to_json_impl(bundle.prompt.value());
   } else {
     json_bundle["prompt"] = nullptr;
   }
@@ -280,7 +267,7 @@ AssistBundle assist_bundle_from_json(const nlohmann::json& json_bundle) {
   bundle.question_id = json_bundle["question_id"].get<std::string>();
   bundle.kind = json_bundle["kind"].get<std::string>();
   if (!json_bundle["prompt"].is_null()) {
-    bundle.prompt = prompt_from_json(json_bundle["prompt"]);
+    bundle.prompt = prompt_from_json_impl(json_bundle["prompt"]);
   }
   bundle.ui_delta = json_bundle["ui_delta"];
   return bundle;
@@ -294,6 +281,7 @@ nlohmann::json to_json(const ResultReport& report) {
   nlohmann::json metrics = nlohmann::json::object();
   metrics["rt_ms"] = report.metrics.rt_ms;
   metrics["attempts"] = report.metrics.attempts;
+  metrics["question_count"] = report.metrics.question_count;
   nlohmann::json assists = nlohmann::json::object();
   for (const auto& entry : report.metrics.assists_used) {
     assists[entry.first] = entry.second;
@@ -316,6 +304,11 @@ ResultReport result_report_from_json(const nlohmann::json& json_report) {
   const auto& metrics = json_report["metrics"];
   report.metrics.rt_ms = metrics["rt_ms"].get<int>();
   report.metrics.attempts = metrics["attempts"].get<int>();
+  if (metrics.contains("question_count")) {
+    report.metrics.question_count = metrics["question_count"].get<int>();
+  } else {
+    report.metrics.question_count = 1;
+  }
   report.metrics.assists_used.clear();
   const auto& assists = metrics["assists_used"].get_object();
   for (const auto& entry : assists) {
@@ -343,6 +336,58 @@ SessionSummary session_summary_from_json(const nlohmann::json& json_summary) {
   summary.by_category = json_summary["by_category"];
   summary.results = json_summary["results"];
   return summary;
+}
+
+nlohmann::json to_json(const MemoryPackage& package) {
+  nlohmann::json json_package = nlohmann::json::object();
+  json_package["summary"] = to_json(package.summary);
+  if (package.adaptive.has_value()) {
+    const auto& adaptive = package.adaptive.value();
+    nlohmann::json json_adaptive = nlohmann::json::object();
+    json_adaptive["has_score"] = adaptive.has_score;
+    json_adaptive["bout_average"] = adaptive.bout_average;
+    json_adaptive["graduate_threshold"] = adaptive.graduate_threshold;
+    json_adaptive["level_up"] = adaptive.level_up;
+    nlohmann::json drills = nlohmann::json::object();
+    for (const auto& entry : adaptive.drills) {
+      nlohmann::json drill = nlohmann::json::object();
+      drill["family"] = entry.second.family;
+      if (entry.second.ema_score.has_value()) {
+        drill["ema_score"] = entry.second.ema_score.value();
+      } else {
+        drill["ema_score"] = nullptr;
+      }
+      drills[entry.first] = std::move(drill);
+    }
+    json_adaptive["drills"] = std::move(drills);
+    if (adaptive.level.has_value()) {
+      const auto& level = adaptive.level.value();
+      nlohmann::json json_level = nlohmann::json::object();
+      json_level["track_index"] = level.track_index;
+      json_level["track_name"] = level.track_name;
+      json_level["current_level"] = level.current_level;
+      if (level.suggested_level.has_value()) {
+        json_level["suggested_level"] = level.suggested_level.value();
+      } else {
+        json_level["suggested_level"] = nullptr;
+      }
+      json_adaptive["level"] = std::move(json_level);
+    } else {
+      json_adaptive["level"] = nullptr;
+    }
+    json_package["adaptive"] = std::move(json_adaptive);
+  } else {
+    json_package["adaptive"] = nullptr;
+  }
+  return json_package;
+}
+
+nlohmann::json to_json(const PromptPlan& plan) {
+  return prompt_plan_to_json_impl(plan);
+}
+
+PromptPlan prompt_plan_from_json(const nlohmann::json& json_plan) {
+  return prompt_from_json_impl(json_plan);
 }
 
 } // namespace ear::bridge

@@ -2,7 +2,11 @@
 
 from .models import (
     AssistBundle,
+    AdaptiveDrillMemory,
+    AdaptiveLevelProposal,
+    AdaptiveMemory,
     MidiClip,
+    MemoryPackage,
     Prompt,
     QuestionBundle,
     ResultMetrics,
@@ -26,4 +30,8 @@ __all__ = [
     "SessionSummary",
     "TypedPayload",
     "SimpleMidiPlayer",
+    "MemoryPackage",
+    "AdaptiveMemory",
+    "AdaptiveLevelProposal",
+    "AdaptiveDrillMemory",
 ]
