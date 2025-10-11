@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -9,6 +10,14 @@
 #include <nlohmann/json.hpp>
 
 namespace ear {
+
+namespace detail {
+
+inline double clip01(double value) {
+  return std::clamp(value, 0.0, 1.0);
+}
+
+} // namespace detail
 
 struct SessionSpec {
   std::string version;
@@ -70,6 +79,9 @@ struct ResultReport {
     std::unordered_map<std::string, int> assists_used;
     std::optional<int> first_input_rt_ms;
   } metrics;
+
+  double score(int question_count, double attempts_weight = 0.7, int fast_rt_ms = 1000,
+               int mid_rt_ms = 5000) const;
 };
 
 struct SessionSummary {
@@ -78,5 +90,32 @@ struct SessionSummary {
   nlohmann::json by_category;
   nlohmann::json results;
 };
+
+inline double ResultReport::score(int question_count, double attempts_weight, int fast_rt_ms,
+                                  int mid_rt_ms) const {
+  if (!correct) {
+    return 0.0;
+  }
+  if (question_count <= 0 || metrics.attempts <= 0) {
+    return 0.0;
+  }
+
+  const double weight = detail::clip01(attempts_weight);
+  const double attempts_score =
+      detail::clip01(static_cast<double>(question_count) / static_cast<double>(metrics.attempts));
+
+  double rt_score = 1.0;
+  if (mid_rt_ms > fast_rt_ms) {
+    const double denominator = static_cast<double>(mid_rt_ms - fast_rt_ms);
+    const double raw =
+        1.0 - (static_cast<double>(metrics.rt_ms) - static_cast<double>(fast_rt_ms)) /
+                  (2.0 * denominator);
+    rt_score = detail::clip01(raw);
+  } else {
+    rt_score = metrics.rt_ms <= fast_rt_ms ? 1.0 : 0.0;
+  }
+
+  return weight * attempts_score + (1.0 - weight) * rt_score;
+}
 
 } // namespace ear
