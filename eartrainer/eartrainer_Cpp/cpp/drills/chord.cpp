@@ -164,6 +164,35 @@ std::vector<int> to_vector(const nlohmann::json& array_node) {
   return values;
 }
 
+int spec_param_int(const DrillSpec& spec, const std::string& key, int fallback) {
+  if (!spec.params.is_object()) {
+    return fallback;
+  }
+  if (spec.params.contains(key)) {
+    const auto& node = spec.params[key];
+    if (node.is_number_integer()) {
+      return node.get<int>();
+    }
+    if (node.is_number()) {
+      return static_cast<int>(node.get<double>());
+    }
+  }
+  return fallback;
+}
+
+bool spec_param_bool(const DrillSpec& spec, const std::string& key, bool fallback) {
+  if (!spec.params.is_object()) {
+    return fallback;
+  }
+  if (spec.params.contains(key)) {
+    const auto& node = spec.params[key];
+    if (node.is_boolean()) {
+      return node.get<bool>();
+    }
+  }
+  return fallback;
+}
+
 } // namespace
 
 void ChordDrill::configure(const DrillSpec& spec) {
@@ -228,11 +257,16 @@ DrillOutput ChordDrill::next_question(std::uint64_t& rng_state) {
   }
 
   PromptPlan plan;
-  // Emit a block chord prompt: simultaneous note_on events encoded via midi-clip.
-  // We indicate this intent by using a dedicated modality the JSON bridge recognizes.
-  plan.modality = "midi_block";
+  plan.modality = "midi-clip";
   plan.tempo_bpm = spec_.tempo_bpm;
   plan.count_in = false;
+
+  const int prompt_tempo = plan.tempo_bpm.has_value() ? plan.tempo_bpm.value() : 90;
+  constexpr int kChordDurMs = 900;
+  const int default_program = spec_param_int(spec_, "chord_prompt_program", 0);
+  const bool split_tracks = spec_param_bool(spec_, "chord_prompt_split_tracks", true);
+  const int strum_step_ms = spec_param_int(spec_, "chord_prompt_strum_step_ms", 0);
+  const int default_velocity = spec_param_int(spec_, "chord_prompt_velocity", 90);
 
   int tonic_midi = drills::central_tonic_midi(spec_.key);
   int bass_base = tonic_midi + drills::degree_to_offset(bass_degree);
@@ -256,8 +290,6 @@ DrillOutput ChordDrill::next_question(std::uint64_t& rng_state) {
   nlohmann::json realised_degrees = nlohmann::json::array();
   midi_tones.push_back(bass_midi);
   realised_degrees.push_back(bass_degree);
-  // Duration for the block chord in ms
-  constexpr int kChordDurMs = 900;
   plan.notes.push_back({bass_midi, kChordDurMs, std::nullopt, std::nullopt});
 
   std::vector<int> base_right_midi;
@@ -294,10 +326,64 @@ DrillOutput ChordDrill::next_question(std::uint64_t& rng_state) {
     right_midi.push_back(midi);
     realised_degrees.push_back(right_degrees[i]);
     midi_tones.push_back(midi);
-    // For block chord prompt, all notes share the same onset; durations can be uniform.
     plan.notes.push_back({midi, kChordDurMs, std::nullopt, std::nullopt});
     previous = midi;
   }
+
+  auto make_track = [](const std::string& name, int channel, int program) {
+    nlohmann::json track = nlohmann::json::object();
+    track["name"] = name;
+    track["channel"] = channel;
+    track["program"] = program;
+    track["notes"] = nlohmann::json::array();
+    return track;
+  };
+
+  auto make_note = [](int midi, int start_ms, int dur_ms, int velocity) {
+    nlohmann::json note = nlohmann::json::object();
+    note["midi"] = midi;
+    note["start_ms"] = start_ms;
+    note["dur_ms"] = dur_ms;
+    note["velocity"] = velocity;
+    return note;
+  };
+
+  nlohmann::json manifest = nlohmann::json::object();
+  manifest["format"] = "multi_track_prompt/v1";
+  manifest["tempo_bpm"] = prompt_tempo;
+  manifest["ppq"] = 480;
+  nlohmann::json tracks = nlohmann::json::array();
+
+  if (split_tracks) {
+    const int bass_channel = spec_param_int(spec_, "chord_prompt_bass_channel", 1);
+    const int bass_program = spec_param_int(spec_, "chord_prompt_bass_program", default_program);
+    auto bass_track = make_track("bass", bass_channel, bass_program);
+    bass_track["notes"].push_back(make_note(bass_midi, 0, kChordDurMs, default_velocity));
+
+    const int right_channel = spec_param_int(spec_, "chord_prompt_right_channel", 0);
+    const int right_program = spec_param_int(spec_, "chord_prompt_right_program", default_program);
+    auto right_track = make_track("right", right_channel, right_program);
+    for (std::size_t i = 0; i < right_midi.size(); ++i) {
+      int onset_ms = strum_step_ms > 0 ? static_cast<int>(i) * strum_step_ms : 0;
+      right_track["notes"].push_back(make_note(right_midi[i], onset_ms, kChordDurMs, default_velocity));
+    }
+
+    tracks.push_back(std::move(bass_track));
+    tracks.push_back(std::move(right_track));
+  } else {
+    const int merged_channel = spec_param_int(spec_, "chord_prompt_channel", 0);
+    auto prompt_track = make_track("prompt", merged_channel, default_program);
+    prompt_track["notes"].push_back(make_note(bass_midi, 0, kChordDurMs, default_velocity));
+    for (std::size_t i = 0; i < right_midi.size(); ++i) {
+      int onset_ms = strum_step_ms > 0 ? static_cast<int>(i) * strum_step_ms : 0;
+      prompt_track["notes"].push_back(make_note(right_midi[i], onset_ms, kChordDurMs, default_velocity));
+    }
+    tracks.push_back(std::move(prompt_track));
+  }
+
+  manifest["strum_step_ms"] = strum_step_ms;
+  manifest["tracks"] = std::move(tracks);
+  plan.midi_clip.reset();
 
   nlohmann::json question_payload = nlohmann::json::object();
   question_payload["root_degree"] = root_degree;
@@ -321,6 +407,7 @@ DrillOutput ChordDrill::next_question(std::uint64_t& rng_state) {
   answer_payload["root_degree"] = root_degree;
 
   nlohmann::json hints = nlohmann::json::object();
+  hints["prompt_manifest"] = manifest;
   hints["answer_kind"] = "chord_degree";
   nlohmann::json allowed = nlohmann::json::array();
   allowed.push_back("Replay");

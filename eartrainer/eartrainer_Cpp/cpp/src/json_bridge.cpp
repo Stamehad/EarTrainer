@@ -8,6 +8,13 @@ namespace {
 // Convert the legacy PromptPlan (sequential notes with dur_ms) into a
 // "midi-clip" JSON object ready for direct playback.
 nlohmann::json prompt_plan_to_json_impl(const PromptPlan& plan) {
+  if (plan.modality == "midi-clip" && plan.midi_clip.has_value()) {
+    nlohmann::json json_plan = nlohmann::json::object();
+    json_plan["modality"] = "midi-clip";
+    json_plan["midi_clip"] = plan.midi_clip.value();
+    return json_plan;
+  }
+
   const int tempo = plan.tempo_bpm.has_value() ? plan.tempo_bpm.value() : 90;
   const int ppq = 480;
   const double ticks_per_ms = (tempo * ppq) / 60000.0; // ticks = dur_ms * ticks_per_ms
@@ -113,6 +120,10 @@ PromptPlan prompt_from_json_impl(const nlohmann::json& json_plan) {
     plan.modality = json_plan["modality"].get<std::string>();
   } else {
     plan.modality = "midi-clip";
+  }
+  if (plan.modality == "midi-clip" && json_plan.contains("midi_clip") &&
+      !json_plan["midi_clip"].is_null()) {
+    plan.midi_clip = json_plan["midi_clip"];
   }
   // We no longer reconstruct sequential notes from midi-clip here.
   return plan;

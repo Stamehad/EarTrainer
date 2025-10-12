@@ -47,6 +47,7 @@ struct PromptPlan {
   std::vector<Note> notes;
   std::optional<int> tempo_bpm;
   std::optional<bool> count_in;
+  std::optional<nlohmann::json> midi_clip;
 };
 
 struct TypedPayload {

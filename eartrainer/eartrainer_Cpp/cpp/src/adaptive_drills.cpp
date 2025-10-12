@@ -284,6 +284,7 @@ QuestionBundle AdaptiveDrills::next() {
   pick_counts_[static_cast<std::size_t>(pick)] += 1;
   last_pick_ = static_cast<std::size_t>(pick);
   auto output = slot.module->next_question(slot.rng_state);
+  apply_prompt_rendering(slot.spec, output);
 
   QuestionBundle bundle;
   std::string question_id = make_question_id();

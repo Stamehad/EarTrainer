@@ -115,6 +115,7 @@ void ensure_question(SessionData& session, std::size_t index) {
   auto& state = session.questions[index];
   if (!state.output.has_value()) {
     state.output = session.module->next_question(session.rng_state);
+    apply_prompt_rendering(session.drill_spec, *state.output);
   }
 }
 
