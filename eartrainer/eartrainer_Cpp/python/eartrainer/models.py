@@ -198,11 +198,47 @@ class ResultMetrics:
 
 
 @dataclass
+class ResultAttempt:
+    label: str
+    correct: bool
+    attempts: int = 0
+    answer_fragment: Optional[TypedPayload] = None
+    expected_fragment: Optional[TypedPayload] = None
+
+    def to_json(self) -> Dict[str, Any]:
+        data: Dict[str, Any] = {
+            "label": self.label,
+            "correct": self.correct,
+            "attempts": self.attempts,
+        }
+        data["answer_fragment"] = (
+            self.answer_fragment.to_json() if self.answer_fragment else None
+        )
+        data["expected_fragment"] = (
+            self.expected_fragment.to_json() if self.expected_fragment else None
+        )
+        return data
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "ResultAttempt":
+        answer = data.get("answer_fragment")
+        expected = data.get("expected_fragment")
+        return cls(
+            label=str(data.get("label", "")),
+            correct=bool(data.get("correct", False)),
+            attempts=int(data.get("attempts", 0)),
+            answer_fragment=TypedPayload.from_json(answer) if isinstance(answer, dict) else None,
+            expected_fragment=TypedPayload.from_json(expected) if isinstance(expected, dict) else None,
+        )
+
+
+@dataclass
 class ResultReport:
     question_id: str
     final_answer: TypedPayload
     correct: bool
     metrics: ResultMetrics
+    attempts: List[ResultAttempt] = field(default_factory=list)
     client_info: Dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> Dict[str, Any]:
@@ -212,8 +248,32 @@ class ResultReport:
             "correct": self.correct,
             "metrics": self.metrics.to_json(),
             "client_info": dict(self.client_info),
+            "attempts": [attempt.to_json() for attempt in self.attempts],
         }
         return data
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "ResultReport":
+        metrics = ResultMetrics(
+            rt_ms=int(data.get("metrics", {}).get("rt_ms", 0)),
+            attempts=int(data.get("metrics", {}).get("attempts", 0)),
+            question_count=int(data.get("metrics", {}).get("question_count", 1)),
+            assists_used=dict(data.get("metrics", {}).get("assists_used", {})),
+            first_input_rt_ms=data.get("metrics", {}).get("first_input_rt_ms"),
+        )
+        attempts_payload = data.get("attempts", [])
+        attempts = [
+            ResultAttempt.from_json(entry) for entry in attempts_payload
+            if isinstance(entry, dict)
+        ]
+        return cls(
+            question_id=data["question_id"],
+            final_answer=TypedPayload.from_json(data["final_answer"]),
+            correct=bool(data.get("correct", False)),
+            metrics=metrics,
+            attempts=attempts,
+            client_info=dict(data.get("client_info", {})),
+        )
 
 
 @dataclass

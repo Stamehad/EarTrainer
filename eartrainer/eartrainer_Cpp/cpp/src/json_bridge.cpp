@@ -293,6 +293,25 @@ nlohmann::json to_json(const ResultReport& report) {
     metrics["first_input_rt_ms"] = nullptr;
   }
   json_report["metrics"] = metrics;
+  nlohmann::json attempts = nlohmann::json::array();
+  for (const auto& attempt : report.attempts) {
+    nlohmann::json entry = nlohmann::json::object();
+    entry["label"] = attempt.label;
+    entry["correct"] = attempt.correct;
+    entry["attempts"] = attempt.attempts;
+    if (attempt.answer_fragment.has_value()) {
+      entry["answer_fragment"] = typed_to_json(attempt.answer_fragment.value());
+    } else {
+      entry["answer_fragment"] = nullptr;
+    }
+    if (attempt.expected_fragment.has_value()) {
+      entry["expected_fragment"] = typed_to_json(attempt.expected_fragment.value());
+    } else {
+      entry["expected_fragment"] = nullptr;
+    }
+    attempts.push_back(std::move(entry));
+  }
+  json_report["attempts"] = std::move(attempts);
   return json_report;
 }
 
@@ -316,6 +335,28 @@ ResultReport result_report_from_json(const nlohmann::json& json_report) {
   }
   if (!metrics["first_input_rt_ms"].is_null()) {
     report.metrics.first_input_rt_ms = metrics["first_input_rt_ms"].get<int>();
+  }
+  report.attempts.clear();
+  if (json_report.contains("attempts") && json_report["attempts"].is_array()) {
+    for (const auto& item : json_report["attempts"].get_array()) {
+      ResultReport::AttemptDetail detail;
+      detail.label = item.contains("label") && item["label"].is_string()
+                         ? item["label"].get<std::string>()
+                         : std::string();
+      detail.correct = item.contains("correct") && item["correct"].is_boolean()
+                           ? item["correct"].get<bool>()
+                           : false;
+      detail.attempts = item.contains("attempts") && item["attempts"].is_number_integer()
+                            ? item["attempts"].get<int>()
+                            : 0;
+      if (item.contains("answer_fragment") && !item["answer_fragment"].is_null()) {
+        detail.answer_fragment = typed_from_json(item["answer_fragment"]);
+      }
+      if (item.contains("expected_fragment") && !item["expected_fragment"].is_null()) {
+        detail.expected_fragment = typed_from_json(item["expected_fragment"]);
+      }
+      report.attempts.push_back(std::move(detail));
+    }
   }
   return report;
 }

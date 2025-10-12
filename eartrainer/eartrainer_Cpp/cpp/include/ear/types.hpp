@@ -81,7 +81,24 @@ struct ResultReport {
     std::optional<int> first_input_rt_ms;
   } metrics;
 
+  struct AttemptDetail {
+    std::string label;
+    bool correct = false;
+    int attempts = 0;
+    std::optional<TypedPayload> answer_fragment;
+    std::optional<TypedPayload> expected_fragment;
+  };
+
+  std::vector<AttemptDetail> attempts;
+
+  struct ScoreResult {
+    double aggregate = 0.0;
+    std::vector<double> per_attempt;
+  };
+
   double score(double attempts_weight = 0.7, int fast_rt_ms = 1000, int mid_rt_ms = 5000) const;
+  ScoreResult score_breakdown(double attempts_weight = 0.7, int fast_rt_ms = 1000,
+                              int mid_rt_ms = 5000) const;
 };
 
 struct SessionSummary {
@@ -114,31 +131,59 @@ struct MemoryPackage {
   std::optional<AdaptiveData> adaptive;
 };
 
-inline double ResultReport::score(double attempts_weight, int fast_rt_ms, int mid_rt_ms) const {
-  if (!correct) {
-    return 0.0;
-  }
-  if (metrics.question_count <= 0 || metrics.attempts <= 0) {
-    return 0.0;
-  }
-
+inline ResultReport::ScoreResult ResultReport::score_breakdown(double attempts_weight,
+                                                               int fast_rt_ms,
+                                                               int mid_rt_ms) const {
+  ScoreResult score;
   const double weight = detail::clip01(attempts_weight);
-  const double attempts_score =
-      detail::clip01(static_cast<double>(metrics.question_count) /
-                     static_cast<double>(metrics.attempts));
-
-  double rt_score = 1.0;
-  if (mid_rt_ms > fast_rt_ms) {
+  const auto response_score = [&](double rt_ms) -> double {
+    if (mid_rt_ms <= fast_rt_ms) {
+      return rt_ms <= static_cast<double>(fast_rt_ms) ? 1.0 : 0.0;
+    }
     const double denominator = static_cast<double>(mid_rt_ms - fast_rt_ms);
     const double raw =
-        1.0 - (static_cast<double>(metrics.rt_ms) - static_cast<double>(fast_rt_ms)) /
-                  (2.0 * denominator);
-    rt_score = detail::clip01(raw);
-  } else {
-    rt_score = metrics.rt_ms <= fast_rt_ms ? 1.0 : 0.0;
+        1.0 - (rt_ms - static_cast<double>(fast_rt_ms)) / (2.0 * denominator);
+    return detail::clip01(raw);
+  };
+
+  double aggregate = 0.0;
+  if (correct && metrics.question_count > 0 && metrics.attempts > 0) {
+    const double attempts_score =
+        detail::clip01(static_cast<double>(metrics.question_count) /
+                       static_cast<double>(metrics.attempts));
+    const double rt_score = response_score(static_cast<double>(metrics.rt_ms));
+    aggregate = weight * attempts_score + (1.0 - weight) * rt_score;
+  }
+  score.aggregate = aggregate;
+
+  if (attempts.empty()) {
+    score.per_attempt.push_back(aggregate);
+    return score;
   }
 
-  return weight * attempts_score + (1.0 - weight) * rt_score;
+  const std::size_t attempt_count = attempts.size();
+  const double per_attempt_rt =
+      attempt_count > 0 ? static_cast<double>(metrics.rt_ms) / static_cast<double>(attempt_count)
+                        : static_cast<double>(metrics.rt_ms);
+
+  for (const auto& attempt : attempts) {
+    double attempt_score = 0.0;
+    if (attempt.correct) {
+      const double attempt_attempts =
+          attempt.attempts > 0 ? static_cast<double>(attempt.attempts) : 1.0;
+      const double attempt_attempts_score =
+          detail::clip01(1.0 / std::max(1.0, attempt_attempts));
+      const double attempt_rt_score = response_score(per_attempt_rt);
+      attempt_score = weight * attempt_attempts_score + (1.0 - weight) * attempt_rt_score;
+    }
+    score.per_attempt.push_back(attempt_score);
+  }
+
+  return score;
+}
+
+inline double ResultReport::score(double attempts_weight, int fast_rt_ms, int mid_rt_ms) const {
+  return score_breakdown(attempts_weight, fast_rt_ms, mid_rt_ms).aggregate;
 }
 
 } // namespace ear
