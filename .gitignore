@@ -39,3 +39,14 @@ temp.md
 # IDE settings
 .vscode/
 .idea/
+
+# Swift / Xcode build artifacts
+**/.build/
+**/.swiftpm/
+**/.clang-module-cache/
+**/.llvm-module-cache/
+DerivedData/
+xcuserdata/
+*.xcworkspace/
+*.xcuserstate
+*.xcodeproj/
