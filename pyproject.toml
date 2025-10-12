@@ -29,6 +29,7 @@ eartrainer = [
   "resources/*.md",
   "resources/*.yml",
   "resources/voicings/*.yml",
+  "resources/voicings/*.json",
   "resources/drones/*.yml",
   "resources/pathways/*.yml",
   "resources/training_sets/*.yml",

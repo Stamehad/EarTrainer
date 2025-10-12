@@ -1,30 +1,47 @@
 #include "chord.hpp"
 
 #include "common.hpp"
+#include "ear/drill_spec.hpp"
 #include "../src/rng.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <optional>
-#include <unordered_map>
+#include <string>
 #include <vector>
 
 namespace ear {
 
 namespace {
 
-const std::unordered_map<std::string, std::vector<int>> kBassOffsets = {
-    {"major", {-14}},
-    {"minor", {-14}},
-    {"diminished", {-14}},
-};
+const std::vector<int>& bass_offsets_for_quality(const ChordVoicingLibrary& library,
+                                                 const std::string& quality) {
+  auto it = library.bass_offsets.find(quality);
+  if (it != library.bass_offsets.end() && !it->second.empty()) {
+    return it->second;
+  }
+  auto fallback = library.bass_offsets.find("major");
+  if (fallback != library.bass_offsets.end() && !fallback->second.empty()) {
+    return fallback->second;
+  }
+  static const std::vector<int> kDefault{-14};
+  return kDefault;
+}
 
-const std::unordered_map<std::string, std::vector<std::vector<int>>> kRightHandVoicings = {
-    {"major", {{0, 2, 4, 7}, {0, 2, 4}, {-3, 0, 2}}},
-    {"minor", {{0, 2, 4, 7}, {0, 2, 4}, {-3, 0, 2}}},
-    {"diminished", {{0, 2, 4, 7}, {0, 2, 4}, {-3, 0, 2}}},
-};
+const std::vector<std::vector<int>>&
+right_hand_voicings_for_quality(const ChordVoicingLibrary& library, const std::string& quality) {
+  auto it = library.right_hand.find(quality);
+  if (it != library.right_hand.end() && !it->second.empty()) {
+    return it->second;
+  }
+  auto fallback = library.right_hand.find("major");
+  if (fallback != library.right_hand.end() && !fallback->second.empty()) {
+    return fallback->second;
+  }
+  static const std::vector<std::vector<int>> kDefault{{0, 2, 4, 7}, {0, 2, 4}, {-3, 0, 2}};
+  return kDefault;
+}
 
 std::vector<int> extract_allowed(const DrillSpec& spec, const std::string& key) {
   std::vector<int> values;
@@ -90,22 +107,6 @@ std::string chord_quality_for_degree(int degree) {
   return "major";
 }
 
-const std::vector<int>& bass_offsets_for_quality(const std::string& quality) {
-  auto it = kBassOffsets.find(quality);
-  if (it != kBassOffsets.end()) {
-    return it->second;
-  }
-  return kBassOffsets.at("major");
-}
-
-const std::vector<std::vector<int>>& right_hand_voicings_for_quality(const std::string& quality) {
-  auto it = kRightHandVoicings.find(quality);
-  if (it != kRightHandVoicings.end()) {
-    return it->second;
-  }
-  return kRightHandVoicings.at("major");
-}
-
 double center_of_mass(const std::vector<int>& values) {
   if (values.empty()) {
     return 0.0;
@@ -117,21 +118,24 @@ double center_of_mass(const std::vector<int>& values) {
   return sum / static_cast<double>(values.size());
 }
 
-int pick_voicing_index(const std::string& quality, std::uint64_t& rng_state) {
-  const auto& voicings = right_hand_voicings_for_quality(quality);
+int pick_voicing_index(const ChordVoicingLibrary& library, const std::string& quality,
+                       std::uint64_t& rng_state) {
+  const auto& voicings = right_hand_voicings_for_quality(library, quality);
   if (voicings.empty()) {
     return 0;
   }
   return rand_int(rng_state, 0, static_cast<int>(voicings.size()) - 1);
 }
 
-nlohmann::json build_degrees_payload(int root_degree, const std::string& quality,
+nlohmann::json build_degrees_payload(const ChordVoicingLibrary& library, int root_degree,
+                                     const std::string& quality,
                                      int voicing_index, int bass_offset,
                                      bool add_seventh = false) {
-  const auto& right_voicings = right_hand_voicings_for_quality(quality);
-  const auto& relative_offsets = right_voicings.empty()
-                                     ? std::vector<int>{0, 2, 4, 7}
-                                     : right_voicings[static_cast<std::size_t>(voicing_index) % right_voicings.size()];
+  const auto& right_voicings = right_hand_voicings_for_quality(library, quality);
+  const auto& relative_offsets =
+      right_voicings.empty()
+          ? std::vector<int>{0, 2, 4, 7}
+          : right_voicings[static_cast<std::size_t>(voicing_index) % right_voicings.size()];
 
   nlohmann::json right_offsets_json = nlohmann::json::array();
   nlohmann::json right_degrees_json = nlohmann::json::array();
@@ -197,6 +201,12 @@ bool spec_param_bool(const DrillSpec& spec, const std::string& key, bool fallbac
 
 void ChordDrill::configure(const DrillSpec& spec) {
   spec_ = spec;
+  voicings_ = default_chord_voicings();
+  if (auto path = configure_chord_voicings(spec_, voicings_)) {
+    voicing_source_path_ = path->string();
+  } else {
+    voicing_source_path_.clear();
+  }
   last_degree_.reset();
   last_voicing_.reset();
 }
@@ -211,22 +221,23 @@ DrillOutput ChordDrill::next_question(std::uint64_t& rng_state) {
   }
 
   std::string quality = chord_quality_for_degree(degree);
-  const auto& bass_options = bass_offsets_for_quality(quality);
+  const auto& bass_options = bass_offsets_for_quality(voicings_, quality);
   int bass_index = bass_options.empty() ? 0 : rand_int(rng_state, 0, static_cast<int>(bass_options.size()) - 1);
   int bass_offset = bass_options.empty() ? 0 : bass_options[static_cast<std::size_t>(bass_index)];
 
-  int voicing_index = pick_voicing_index(quality, rng_state);
+  int voicing_index = pick_voicing_index(voicings_, quality, rng_state);
   if (avoid_repetition(spec_) && last_voicing_.has_value()) {
-    const auto& voicings = right_hand_voicings_for_quality(quality);
+    const auto& voicings = right_hand_voicings_for_quality(voicings_, quality);
     if (voicings.size() > 1) {
       for (int attempt = 0; attempt < 3 && voicing_index == last_voicing_.value(); ++attempt) {
-        voicing_index = pick_voicing_index(quality, rng_state);
+        voicing_index = pick_voicing_index(voicings_, quality, rng_state);
       }
     }
   }
   last_voicing_ = voicing_index;
 
-  auto payload = build_degrees_payload(degree, quality, voicing_index, bass_offset, add_seventh);
+  auto payload =
+      build_degrees_payload(voicings_, degree, quality, voicing_index, bass_offset, add_seventh);
 
   int root_degree = payload["root"].get<int>();
   std::string sampled_quality = payload["quality"].get<std::string>();
@@ -352,6 +363,21 @@ DrillOutput ChordDrill::next_question(std::uint64_t& rng_state) {
   manifest["format"] = "multi_track_prompt/v1";
   manifest["tempo_bpm"] = prompt_tempo;
   manifest["ppq"] = 480;
+  manifest["add_seventh"] = add_seventh;
+  manifest["quality"] = sampled_quality;
+  manifest["voicing_index"] = sampled_voicing_index;
+  manifest["selected_bass_offset"] = sampled_bass_offset;
+  manifest["bass_degree"] = bass_degree;
+  manifest["root_degree"] = root_degree;
+  manifest["right_offsets"] = right_offsets_json;
+  if (!voicing_source_path_.empty()) {
+    manifest["voicings_source"] = voicing_source_path_;
+  }
+  nlohmann::json bass_offsets_json = nlohmann::json::array();
+  for (int value : bass_options) {
+    bass_offsets_json.push_back(value);
+  }
+  manifest["available_bass_offsets"] = bass_offsets_json;
   nlohmann::json tracks = nlohmann::json::array();
 
   if (split_tracks) {
@@ -402,6 +428,9 @@ DrillOutput ChordDrill::next_question(std::uint64_t& rng_state) {
   question_payload["bass_offset"] = sampled_bass_offset;
 
   question_payload["right_offsets"] = right_offsets_json;
+  if (!voicing_source_path_.empty()) {
+    question_payload["voicings_source"] = voicing_source_path_;
+  }
 
   nlohmann::json answer_payload = nlohmann::json::object();
   answer_payload["root_degree"] = root_degree;

@@ -19,6 +19,7 @@ temp.md
 # C++ core build artifacts (eartrainer_Cpp)
 /eartrainer/eartrainer_Cpp/build/
 /eartrainer/eartrainer_Cpp/**/CMakeFiles/
+/eartrainer/eartrainer_Cpp/**/CMakeLists.txt
 /eartrainer/eartrainer_Cpp/**/CMakeCache.txt
 /eartrainer/eartrainer_Cpp/**/cmake_install.cmake
 /eartrainer/eartrainer_Cpp/**/Makefile

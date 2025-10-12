@@ -1,6 +1,9 @@
 #pragma once
 
 #include "drill.hpp"
+#include "ear/chord_voicings.hpp"
+
+#include <string>
 
 namespace ear {
 
@@ -13,6 +16,8 @@ private:
   DrillSpec spec_{};
   std::optional<int> last_degree_;
   std::optional<int> last_voicing_;
+  ChordVoicingLibrary voicings_;
+  std::string voicing_source_path_;
 };
 
 } // namespace ear
