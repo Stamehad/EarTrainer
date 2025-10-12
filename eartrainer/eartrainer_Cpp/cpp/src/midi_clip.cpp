@@ -1,4 +1,4 @@
-#include "ear/midi_clip.hpp"
+#include "../include/ear/midi_clip.hpp"
 
 #include <algorithm>
 #include <cmath>

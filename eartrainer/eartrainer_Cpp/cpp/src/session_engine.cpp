@@ -1,12 +1,12 @@
-#include "ear/session_engine.hpp"
+#include "../include/ear/session_engine.hpp"
 
 #include "../assistance/assistance.hpp"
 #include "../drills/drill.hpp"
 #include "../drills/common.hpp"
 #include "../scoring/scoring.hpp"
-#include "ear/drill_hub.hpp"
-#include "ear/drill_factory.hpp"
-#include "ear/adaptive_drills.hpp"
+#include "../include/ear/drill_hub.hpp"
+#include "../include/ear/drill_factory.hpp"
+#include "../include/ear/adaptive_drills.hpp"
 #include "rng.hpp"
 
 #include <algorithm>

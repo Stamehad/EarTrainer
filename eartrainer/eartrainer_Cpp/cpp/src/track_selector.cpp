@@ -1,6 +1,6 @@
-#include "ear/track_selector.hpp"
+#include "../include/ear/track_selector.hpp"
 
-#include "ear/drill_spec.hpp"
+#include "../include/ear/drill_spec.hpp"
 
 #include <algorithm>
 #include <filesystem>

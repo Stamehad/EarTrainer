@@ -7,9 +7,9 @@ public protocol SessionEngine {
     func saveProfile(_ snapshot: ProfileSnapshot) throws
     func serializeProfile() throws -> ProfileSnapshot
     func startSession(_ spec: SessionSpec) throws
-    func nextQuestion() throws -> Question?
-    func submit(_ answer: Answer) throws -> AttemptResult
-    func endSession() throws -> SessionSummary
+    func nextQuestion() throws -> EngineResponse?
+    func submit(_ report: ResultReport) throws -> EngineResponse?
+    func endSession() throws -> EngineResponse?
     var hasActiveSession: Bool { get }
     func serializeCheckpoint() throws -> Checkpoint?
     func restore(checkpoint: Checkpoint) throws
@@ -67,29 +67,29 @@ public final class Bridge: SessionEngine {
         }
     }
 
-    public func nextQuestion() throws -> Question? {
+    public func nextQuestion() throws -> EngineResponse? {
         guard let payload = try callString({ next_question() }) else {
             return nil
         }
-        return try decode(Question.self, from: payload)
+        return try decodeResponse(from: payload)
     }
 
-    public func submit(_ answer: Answer) throws -> AttemptResult {
-        let payload = try encode(answer)
+    public func submit(_ report: ResultReport) throws -> EngineResponse? {
+        let payload = try encode(report)
         let response = try payload.withCString { pointer in
             try callString { feedback(pointer) }
         }
         guard let response else {
-            throw BridgeError.missingData("AttemptResult")
+            return nil
         }
-        return try decode(AttemptResult.self, from: response)
+        return try decodeResponse(from: response)
     }
 
-    public func endSession() throws -> SessionSummary {
+    public func endSession() throws -> EngineResponse? {
         guard let payload = try callString({ end_session() }) else {
-            throw BridgeError.missingData("SessionSummary")
+            return nil
         }
-        return try decode(SessionSummary.self, from: payload)
+        return try decodeResponse(from: payload)
     }
 
     public var hasActiveSession: Bool {
@@ -178,6 +178,35 @@ public final class Bridge: SessionEngine {
         }
     }
 
+    private func decodeResponse(from string: String) throws -> EngineResponse? {
+        guard let data = string.data(using: .utf8) else {
+            throw BridgeError.missingData("UTF8 decoding")
+        }
+        let envelope = try decoder.decode(BridgeEnvelope.self, from: data)
+        switch envelope.status {
+        case .ok:
+            guard let type = envelope.type else { return nil }
+            switch type {
+            case .question:
+                guard let bundle = envelope.question else {
+                    throw BridgeError.missingData("Question bundle")
+                }
+                let debug = envelope.debug
+                return .question(QuestionEnvelope(bundle: bundle, debug: debug))
+            case .summary:
+                if let summary = envelope.summary {
+                    return .summary(summary)
+                }
+                if let memory = envelope.memory?.summary {
+                    return .summary(memory)
+                }
+                throw BridgeError.missingData("Session summary")
+            }
+        case .error:
+            throw BridgeError.engineError(envelope.message ?? "Engine error")
+        }
+    }
+
     private static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -189,4 +218,17 @@ public final class Bridge: SessionEngine {
         decoder.dateDecodingStrategy = .iso8601
         return decoder
     }
+}
+
+private struct BridgeEnvelope: Codable {
+    enum Status: String, Codable { case ok, error }
+    enum PayloadType: String, Codable { case question, summary }
+
+    var status: Status
+    var type: PayloadType?
+    var question: QuestionBundle?
+    var summary: SessionSummary?
+    var debug: JSONValue?
+    var memory: MemoryPackage?
+    var message: String?
 }

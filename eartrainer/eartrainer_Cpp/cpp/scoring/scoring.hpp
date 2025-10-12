@@ -1,11 +1,11 @@
 #pragma once
 
-#include "ear/types.hpp"
+#include "../include/ear/types.hpp"
 
 #include <optional>
 #include <vector>
 
-#include <nlohmann/json.hpp>
+#include "../include/nlohmann/json.hpp"
 
 namespace ear::scoring {
 

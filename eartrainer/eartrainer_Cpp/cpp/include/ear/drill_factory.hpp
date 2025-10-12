@@ -5,8 +5,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "ear/drill_spec.hpp"
-#include "drills/drill.hpp"
+#include "drill_spec.hpp"
+#include "../../drills/drill.hpp"
 
 namespace ear {
 

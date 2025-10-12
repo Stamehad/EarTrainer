@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ear/session_engine.hpp"
+#include "../include/ear/session_engine.hpp"
 
 namespace ear::bridge {
 

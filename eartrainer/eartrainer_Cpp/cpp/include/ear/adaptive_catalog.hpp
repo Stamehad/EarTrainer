@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ear/drill_spec.hpp"
+#include "drill_spec.hpp"
 
 #include <string>
 #include <vector>
@@ -12,4 +12,3 @@ std::vector<DrillSpec> load_level_catalog(const std::string& catalog_path, int l
 
 } // namespace adaptive
 } // namespace ear
-

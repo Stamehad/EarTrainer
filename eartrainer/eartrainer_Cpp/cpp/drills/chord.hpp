@@ -1,7 +1,7 @@
 #pragma once
 
 #include "drill.hpp"
-#include "ear/chord_voicings.hpp"
+#include "../include/ear/chord_voicings.hpp"
 
 #include <string>
 

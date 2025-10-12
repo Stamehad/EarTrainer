@@ -1,9 +1,9 @@
 #pragma once
 
-#include "drills/drill.hpp"
-#include "ear/types.hpp"
+#include "../../drills/drill.hpp"
+#include "types.hpp"
 
-#include <nlohmann/json.hpp>
+#include "../nlohmann/json.hpp"
 
 #include <cstddef>
 #include <memory>

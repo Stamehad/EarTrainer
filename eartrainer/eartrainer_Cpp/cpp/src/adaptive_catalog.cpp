@@ -1,4 +1,4 @@
-#include "ear/adaptive_catalog.hpp"
+#include "../include/ear/adaptive_catalog.hpp"
 
 #include <filesystem>
 #include <stdexcept>
@@ -27,4 +27,3 @@ std::vector<DrillSpec> load_level_catalog(const std::string& catalog_path, int l
 }
 
 } // namespace ear::adaptive
-

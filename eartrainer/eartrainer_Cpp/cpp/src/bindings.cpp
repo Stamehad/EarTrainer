@@ -1,5 +1,5 @@
-#include "ear/session_engine.hpp"
-#include "ear/adaptive_drills.hpp"
+#include "../include/ear/session_engine.hpp"
+#include "../include/ear/adaptive_drills.hpp"
 
 #include "json_bridge.hpp"
 

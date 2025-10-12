@@ -1,6 +1,6 @@
-#include "ear/session_engine.hpp"
-#include "ear/track_selector.hpp"
-#include "ear/types.hpp"
+#include "../include/ear/session_engine.hpp"
+#include "../include/ear/track_selector.hpp"
+#include "../include/ear/types.hpp"
 #include "scoring/scoring.hpp"
 
 #include "../src/json_bridge.hpp"

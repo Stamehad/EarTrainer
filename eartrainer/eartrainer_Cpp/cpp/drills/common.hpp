@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ear/drill_spec.hpp"
+#include "../include/ear/drill_spec.hpp"
 
 #include <algorithm>
 #include <cctype>

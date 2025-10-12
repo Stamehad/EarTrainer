@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ear/types.hpp"
-#include "ear/drill_spec.hpp"
+#include "../include/ear/types.hpp"
+#include "../include/ear/drill_spec.hpp"
 
 #include <optional>
 #include <utility>

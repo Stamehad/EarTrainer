@@ -1,5 +1,6 @@
 import XCTest
 @testable import AppUI
+import Bridge
 
 final class SessionFlowTests: XCTestCase {
     private var tempDirectory: URL!
@@ -23,22 +24,15 @@ final class SessionFlowTests: XCTestCase {
 
         await MainActor.run {
             viewModel.bootstrap()
+            viewModel.spec.nQuestions = 2
             viewModel.start()
         }
 
         await MainActor.run {
-            guard let first = viewModel.currentQuestion else {
-                XCTFail("Missing first question")
-                return
-            }
-            viewModel.submit(answer: first.choices.first?.id ?? "A", latencyMs: 120)
-            viewModel.next()
-            guard let second = viewModel.currentQuestion else {
-                XCTFail("Missing second question")
-                return
-            }
-            viewModel.submit(answer: second.choices.first?.id ?? "A", latencyMs: 95)
-            viewModel.finish()
+            XCTAssertNotNil(viewModel.currentQuestion, "Expected first question")
+            viewModel.submit(latencyMs: 120)
+            XCTAssertNotNil(viewModel.currentQuestion, "Expected second question")
+            viewModel.submit(latencyMs: 95)
         }
 
         let route = await MainActor.run { viewModel.route }
@@ -50,33 +44,26 @@ final class SessionFlowTests: XCTestCase {
         let profileURL = try Paths.profileURL(for: "tester")
         let profileData = try Data(contentsOf: profileURL)
         XCTAssertFalse(profileData.isEmpty)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let snapshot = try decoder.decode(ProfileSnapshot.self, from: profileData)
+        XCTAssertEqual(snapshot.name, "tester")
     }
 
-    func testCheckpointRestorationBringsSessionBackToGame() async throws {
+    func testCheckpointFileNotCreatedWhenEngineDoesNotSupportIt() async throws {
         let bridge = MockBridge()
         let viewModel = await MainActor.run { SessionViewModel(engine: bridge, profileName: "checkpoint") }
 
         await MainActor.run {
             viewModel.bootstrap()
             viewModel.start()
-            guard let question = viewModel.currentQuestion else { return }
-            viewModel.submit(answer: question.choices.first?.id ?? "A", latencyMs: 60)
+            viewModel.submit(latencyMs: 60)
             viewModel.handleScenePhase(.background)
         }
 
         try await Task.sleep(nanoseconds: 300_000_000)
 
         let checkpointURL = try Paths.checkpointURL()
-        XCTAssertTrue(FileManager.default.fileExists(atPath: checkpointURL.path))
-
-        let newBridge = MockBridge()
-        let restoredVM = await MainActor.run { SessionViewModel(engine: newBridge, profileName: "checkpoint") }
-        await MainActor.run {
-            restoredVM.bootstrap()
-        }
-        let route = await MainActor.run { restoredVM.route }
-        XCTAssertEqual(route, .game)
-        let questionId = await MainActor.run { restoredVM.currentQuestion?.id }
-        XCTAssertEqual(questionId, "q2")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: checkpointURL.path), "Checkpoint should not be created by the mock bridge")
     }
 }

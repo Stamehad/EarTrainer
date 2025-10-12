@@ -1,4 +1,4 @@
-#include "ear/drill_hub.hpp"
+#include "../include/ear/drill_hub.hpp"
 
 #include "../src/rng.hpp"
 

@@ -1,6 +1,6 @@
-#include "ear/chord_voicings.hpp"
+#include "../include/ear/chord_voicings.hpp"
 
-#include "ear/drill_spec.hpp"
+#include "../include/ear/drill_spec.hpp"
 
 #include <algorithm>
 #include <cctype>

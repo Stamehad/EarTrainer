@@ -1,7 +1,7 @@
 #include "chord.hpp"
 
 #include "common.hpp"
-#include "ear/drill_spec.hpp"
+#include "../include/ear/drill_spec.hpp"
 #include "../src/rng.hpp"
 
 #include <algorithm>

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "ear/track_selector.hpp"
-#include "ear/drill_factory.hpp"
-#include "ear/types.hpp"
+#include "track_selector.hpp"
+#include "drill_factory.hpp"
+#include "types.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -12,7 +12,7 @@
 #include <optional>
 #include <unordered_map>
 
-#include <nlohmann/json.hpp>
+#include "../nlohmann/json.hpp"
 
 namespace ear {
 

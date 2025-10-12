@@ -9,22 +9,7 @@ public struct ResultView: View {
     public var body: some View {
         VStack(spacing: 24) {
             if let summary = viewModel.summary {
-                VStack(spacing: 12) {
-                    Text("Session Complete")
-                        .font(.title.weight(.semibold))
-                    Text("You answered \(summary.correctAnswers) of \(summary.totalQuestions) correctly")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Divider()
-                    StatRow(title: "Accuracy", value: accuracyText(summary))
-                    StatRow(title: "Duration", value: durationText(summary))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.panelBackground)
-                )
+                SummaryContent(summary: summary)
             } else {
                 Text("No summary available.")
                     .foregroundStyle(.secondary)
@@ -46,30 +31,51 @@ public struct ResultView: View {
         }
         .padding()
     }
+}
 
-    private func accuracyText(_ summary: SessionSummary) -> String {
-        guard summary.totalQuestions > 0 else { return "--" }
-        let percent = Double(summary.correctAnswers) / Double(summary.totalQuestions) * 100
-        return String(format: "%.0f%%", percent)
-    }
+private struct SummaryContent: View {
+    let summary: SessionSummary
 
-    private func durationText(_ summary: SessionSummary) -> String {
-        let seconds = Double(summary.durationMs) / 1000.0
-        return String(format: "%.1f s", seconds)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Session Complete")
+                .font(.title.weight(.semibold))
+            Text("Session ID: \(summary.sessionId)")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            SummaryPanel(title: "Totals", content: summary.totals.prettyPrinted())
+            SummaryPanel(title: "By Category", content: summary.byCategory.prettyPrinted())
+            SummaryPanel(title: "Results", content: summary.results.prettyPrinted())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.panelBackground)
+        )
     }
 }
 
-private struct StatRow: View {
+private struct SummaryPanel: View {
     let title: String
-    let value: String
+    let content: String
 
     var body: some View {
-        HStack {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
-                .font(.headline)
+                .font(.subheadline.weight(.semibold))
+            ScrollView(.vertical, showsIndicators: true) {
+                Text(content)
+                    .font(.system(.footnote, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+            }
+            .frame(maxHeight: 160)
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.panelBackground)
+            )
         }
     }
 }

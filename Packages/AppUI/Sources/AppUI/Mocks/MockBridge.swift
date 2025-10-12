@@ -6,8 +6,9 @@ public final class MockBridge: SessionEngine {
     private var storageRoot: URL?
     private var snapshot: ProfileSnapshot?
     private var activeSpec: SessionSpec?
-    private var questions: [Question] = []
+    private var questions: [QuestionBundle] = []
     private var currentIndex: Int = 0
+    private var sessionIdentifier: String?
 
     public init() {}
 
@@ -36,35 +37,44 @@ public final class MockBridge: SessionEngine {
 
     public func startSession(_ spec: SessionSpec) throws {
         activeSpec = spec
+        sessionIdentifier = "mock-\(UUID().uuidString)"
         currentIndex = 0
         questions = makeQuestions(from: spec)
     }
 
-    public func nextQuestion() throws -> Question? {
+    public func nextQuestion() throws -> EngineResponse? {
         guard currentIndex < questions.count else {
-            return nil
+            return .summary(makeSummary(total: questions.count, correct: currentIndex))
         }
-        return questions[currentIndex]
+        let bundle = questions[currentIndex]
+        let debugInfo = JSONValue.object([
+            "index": JSONValue.int(currentIndex),
+            "remaining": JSONValue.int(max(0, questions.count - currentIndex - 1))
+        ])
+        return .question(QuestionEnvelope(bundle: bundle, debug: debugInfo))
     }
 
-    public func submit(_ answer: Answer) throws -> AttemptResult {
+    public func submit(_ report: ResultReport) throws -> EngineResponse? {
         guard currentIndex < questions.count else {
-            throw BridgeError.engineError("No question available")
+            return .summary(makeSummary(total: questions.count, correct: currentIndex))
         }
-        let question = questions[currentIndex]
-        let correctId = question.choices.first?.id ?? "A"
-        let isCorrect = answer.choiceId == correctId
         currentIndex += 1
-        return AttemptResult(
-            questionId: question.id,
-            correct: isCorrect,
-            correctAnswerId: correctId,
-            scoreDelta: isCorrect ? 1 : 0,
-            message: isCorrect ? "Nice!" : "Keep practicing"
-        )
+        if currentIndex < questions.count {
+            let bundle = questions[currentIndex]
+            let debugInfo = JSONValue.object([
+                "index": JSONValue.int(currentIndex),
+                "submitted": JSONValue.object([
+                    "question_id": JSONValue.string(report.questionId),
+                    "correct": JSONValue.bool(report.correct)
+                ])
+            ])
+            return .question(QuestionEnvelope(bundle: bundle, debug: debugInfo))
+        } else {
+            return .summary(makeSummary(total: questions.count, correct: currentIndex))
+        }
     }
 
-    public func endSession() throws -> SessionSummary {
+    public func endSession() throws -> EngineResponse? {
         let total = questions.count
         let correct = total // mock assumes perfect accuracy
         questions = []
@@ -74,40 +84,67 @@ public final class MockBridge: SessionEngine {
             snapshot.updatedAt = Date()
             self.snapshot = snapshot
         }
-        return SessionSummary(totalQuestions: total, correctAnswers: correct, durationMs: 90_000)
+        return .summary(makeSummary(total: total, correct: correct))
     }
 
     public var hasActiveSession: Bool {
-        currentIndex < questions.count
+        sessionIdentifier != nil && currentIndex < questions.count
     }
 
     public func serializeCheckpoint() throws -> Checkpoint? {
-        guard hasActiveSession else { return nil }
-        return Checkpoint(currentQuestion: currentIndex, totalQuestions: questions.count, spec: activeSpec)
+        return nil
     }
 
     public func restore(checkpoint: Checkpoint) throws {
-        activeSpec = checkpoint.spec ?? activeSpec
-        if let spec = activeSpec {
-            questions = makeQuestions(from: spec)
-        }
-        currentIndex = min(checkpoint.currentQuestion, questions.count)
+        activeSpec = checkpoint.spec
+        currentIndex = 0
+        sessionIdentifier = checkpoint.sessionId
+        questions = makeQuestions(from: checkpoint.spec)
     }
 
-    private func makeQuestions(from spec: SessionSpec) -> [Question] {
-        let basePrompt = spec.drill.capitalized
-        return (0..<max(1, spec.count)).map { index in
-            let id = "q\(index + 1)"
-            let choiceA = Question.Choice(id: "A", text: "Option A")
-            let choiceB = Question.Choice(id: "B", text: "Option B")
-            let choiceC = Question.Choice(id: "C", text: "Option C")
-            return Question(
-                id: id,
-                prompt: "\(basePrompt) question \(index + 1)",
-                choices: [choiceA, choiceB, choiceC],
-                metadata: ["set": spec.setId]
+    private func makeQuestions(from spec: SessionSpec) -> [QuestionBundle] {
+        let count = max(1, spec.nQuestions)
+        return (0..<count).map { index in
+            let questionId = "q\(index + 1)"
+            let choicePayload = JSONValue.array([
+                JSONValue.object(["id": JSONValue.string("A"), "label": JSONValue.string("Choice A")]),
+                JSONValue.object(["id": JSONValue.string("B"), "label": JSONValue.string("Choice B")]),
+                JSONValue.object(["id": JSONValue.string("C"), "label": JSONValue.string("Choice C")])
+            ])
+            let question = TypedPayload(
+                type: "multiple_choice",
+                payload: JSONValue.object([
+                    "prompt": JSONValue.string("Question \(index + 1) for \(spec.drillKind.capitalized)"),
+                    "choices": choicePayload
+                ])
+            )
+            let answer = TypedPayload(
+                type: "choice_id",
+                payload: JSONValue.object(["id": JSONValue.string("A")])
+            )
+            return QuestionBundle(
+                questionId: questionId,
+                question: question,
+                correctAnswer: answer,
+                prompt: nil,
+                uiHints: JSONValue.object([
+                    "track_levels": JSONValue.array(spec.trackLevels.map { JSONValue.int($0) })
+                ])
             )
         }
+    }
+
+    private func makeSummary(total: Int, correct: Int) -> SessionSummary {
+        let totals = JSONValue.object([
+            "total_questions": JSONValue.int(total),
+            "correct": JSONValue.int(correct)
+        ])
+        return SessionSummary(
+            sessionId: sessionIdentifier ?? "mock",
+            totals: totals,
+            byCategory: JSONValue.array([]),
+            results: JSONValue.array([])
+        )
     }
 }
 #endif

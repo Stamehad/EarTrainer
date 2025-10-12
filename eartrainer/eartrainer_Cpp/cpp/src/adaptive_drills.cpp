@@ -1,8 +1,8 @@
-#include "ear/adaptive_drills.hpp"
+#include "../include/ear/adaptive_drills.hpp"
 
-#include "ear/adaptive_catalog.hpp"
-#include "ear/track_selector.hpp"
-#include "ear/drill_factory.hpp"
+#include "../include/ear/adaptive_catalog.hpp"
+#include "../include/ear/track_selector.hpp"
+#include "../include/ear/drill_factory.hpp"
 #include "rng.hpp"
 
 #include <algorithm>

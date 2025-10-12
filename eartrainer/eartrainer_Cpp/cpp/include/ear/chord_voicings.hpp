@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "ear/drill_spec.hpp"
+#include "drill_spec.hpp"
 
 namespace ear {
 

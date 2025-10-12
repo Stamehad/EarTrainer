@@ -1,4 +1,4 @@
-#include "ear/drill_factory.hpp"
+#include "../include/ear/drill_factory.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -12,13 +12,13 @@
 #define EAR_HAVE_YAML 0
 #endif
 
-#include "common.hpp"        // parse_key_from_string etc.
-#include "drills/chord.hpp"
-#include "drills/interval.hpp"
-#include "drills/melody.hpp"
-#include "drills/note.hpp"
-#include "ear/types.hpp"
-#include "ear/midi_clip.hpp"
+#include "../drills/common.hpp"        // parse_key_from_string etc.
+#include "../drills/chord.hpp"
+#include "../drills/interval.hpp"
+#include "../drills/melody.hpp"
+#include "../drills/note.hpp"
+#include "../include/ear/types.hpp"
+#include "../include/ear/midi_clip.hpp"
 
 using nlohmann::json;
 

@@ -15,9 +15,10 @@ public final class SessionViewModel: ObservableObject {
 
     @Published public private(set) var route: Route = .entrance
     @Published public var spec: SessionSpec
-    @Published public private(set) var currentQuestion: Question?
-    @Published public private(set) var attemptResult: AttemptResult?
+    @Published public private(set) var currentQuestion: QuestionEnvelope?
     @Published public private(set) var summary: SessionSummary?
+    @Published public private(set) var questionJSON: String?
+    @Published public private(set) var debugJSON: String?
     @Published public var errorBanner: String?
     @Published public private(set) var isProcessing: Bool = false
 
@@ -25,6 +26,7 @@ public final class SessionViewModel: ObservableObject {
     private let profileName: String
     private var profile: ProfileSnapshot?
     private var hasBootstrapped = false
+    private var questionsAnswered = 0
 
     private let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -36,6 +38,12 @@ public final class SessionViewModel: ObservableObject {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
+    }()
+
+    private let displayEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return encoder
     }()
 
     public init(engine: SessionEngine, profileName: String = "default") {
@@ -78,46 +86,53 @@ public final class SessionViewModel: ObservableObject {
     public func start() {
         guard !isProcessing else { return }
         perform {
-            attemptResult = nil
             summary = nil
+            questionJSON = nil
+            debugJSON = nil
+            questionsAnswered = 0
             try engine.startSession(spec)
-            currentQuestion = try engine.nextQuestion()
             route = .game
             try clearCheckpointOnDisk()
+            try fetchNextQuestion()
         }
     }
 
-    public func submit(answer choiceId: String, latencyMs: Int) {
+    public func submit(latencyMs: Int = 1_000) {
         guard !isProcessing, let question = currentQuestion else { return }
         perform {
-            let answer = Answer(questionId: question.id, choiceId: choiceId, latencyMs: latencyMs)
-            attemptResult = try engine.submit(answer)
+            let report = buildReport(for: question.bundle, latencyMs: latencyMs)
+            let response = try engine.submit(report)
+            questionsAnswered += 1
+            if let response {
+                handle(response: response)
+            } else {
+                currentQuestion = nil
+            }
         }
     }
 
     public func next() {
         guard !isProcessing else { return }
-        perform {
-            attemptResult = nil
-            if let question = try engine.nextQuestion() {
-                currentQuestion = question
-            } else {
-                try finishSession()
-            }
-        }
+        perform { try fetchNextQuestion() }
     }
 
     public func finish() {
         guard !isProcessing else { return }
         perform {
-            try finishSession()
+            if let response = try engine.endSession() {
+                handle(response: response)
+            } else {
+                summary = nil
+                route = .entrance
+            }
         }
     }
 
     public func resetToEntrance() {
         currentQuestion = nil
-        attemptResult = nil
         summary = nil
+        questionJSON = nil
+        debugJSON = nil
         route = .entrance
     }
 
@@ -156,25 +171,16 @@ public final class SessionViewModel: ObservableObject {
         guard manager.fileExists(atPath: url.path) else {
             return
         }
-        let data = try Data(contentsOf: url)
-        let checkpoint = try decoder.decode(Checkpoint.self, from: data)
-        if let savedSpec = checkpoint.spec {
-            spec = savedSpec
+        do {
+            let data = try Data(contentsOf: url)
+            let checkpoint = try decoder.decode(Checkpoint.self, from: data)
+            spec = checkpoint.spec
+            try engine.restore(checkpoint: checkpoint)
+            try fetchNextQuestion()
+        } catch {
+            try? clearCheckpointOnDisk()
+            throw error
         }
-        try engine.restore(checkpoint: checkpoint)
-        currentQuestion = try engine.nextQuestion()
-        attemptResult = nil
-        summary = nil
-        route = currentQuestion == nil ? .entrance : .game
-    }
-
-    private func finishSession() throws {
-        summary = try engine.endSession()
-        currentQuestion = nil
-        attemptResult = nil
-        route = .results
-        try clearCheckpointOnDisk()
-        try saveProfileToDisk()
     }
 
     private func saveProfileToDisk() throws {
@@ -198,6 +204,67 @@ public final class SessionViewModel: ObservableObject {
         }
     }
 
+    private func fetchNextQuestion() throws {
+        if let response = try engine.nextQuestion() {
+            handle(response: response)
+        } else {
+            currentQuestion = nil
+            questionJSON = nil
+            debugJSON = nil
+        }
+    }
+
+    private func handle(response: EngineResponse) {
+        switch response {
+        case let .question(envelope):
+            currentQuestion = envelope
+            summary = nil
+            questionJSON = prettyJSONString(envelope.bundle)
+            debugJSON = envelope.debug?.prettyPrinted()
+            route = .game
+        case let .summary(report):
+            currentQuestion = nil
+            questionJSON = nil
+            debugJSON = nil
+            summary = report
+            route = .results
+            questionsAnswered = 0
+            do {
+                try clearCheckpointOnDisk()
+                try saveProfileToDisk()
+            } catch {
+                presentError(error)
+            }
+        }
+    }
+
+    private func buildReport(for bundle: QuestionBundle, latencyMs: Int) -> ResultReport {
+        let metrics = ResultMetrics(
+            rtMs: latencyMs,
+            attempts: 1,
+            questionCount: questionsAnswered + 1,
+            assistsUsed: [:],
+            firstInputRtMs: latencyMs
+        )
+        let clientInfo: [String: JSONValue] = [
+            "auto_submit": .bool(true),
+            "latency_ms": .int(latencyMs)
+        ]
+        return ResultReport(
+            questionId: bundle.questionId,
+            finalAnswer: bundle.correctAnswer,
+            correct: true,
+            metrics: metrics,
+            attempts: [],
+            clientInfo: clientInfo
+        )
+    }
+
+    private func prettyJSONString<T: Encodable>(_ value: T) -> String? {
+        guard let data = try? displayEncoder.encode(value) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
     private func persistStateInBackground() {
         Task(priority: .background) { [profileName] in
             do {
@@ -209,11 +276,7 @@ public final class SessionViewModel: ObservableObject {
                 }
 
                 let checkpoint: Checkpoint? = try await MainActor.run {
-                    guard var snapshot = try self.engine.serializeCheckpoint() else {
-                        return nil
-                    }
-                    snapshot.spec = self.spec
-                    return snapshot
+                    try self.engine.serializeCheckpoint()
                 }
 
                 let profileEncoder = JSONEncoder()

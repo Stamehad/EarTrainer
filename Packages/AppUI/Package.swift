@@ -20,9 +20,30 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "EarTrainerEngine",
+            path: "Sources/CEarTrainerBridge/Engine",
+            exclude: [
+                "src/bindings.cpp"
+            ],
+            publicHeadersPath: "include",
+            cxxSettings: [
+                .headerSearchPath("include"),
+                .headerSearchPath("src"),
+                .headerSearchPath("drills"),
+                .headerSearchPath("assistance"),
+                .headerSearchPath("scoring"),
+                .headerSearchPath("controller")
+            ]
+        ),
+        .target(
             name: "CEarTrainerBridge",
+            dependencies: ["EarTrainerEngine"],
             path: "Sources/CEarTrainerBridge",
-            publicHeadersPath: "include"
+            exclude: ["Engine"],
+            publicHeadersPath: "include",
+            linkerSettings: [
+                .linkedLibrary("c++")
+            ]
         ),
         .target(
             name: "Bridge",
@@ -42,5 +63,6 @@ let package = Package(
             dependencies: ["AppUI"],
             path: "Tests/AppUITests"
         )
-    ]
+    ],
+    cxxLanguageStandard: .cxx17
 )

@@ -5,14 +5,14 @@
 #include <unordered_map>
 #include <vector>
 
-#include <nlohmann/json.hpp>
+#include "../nlohmann/json.hpp"
 
 namespace YAML {
 class Node;
 }
 
 // SessionSpec is defined in ear/types.hpp; needed for conversion helpers.
-#include "ear/types.hpp"
+#include "types.hpp"
 
 /**
  * DrillSpec: data-only description of one drill template, loaded from YAML.
