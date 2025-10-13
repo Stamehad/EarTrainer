@@ -1,0 +1,24 @@
+{
+  "drills": [
+    {
+      "family": "test",
+      "id": "CHD_PHASE1_1",
+      "level": 211
+    },
+    {
+      "family": "test",
+      "id": "CHD_PHASE1_2",
+      "level": 215
+    },
+    {
+      "family": "test",
+      "id": "CHD_PHASE1_3",
+      "level": 217
+    },
+    {
+      "family": "test",
+      "id": "CHD_PHASE2_1",
+      "level": 221
+    }
+  ]
+}

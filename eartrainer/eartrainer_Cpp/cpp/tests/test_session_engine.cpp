@@ -63,9 +63,9 @@ void test_track_selector(TestSuite& suite) {
 
   const auto base_dir = std::filesystem::path(__FILE__).parent_path() / "catalogs";
   std::vector<TrackCatalogDescriptor> catalog_descriptors = {
-      {"degree", base_dir / "degree_levels_test.yml"},
-      {"melody", base_dir / "melody_levels_test.yml"},
-      {"chord",  base_dir / "chord_levels_test.yml"},
+      {"degree", base_dir / "degree_levels_test.json"},
+      {"melody", base_dir / "melody_levels_test.json"},
+      {"chord",  base_dir / "chord_levels_test.json"},
   };
   auto catalogs = ear::adaptive::load_track_phase_catalogs(catalog_descriptors);
 

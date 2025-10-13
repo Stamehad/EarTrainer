@@ -1,0 +1,108 @@
+# Adaptive melody track catalog
+drills:
+  - id: MELODY60_STEP1
+    family: melody
+    level: 111
+    tier: 0
+    defaults:
+      tempo_bpm: 60
+    params:
+      melody_length: 2
+      melody_max_step: 1      # 1 = stepwise only
+      range_below_semitones: 0
+      range_above_semitones: 12
+  
+  - id: MELODY60_STEP2
+    family: melody
+    level: 111
+    tier: 1
+    defaults:
+      tempo_bpm: 60
+    params:
+      melody_length: 2
+      melody_max_step: 2
+      range_below_semitones: 0
+      range_above_semitones: 12
+
+  - id: MELODY60
+    family: melody
+    level: 111
+    tier: 2
+    defaults:
+      tempo_bpm: 60
+    params:
+      melody_length: 2
+      range_below_semitones: 0
+      range_above_semitones: 12
+  
+  - id: MELODY90_STEP1
+    family: melody
+    level: 112
+    tier: 0
+    defaults:
+      tempo_bpm: 90
+    params:
+      melody_length: [2, 3]
+      melody_max_step: 1      # 1 = stepwise only
+      range_below_semitones: 0
+      range_above_semitones: 12
+  
+  - id: MELODY90_STEP2
+    family: melody
+    level: 112
+    tier: 1
+    defaults:
+      tempo_bpm: 60
+    params:
+      melody_length: [2, 3]
+      melody_max_step: 2
+      range_below_semitones: 0
+      range_above_semitones: 12
+
+  - id: MELODY90
+    family: melody
+    level: 112
+    tier: 2
+    defaults:
+      tempo_bpm: 60
+    params:
+      melody_length: [2, 3]
+      range_below_semitones: 0
+      range_above_semitones: 12
+
+  - id: MELODY120_STEP1
+    family: melody
+    level: 113
+    tier: 0
+    defaults:
+      tempo_bpm: 90
+    params:
+      melody_length: [2, 3, 4]
+      melody_max_step: 1      # 1 = stepwise only
+      range_below_semitones: 0
+      range_above_semitones: 12
+  
+  - id: MELODY120_STEP2
+    family: melody
+    level: 113
+    tier: 1
+    defaults:
+      tempo_bpm: 60
+    params:
+      melody_length: [2, 3, 4]
+      melody_max_step: 2
+      range_below_semitones: 0
+      range_above_semitones: 12
+
+  - id: MELODY120
+    family: melody
+    level: 113
+    tier: 2
+    defaults:
+      tempo_bpm: 60
+    params:
+      melody_length: [2, 3, 4]
+      range_below_semitones: 0
+      range_above_semitones: 12
+
+

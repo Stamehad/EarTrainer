@@ -54,6 +54,9 @@ let package = Package(
             name: "AppUI",
             dependencies: ["Bridge"],
             path: "Sources/AppUI",
+            resources: [
+                .copy("Resources/CoreResources")
+            ],
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))
             ]

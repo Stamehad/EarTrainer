@@ -1,0 +1,192 @@
+{
+  "drills": [
+    {
+      "defaults": {
+        "tempo_bpm": 80
+      },
+      "family": "note",
+      "id": "PATHWAYS_1_4",
+      "level": 1,
+      "params": {
+        "allowed_degrees": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "avoid_repeat": true,
+        "pathway_repeat_lead": false,
+        "pathway_rest_beats": 0.5,
+        "pathway_step_beats": 1.0,
+        "range_above_semitones": 12,
+        "range_below_semitones": 0,
+        "use_pathway": true
+      },
+      "tier": 0
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 80
+      },
+      "family": "note",
+      "id": "PATHWAYS_5_7",
+      "level": 1,
+      "params": {
+        "allowed_degrees": [
+          4,
+          5,
+          6
+        ],
+        "avoid_repeat": true,
+        "pathway_repeat_lead": false,
+        "pathway_rest_beats": 0.5,
+        "pathway_step_beats": 1.0,
+        "range_above_semitones": 12,
+        "range_below_semitones": 0,
+        "use_pathway": true
+      },
+      "tier": 1
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 72
+      },
+      "family": "note",
+      "id": "NOTE_1_4",
+      "level": 2,
+      "params": {
+        "allowed_degrees": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "avoid_repeat": true,
+        "range_above_semitones": 12,
+        "range_below_semitones": 0
+      },
+      "tier": 0
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 72
+      },
+      "family": "note",
+      "id": "NOTE_5_7",
+      "level": 2,
+      "params": {
+        "allowed_degrees": [
+          4,
+          5,
+          6
+        ],
+        "avoid_repeat": true,
+        "range_above_semitones": 11,
+        "range_below_semitones": 0
+      },
+      "tier": 1
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 72
+      },
+      "family": "note",
+      "id": "NOTE_TO_TONIC",
+      "level": 3,
+      "params": {
+        "allowed_degrees": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "avoid_repeat": true,
+        "range_above_semitones": 12,
+        "range_below_semitones": 0,
+        "tonic_anchor": "after"
+      },
+      "tier": 0
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 72
+      },
+      "family": "note",
+      "id": "NOTE_AFTER_TONIC",
+      "level": 3,
+      "params": {
+        "allowed_degrees": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "avoid_repeat": true,
+        "range_above_semitones": 12,
+        "range_below_semitones": 0,
+        "tonic_anchor": "before"
+      },
+      "tier": 1
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 120
+      },
+      "family": "note",
+      "id": "PATHWAYS_2OCT",
+      "level": 11,
+      "params": {
+        "avoid_repeat": true,
+        "pathway_repeat_lead": false,
+        "pathway_rest_beats": 0.5,
+        "pathway_step_beats": 1.0,
+        "range_above_semitones": 12,
+        "range_below_semitones": 12,
+        "use_pathway": true
+      },
+      "tier": 0
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 120
+      },
+      "family": "note",
+      "id": "NOTE_WITH_TONIC_2OCT",
+      "level": 11,
+      "params": {
+        "allowed_degrees": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "avoid_repeat": true,
+        "range_above_semitones": 12,
+        "range_below_semitones": 12,
+        "tonic_anchor": "both",
+        "tonic_anchor_include_octave": true
+      },
+      "tier": 1
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 72
+      },
+      "family": "note",
+      "id": "NOTE_2OCT",
+      "level": 11,
+      "params": {
+        "avoid_repeat": true,
+        "range_above_semitones": 12,
+        "range_below_semitones": 12
+      },
+      "tier": 2
+    }
+  ]
+}

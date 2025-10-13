@@ -49,10 +49,9 @@ DerivedData/
 xcuserdata/
 *.xcworkspace/
 *.xcuserstate
-*.xcodeproj/
 
 # Locally-symlinked core engine sources (consumed by SwiftPM only)
 Packages/AppUI/Sources/CEarTrainerBridge/Engine/
 
-# Throwaway Xcode scaffold directory (app uses Swift package entry)
-ios/EarTrainerApp/
+# Allow committed Xcode project under ios/; still ignore user/caches
+# (Keep patterns above: DerivedData/, xcuserdata/, *.xcworkspace/, *.xcuserstate)

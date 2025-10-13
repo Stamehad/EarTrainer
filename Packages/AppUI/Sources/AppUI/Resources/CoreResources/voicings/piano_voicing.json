@@ -1,0 +1,39 @@
+{
+  "triads": {
+    "major": {
+      "bass_offsets": [-14],
+      "voicings": [
+        {"offsets": [0, 2, 4, 7]},
+        {"offsets": [0, 2, 4]},
+        {"offsets": [-3, 0, 2]},
+        {"offsets": [2, 4, 7]}
+      ]
+    },
+    "minor": {
+      "bass_offsets": [-14],
+      "voicings": [
+        {"offsets": [0, 2, 4, 7]},
+        {"offsets": [0, 2, 4]},
+        {"offsets": [-3, 0, 2]},
+        {"offsets": [2, 4, 7]}
+      ]
+    },
+    "diminished": {
+      "bass_offsets": [-14],
+      "voicings": [
+        {"offsets": [0, 2, 4, 7]},
+        {"offsets": [0, 2, 4]},
+        {"offsets": [-3, 0, 2]},
+        {"offsets": [2, 4, 7]}
+      ]
+    }
+  },
+  "metadata": {
+    "tonic_reference": "relative scale degrees (0 = chord root, +/-7 per octave)",
+    "scale_context": "major",
+    "notes": [
+      "Offsets are added to the sampled chord root degree and converted to MIDI using the diatonic mapper.",
+      "This file mirrors the core C++ voicing map; keep both in sync when adding instruments or qualities."
+    ]
+  }
+}

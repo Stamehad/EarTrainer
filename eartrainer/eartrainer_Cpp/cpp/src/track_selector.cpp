@@ -4,10 +4,14 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <set>
 #include <stdexcept>
+
+#include "../include/nlohmann/json.hpp"
 
 namespace ear::adaptive {
 namespace {
@@ -25,29 +29,50 @@ std::filesystem::path resolve_catalog_path(const std::filesystem::path& path) {
 }
 
 std::vector<DrillSpec> load_catalog_specs(const std::filesystem::path& catalog_path) {
-  if (!std::filesystem::exists(catalog_path)) {
+  std::filesystem::path path = catalog_path;
+  if (!std::filesystem::exists(path)) {
+    if (path.extension() == ".yml") {
+      auto alt = path;
+      alt.replace_extension(".json");
+      if (std::filesystem::exists(alt)) {
+        path = alt;
+      }
+    }
+  }
+
+  if (!std::filesystem::exists(path)) {
     throw std::runtime_error("Adaptive track catalog not found at: " + catalog_path.string());
   }
 
-  return DrillSpec::load_yaml(catalog_path.string());
+  if (path.extension() != ".json") {
+    throw std::runtime_error("Adaptive track catalog must be JSON: " + path.string());
+  }
+
+  std::ifstream stream(path);
+  if (!stream) {
+    throw std::runtime_error("Failed to open track catalog: " + path.string());
+  }
+  std::string content((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+  auto document = nlohmann::json::parse(content);
+  return DrillSpec::load_json(document);
 }
 
 } // namespace
 
 const std::vector<TrackCatalogDescriptor>& default_track_catalogs() {
   static const std::vector<TrackCatalogDescriptor> descriptors = {
-      {"degree", std::filesystem::path("resources") / "degree_levels.yml"},
-      {"melody", std::filesystem::path("resources") / "melody_levels.yml"},
-      {"chord",  std::filesystem::path("resources") / "chord_levels.yml"},
+      {"degree", std::filesystem::path("resources") / "degree_levels.json"},
+      {"melody", std::filesystem::path("resources") / "melody_levels.json"},
+      {"chord",  std::filesystem::path("resources") / "chord_levels.json"},
   };
   return descriptors;
 }
 
 std::vector<TrackCatalogDescriptor> track_catalogs_from_resources(const std::filesystem::path& resources_dir) {
   return {
-      {"degree", resources_dir / "degree_levels.yml"},
-      {"melody", resources_dir / "melody_levels.yml"},
-      {"chord",  resources_dir / "chord_levels.yml"},
+      {"degree", resources_dir / "degree_levels.json"},
+      {"melody", resources_dir / "melody_levels.json"},
+      {"chord",  resources_dir / "chord_levels.json"},
   };
 }
 

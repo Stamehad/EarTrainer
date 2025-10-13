@@ -8,10 +8,12 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 
 #include "../Engine/include/nlohmann/json.hpp"
 #include "../Engine/include/ear/session_engine.hpp"
 #include "../Engine/src/json_bridge.hpp"
+#include "../Engine/include/ear/types.hpp"
 
 namespace {
 
@@ -100,6 +102,11 @@ char* set_storage_root(const char* path) {
   auto& s = state();
   std::scoped_lock guard(s.mutex);
   s.storage_root = path ? std::string(path) : std::string();
+  if (!s.storage_root.empty()) {
+    std::error_code ec;
+    std::filesystem::create_directories(s.storage_root, ec);
+    std::filesystem::current_path(s.storage_root, ec);
+  }
   return nullptr;
 }
 
@@ -215,8 +222,12 @@ char* feedback(const char* answer_json) {
     return copy_json(error_envelope("No pending question"));
   }
   try {
-    nlohmann::json json_report = answer_json ? nlohmann::json::parse(answer_json)
-                                             : nlohmann::json::object();
+    nlohmann::json json_report;
+    if (answer_json) {
+      json_report = nlohmann::json::parse(answer_json);
+    } else {
+      json_report = nlohmann::json::object();
+    }
     ear::ResultReport report = ear::bridge::result_report_from_json(json_report);
     auto& engine = ensure_engine();
     auto next = engine.submit_result(*s.session_id, report);

@@ -1,0 +1,157 @@
+{
+  "drills": [
+    {
+      "defaults": {
+        "tempo_bpm": 60
+      },
+      "family": "melody",
+      "id": "MELODY60_STEP1",
+      "level": 111,
+      "params": {
+        "melody_length": 2,
+        "melody_max_step": 1,
+        "range_above_semitones": 12,
+        "range_below_semitones": 0
+      },
+      "tier": 0
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 60
+      },
+      "family": "melody",
+      "id": "MELODY60_STEP2",
+      "level": 111,
+      "params": {
+        "melody_length": 2,
+        "melody_max_step": 2,
+        "range_above_semitones": 12,
+        "range_below_semitones": 0
+      },
+      "tier": 1
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 60
+      },
+      "family": "melody",
+      "id": "MELODY60",
+      "level": 111,
+      "params": {
+        "melody_length": 2,
+        "range_above_semitones": 12,
+        "range_below_semitones": 0
+      },
+      "tier": 2
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 90
+      },
+      "family": "melody",
+      "id": "MELODY90_STEP1",
+      "level": 112,
+      "params": {
+        "melody_length": [
+          2,
+          3
+        ],
+        "melody_max_step": 1,
+        "range_above_semitones": 12,
+        "range_below_semitones": 0
+      },
+      "tier": 0
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 60
+      },
+      "family": "melody",
+      "id": "MELODY90_STEP2",
+      "level": 112,
+      "params": {
+        "melody_length": [
+          2,
+          3
+        ],
+        "melody_max_step": 2,
+        "range_above_semitones": 12,
+        "range_below_semitones": 0
+      },
+      "tier": 1
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 60
+      },
+      "family": "melody",
+      "id": "MELODY90",
+      "level": 112,
+      "params": {
+        "melody_length": [
+          2,
+          3
+        ],
+        "range_above_semitones": 12,
+        "range_below_semitones": 0
+      },
+      "tier": 2
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 90
+      },
+      "family": "melody",
+      "id": "MELODY120_STEP1",
+      "level": 113,
+      "params": {
+        "melody_length": [
+          2,
+          3,
+          4
+        ],
+        "melody_max_step": 1,
+        "range_above_semitones": 12,
+        "range_below_semitones": 0
+      },
+      "tier": 0
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 60
+      },
+      "family": "melody",
+      "id": "MELODY120_STEP2",
+      "level": 113,
+      "params": {
+        "melody_length": [
+          2,
+          3,
+          4
+        ],
+        "melody_max_step": 2,
+        "range_above_semitones": 12,
+        "range_below_semitones": 0
+      },
+      "tier": 1
+    },
+    {
+      "defaults": {
+        "tempo_bpm": 60
+      },
+      "family": "melody",
+      "id": "MELODY120",
+      "level": 113,
+      "params": {
+        "melody_length": [
+          2,
+          3,
+          4
+        ],
+        "range_above_semitones": 12,
+        "range_below_semitones": 0
+      },
+      "tier": 2
+    }
+  ]
+}

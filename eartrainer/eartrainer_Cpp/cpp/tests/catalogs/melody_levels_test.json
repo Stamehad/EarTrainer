@@ -1,0 +1,19 @@
+{
+  "drills": [
+    {
+      "family": "test",
+      "id": "MEL_PHASE1_1",
+      "level": 111
+    },
+    {
+      "family": "test",
+      "id": "MEL_PHASE1_2",
+      "level": 118
+    },
+    {
+      "family": "test",
+      "id": "MEL_PHASE2_1",
+      "level": 121
+    }
+  ]
+}

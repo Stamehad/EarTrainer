@@ -146,7 +146,47 @@ public final class SessionViewModel: ObservableObject {
 
     private func prepareEngine() throws {
         let root = try Paths.appSupportRoot()
+        try ensureResourcesAvailable(at: root)
         try engine.setStorageRoot(root)
+    }
+
+    private func ensureResourcesAvailable(at root: URL) throws {
+        let fileManager = FileManager.default
+        let destination = root.appendingPathComponent("resources", isDirectory: true)
+        let bundle = ResourceBundle.bundle
+        guard let source = bundle.url(forResource: "CoreResources", withExtension: nil) else {
+            throw BridgeError.missingData("CoreResources bundle")
+        }
+        if !fileManager.fileExists(atPath: destination.path) {
+            try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
+        }
+        if let enumerator = fileManager.enumerator(at: source, includingPropertiesForKeys: [.isDirectoryKey]) {
+            for case let fileURL as URL in enumerator {
+                let resourceValues = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
+                let relativePath = fileURL.path.replacingOccurrences(of: source.path + "/", with: "")
+                let targetURL = destination.appendingPathComponent(relativePath)
+                if resourceValues.isDirectory == true {
+                    try fileManager.createDirectory(at: targetURL, withIntermediateDirectories: true)
+                } else {
+                    if fileManager.fileExists(atPath: targetURL.path) {
+                        try fileManager.removeItem(at: targetURL)
+                    }
+                    try fileManager.copyItem(at: fileURL, to: targetURL)
+                }
+            }
+        }
+    }
+
+    private enum ResourceBundle {
+        static var bundle: Bundle = {
+            #if SWIFT_PACKAGE
+            return Bundle.module
+            #else
+            return Bundle(for: BundleMarker.self)
+            #endif
+        }()
+
+        private final class BundleMarker {}
     }
 
     private func loadProfileSnapshot() throws {

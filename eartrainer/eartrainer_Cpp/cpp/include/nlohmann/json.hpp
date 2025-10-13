@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cassert>
+#include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -221,7 +223,14 @@ public:
   }
 
   static json parse(const std::string& text) {
-    throw std::runtime_error("nlohmann::json minimal stub does not implement parse");
+    std::size_t pos = 0;
+    skip_whitespace(text, pos);
+    json value = parse_value(text, pos);
+    skip_whitespace(text, pos);
+    if (pos != text.size()) {
+      throw std::runtime_error("json parse error: unexpected trailing characters");
+    }
+    return value;
   }
 
   bool operator==(const json& other) const { return data_ == other.data_; }
@@ -229,6 +238,245 @@ public:
 
 private:
   variant_t data_;
+
+  static void skip_whitespace(const std::string& text, std::size_t& pos) {
+    while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos]))) {
+      ++pos;
+    }
+  }
+
+  static json parse_value(const std::string& text, std::size_t& pos) {
+    if (pos >= text.size()) {
+      throw std::runtime_error("json parse error: unexpected end of input");
+    }
+    char ch = text[pos];
+    switch (ch) {
+      case '{':
+        return parse_object(text, pos);
+      case '[':
+        return parse_array(text, pos);
+      case '"':
+        return parse_string(text, pos);
+      case 't':
+        return parse_true(text, pos);
+      case 'f':
+        return parse_false(text, pos);
+      case 'n':
+        return parse_null(text, pos);
+      default:
+        return parse_number(text, pos);
+    }
+  }
+
+  static json parse_object(const std::string& text, std::size_t& pos) {
+    object_t obj;
+    ++pos; // skip '{'
+    skip_whitespace(text, pos);
+    if (pos < text.size() && text[pos] == '}') {
+      ++pos;
+      return obj;
+    }
+    while (true) {
+      skip_whitespace(text, pos);
+      if (pos >= text.size() || text[pos] != '"') {
+        throw std::runtime_error("json parse error: expected string key");
+      }
+      json key_json = parse_string(text, pos);
+      std::string key = key_json.get_string();
+      skip_whitespace(text, pos);
+      if (pos >= text.size() || text[pos] != ':') {
+        throw std::runtime_error("json parse error: expected ':' after key");
+      }
+      ++pos; // skip ':'
+      skip_whitespace(text, pos);
+      obj[key] = parse_value(text, pos);
+      skip_whitespace(text, pos);
+      if (pos >= text.size()) {
+        throw std::runtime_error("json parse error: unexpected end in object");
+      }
+      if (text[pos] == '}') {
+        ++pos;
+        break;
+      }
+      if (text[pos] != ',') {
+        throw std::runtime_error("json parse error: expected ',' in object");
+      }
+      ++pos;
+    }
+    return obj;
+  }
+
+  static json parse_array(const std::string& text, std::size_t& pos) {
+    array_t arr;
+    ++pos; // skip '['
+    skip_whitespace(text, pos);
+    if (pos < text.size() && text[pos] == ']') {
+      ++pos;
+      return arr;
+    }
+    while (true) {
+      skip_whitespace(text, pos);
+      arr.push_back(parse_value(text, pos));
+      skip_whitespace(text, pos);
+      if (pos >= text.size()) {
+        throw std::runtime_error("json parse error: unexpected end in array");
+      }
+      if (text[pos] == ']') {
+        ++pos;
+        break;
+      }
+      if (text[pos] != ',') {
+        throw std::runtime_error("json parse error: expected ',' in array");
+      }
+      ++pos;
+    }
+    return arr;
+  }
+
+  static json parse_string(const std::string& text, std::size_t& pos) {
+    std::string result;
+    ++pos; // skip opening quote
+    while (pos < text.size()) {
+      char ch = text[pos++];
+      if (ch == '"') {
+        return result;
+      }
+      if (ch == '\\') {
+        if (pos >= text.size()) {
+          throw std::runtime_error("json parse error: invalid escape sequence");
+        }
+        char esc = text[pos++];
+        switch (esc) {
+          case '"': result += '"'; break;
+          case '\\': result += '\\'; break;
+          case '/': result += '/'; break;
+          case 'b': result += '\b'; break;
+          case 'f': result += '\f'; break;
+          case 'n': result += '\n'; break;
+          case 'r': result += '\r'; break;
+          case 't': result += '\t'; break;
+          case 'u': {
+            if (pos + 4 > text.size()) {
+              throw std::runtime_error("json parse error: invalid unicode escape");
+            }
+            char32_t codepoint = 0;
+            for (int i = 0; i < 4; ++i) {
+              char c = text[pos++];
+              codepoint <<= 4;
+              if (c >= '0' && c <= '9') codepoint += static_cast<char32_t>(c - '0');
+              else if (c >= 'a' && c <= 'f') codepoint += static_cast<char32_t>(10 + c - 'a');
+              else if (c >= 'A' && c <= 'F') codepoint += static_cast<char32_t>(10 + c - 'A');
+              else throw std::runtime_error("json parse error: invalid unicode escape");
+            }
+            append_utf8(result, codepoint);
+            break;
+          }
+          default:
+            throw std::runtime_error("json parse error: invalid escape sequence");
+        }
+      } else {
+        result += ch;
+      }
+    }
+    throw std::runtime_error("json parse error: unterminated string");
+  }
+
+  static void append_utf8(std::string& out, char32_t codepoint) {
+    if (codepoint <= 0x7F) {
+      out += static_cast<char>(codepoint);
+    } else if (codepoint <= 0x7FF) {
+      out += static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F));
+      out += static_cast<char>(0x80 | (codepoint & 0x3F));
+    } else if (codepoint <= 0xFFFF) {
+      out += static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F));
+      out += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+      out += static_cast<char>(0x80 | (codepoint & 0x3F));
+    } else {
+      out += static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07));
+      out += static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
+      out += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+      out += static_cast<char>(0x80 | (codepoint & 0x3F));
+    }
+  }
+
+  static json parse_number(const std::string& text, std::size_t& pos) {
+    std::size_t start = pos;
+    if (text[pos] == '-' ) {
+      ++pos;
+    }
+    auto read_digits = [&](bool required) {
+      std::size_t count = 0;
+      while (pos < text.size() && std::isdigit(static_cast<unsigned char>(text[pos]))) {
+        ++pos;
+        ++count;
+      }
+      if (required && count == 0) {
+        throw std::runtime_error("json parse error: invalid number");
+      }
+    };
+
+    if (pos >= text.size()) {
+      throw std::runtime_error("json parse error: invalid number");
+    }
+    if (text[pos] == '0') {
+      ++pos;
+    } else {
+      read_digits(true);
+    }
+
+    bool is_float = false;
+    if (pos < text.size() && text[pos] == '.') {
+      is_float = true;
+      ++pos;
+      read_digits(true);
+    }
+
+    if (pos < text.size() && (text[pos] == 'e' || text[pos] == 'E')) {
+      is_float = true;
+      ++pos;
+      if (pos < text.size() && (text[pos] == '+' || text[pos] == '-')) {
+        ++pos;
+      }
+      read_digits(true);
+    }
+
+    std::string number_str = text.substr(start, pos - start);
+    try {
+      if (is_float) {
+        return json(std::stod(number_str));
+      }
+      return json(static_cast<number_integer_t>(std::stoll(number_str)));
+    } catch (...) {
+      throw std::runtime_error("json parse error: invalid number");
+    }
+  }
+
+  static json parse_true(const std::string& text, std::size_t& pos) {
+    const std::string token = "true";
+    if (text.substr(pos, token.size()) != token) {
+      throw std::runtime_error("json parse error: invalid literal");
+    }
+    pos += token.size();
+    return json(true);
+  }
+
+  static json parse_false(const std::string& text, std::size_t& pos) {
+    const std::string token = "false";
+    if (text.substr(pos, token.size()) != token) {
+      throw std::runtime_error("json parse error: invalid literal");
+    }
+    pos += token.size();
+    return json(false);
+  }
+
+  static json parse_null(const std::string& text, std::size_t& pos) {
+    const std::string token = "null";
+    if (text.substr(pos, token.size()) != token) {
+      throw std::runtime_error("json parse error: invalid literal");
+    }
+    pos += token.size();
+    return json(nullptr);
+  }
 
   void ensure_type_array() const {
     if (!is_array()) {
@@ -328,4 +576,3 @@ private:
 };
 
 } // namespace nlohmann
-
