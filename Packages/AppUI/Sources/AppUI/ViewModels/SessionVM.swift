@@ -153,10 +153,18 @@ public final class SessionViewModel: ObservableObject {
     private func ensureResourcesAvailable(at root: URL) throws {
         let fileManager = FileManager.default
         let destination = root.appendingPathComponent("resources", isDirectory: true)
-        let bundle = ResourceBundle.bundle
-        guard let source = bundle.url(forResource: "CoreResources", withExtension: nil) else {
-            throw BridgeError.missingData("CoreResources bundle")
+        // Prefer resources shipped in the host app bundle (copied by Xcode build phase),
+        // fall back to package resources for previews/tests.
+        var source: URL?
+        if let mainURL = Bundle.main.url(forResource: "CoreResources", withExtension: nil) {
+            source = mainURL
         }
+        #if SWIFT_PACKAGE
+        if source == nil {
+            source = Bundle.module.url(forResource: "CoreResources", withExtension: nil)
+        }
+        #endif
+        guard let source else { throw BridgeError.missingData("CoreResources folder not found in app bundle") }
         if !fileManager.fileExists(atPath: destination.path) {
             try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
         }

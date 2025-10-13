@@ -43,6 +43,18 @@ fi
 PYTHON_EXE=$(python -c 'import sys; print(sys.executable)')
 echo "[eartrainer] Using Python: $PYTHON_EXE"
 
+echo "[eartrainer] Converting YAML catalogs to JSON ..."
+CONVERT_SCRIPT="$SCRIPT_DIR/../scripts/convert_catalogs.py"
+if [[ -f "$CONVERT_SCRIPT" ]]; then
+  if "$PYTHON_EXE" "$CONVERT_SCRIPT"; then
+    echo "[eartrainer] Catalog conversion completed"
+  else
+    echo "[eartrainer] Warning: catalog conversion failed (continuing)" >&2
+  fi
+else
+  echo "[eartrainer] Note: converter script not found at $CONVERT_SCRIPT"
+fi
+
 mkdir -p "$BUILD_DIR"
 echo "[eartrainer] Configuring CMake project ..."
 cmake -S "$CPP_DIR" -B "$BUILD_DIR" \
