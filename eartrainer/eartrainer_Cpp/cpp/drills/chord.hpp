@@ -15,9 +15,10 @@ public:
 private:
   DrillSpec spec_{};
   std::optional<int> last_degree_;
-  std::optional<int> last_voicing_;
-  ChordVoicingLibrary voicings_;
-  std::string voicing_source_path_;
+  std::optional<std::string> last_voicing_id_;
+  std::optional<std::string> preferred_right_voicing_;
+  std::optional<std::string> preferred_bass_voicing_;
+  std::string voicing_source_id_ = "builtin_diatonic_triads";
 };
 
 } // namespace ear

@@ -6,42 +6,17 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <limits>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ear {
 
 namespace {
-
-const std::vector<int>& bass_offsets_for_quality(const ChordVoicingLibrary& library,
-                                                 const std::string& quality) {
-  auto it = library.bass_offsets.find(quality);
-  if (it != library.bass_offsets.end() && !it->second.empty()) {
-    return it->second;
-  }
-  auto fallback = library.bass_offsets.find("major");
-  if (fallback != library.bass_offsets.end() && !fallback->second.empty()) {
-    return fallback->second;
-  }
-  static const std::vector<int> kDefault{-14};
-  return kDefault;
-}
-
-const std::vector<std::vector<int>>&
-right_hand_voicings_for_quality(const ChordVoicingLibrary& library, const std::string& quality) {
-  auto it = library.right_hand.find(quality);
-  if (it != library.right_hand.end() && !it->second.empty()) {
-    return it->second;
-  }
-  auto fallback = library.right_hand.find("major");
-  if (fallback != library.right_hand.end() && !fallback->second.empty()) {
-    return fallback->second;
-  }
-  static const std::vector<std::vector<int>> kDefault{{0, 2, 4, 7}, {0, 2, 4}, {-3, 0, 2}};
-  return kDefault;
-}
 
 std::vector<int> extract_allowed(const DrillSpec& spec, const std::string& key) {
   std::vector<int> values;
@@ -118,24 +93,30 @@ double center_of_mass(const std::vector<int>& values) {
   return sum / static_cast<double>(values.size());
 }
 
-int pick_voicing_index(const ChordVoicingLibrary& library, const std::string& quality,
-                       std::uint64_t& rng_state) {
-  const auto& voicings = right_hand_voicings_for_quality(library, quality);
-  if (voicings.empty()) {
-    return 0;
+std::optional<std::string> spec_param_string(const DrillSpec& spec, const std::string& key) {
+  if (!spec.params.is_object()) {
+    return std::nullopt;
   }
-  return rand_int(rng_state, 0, static_cast<int>(voicings.size()) - 1);
+  if (!spec.params.contains(key)) {
+    return std::nullopt;
+  }
+  const auto& node = spec.params[key];
+  if (!node.is_string()) {
+    return std::nullopt;
+  }
+  std::string value = node.get<std::string>();
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return value;
 }
 
-nlohmann::json build_degrees_payload(const ChordVoicingLibrary& library, int root_degree,
+nlohmann::json build_degrees_payload(int root_degree,
                                      const std::string& quality,
-                                     int voicing_index, int bass_offset,
+                                     const ChordVoicingEngine::RightHandPattern& right_pattern,
+                                     int bass_offset,
+                                     const std::string& right_voicing_id,
                                      bool add_seventh = false) {
-  const auto& right_voicings = right_hand_voicings_for_quality(library, quality);
-  const auto& relative_offsets =
-      right_voicings.empty()
-          ? std::vector<int>{0, 2, 4, 7}
-          : right_voicings[static_cast<std::size_t>(voicing_index) % right_voicings.size()];
+  const auto& relative_offsets = right_pattern.degree_offsets;
 
   nlohmann::json right_offsets_json = nlohmann::json::array();
   nlohmann::json right_degrees_json = nlohmann::json::array();
@@ -148,7 +129,7 @@ nlohmann::json build_degrees_payload(const ChordVoicingLibrary& library, int roo
   payload["root"] = root_degree;
   payload["degrees"] = right_degrees_json;
   payload["quality"] = quality;
-  payload["voicing_index"] = voicing_index;
+  payload["voicing_id"] = right_voicing_id;
   payload["add_seventh"] = add_seventh;
   payload["bass_offset"] = bass_offset;
   payload["bass_degree"] = root_degree + bass_offset;
@@ -201,14 +182,15 @@ bool spec_param_bool(const DrillSpec& spec, const std::string& key, bool fallbac
 
 void ChordDrill::configure(const DrillSpec& spec) {
   spec_ = spec;
-  voicings_ = default_chord_voicings();
-  if (auto path = configure_chord_voicings(spec_, voicings_)) {
-    voicing_source_path_ = path->string();
-  } else {
-    voicing_source_path_.clear();
-  }
   last_degree_.reset();
-  last_voicing_.reset();
+  last_voicing_id_.reset();
+  preferred_right_voicing_ = spec_param_string(spec_, "chord_right_voicing");
+  preferred_bass_voicing_ = spec_param_string(spec_, "chord_bass_voicing");
+  if (auto profile = spec_param_string(spec_, "chord_voicing_profile")) {
+    voicing_source_id_ = *profile;
+  } else {
+    voicing_source_id_ = "builtin_diatonic_triads";
+  }
 }
 
 QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
@@ -221,49 +203,60 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   }
 
   std::string quality = chord_quality_for_degree(degree);
-  const auto& bass_options = bass_offsets_for_quality(voicings_, quality);
-  int bass_index = bass_options.empty() ? 0 : rand_int(rng_state, 0, static_cast<int>(bass_options.size()) - 1);
-  int bass_offset = bass_options.empty() ? 0 : bass_options[static_cast<std::size_t>(bass_index)];
+  auto quality_enum = triad_quality_from_string(quality);
+  const auto& voicing_eng = ChordVoicingEngine::instance();
 
-  int voicing_index = pick_voicing_index(voicings_, quality, rng_state);
-  if (avoid_repetition(spec_) && last_voicing_.has_value()) {
-    const auto& voicings = right_hand_voicings_for_quality(voicings_, quality);
-    if (voicings.size() > 1) {
-      for (int attempt = 0; attempt < 3 && voicing_index == last_voicing_.value(); ++attempt) {
-        voicing_index = pick_voicing_index(voicings_, quality, rng_state);
-      }
-    }
+  std::optional<std::string> avoid_voicing;
+  if (avoid_repetition(spec_) && last_voicing_id_.has_value()) {
+    avoid_voicing = last_voicing_id_;
   }
-  last_voicing_ = voicing_index;
 
-  auto payload =
-      build_degrees_payload(voicings_, degree, quality, voicing_index, bass_offset, add_seventh);
+  auto selection = voicing_eng.pick_triad(quality_enum, rng_state,
+                                     preferred_right_voicing_,
+                                     preferred_bass_voicing_,
+                                     avoid_voicing);
+
+  if (!selection.right_hand || !selection.bass) {
+    throw std::runtime_error("ChordDrill: missing voicing definition for quality '" + quality + "'");
+  }
+
+  last_voicing_id_ = selection.right_hand->id;
+
+  int bass_offset = selection.bass->degree_offset;
+  auto payload = build_degrees_payload(degree,
+                                       quality,
+                                       *selection.right_hand,
+                                       bass_offset,
+                                       selection.right_hand->id,
+                                       add_seventh);
+  payload["bass_voicing_id"] = selection.bass->id;
+  payload["right_voicing_id"] = selection.right_hand->id;
 
   int root_degree = payload["root"].get<int>();
   std::string sampled_quality = payload["quality"].get<std::string>();
-  int sampled_voicing_index = payload["voicing_index"].get<int>();
-  int bass_degree = root_degree;
-  if (payload.contains("bass_degree")) {
-    bass_degree = payload["bass_degree"].get<int>();
-  }
-  int sampled_bass_offset = 0;
-  if (payload.contains("bass_offset")) {
-    sampled_bass_offset = payload["bass_offset"].get<int>();
-  }
+  std::string sampled_voicing_id = payload["voicing_id"].get<std::string>();
+  std::string sampled_bass_id = payload["bass_voicing_id"].get<std::string>();
+  int bass_degree = payload["bass_degree"].get<int>();
+  int sampled_bass_offset = payload["bass_offset"].get<int>();
 
-  nlohmann::json right_offsets_json = nlohmann::json::array();
-  if (payload.contains("right_offsets")) {
-    right_offsets_json = payload["right_offsets"];
-  }
-  nlohmann::json degrees_node = nlohmann::json::array();
-  if (payload.contains("degrees")) {
-    degrees_node = payload["degrees"];
-  }
+  nlohmann::json right_offsets_json = payload["right_offsets"];
+  nlohmann::json degrees_node = payload["degrees"];
   auto right_degrees = to_vector(degrees_node);
   if (right_degrees.empty()) {
     auto right_offsets = to_vector(right_offsets_json);
     for (int offset : right_offsets) {
       right_degrees.push_back(root_degree + offset);
+    }
+  }
+
+  const auto& bass_options = voicing_eng.bass_options(quality_enum);
+  const auto& right_options = voicing_eng.right_hand_options(quality_enum);
+
+  int sampled_voicing_index = 0;
+  for (std::size_t i = 0; i < right_options.size(); ++i) {
+    if (right_options[i].id == sampled_voicing_id) {
+      sampled_voicing_index = static_cast<int>(i);
+      break;
     }
   }
 
@@ -365,19 +358,38 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   manifest["ppq"] = 480;
   manifest["add_seventh"] = add_seventh;
   manifest["quality"] = sampled_quality;
+  manifest["voicing_id"] = sampled_voicing_id;
   manifest["voicing_index"] = sampled_voicing_index;
   manifest["selected_bass_offset"] = sampled_bass_offset;
+  manifest["bass_voicing_id"] = sampled_bass_id;
   manifest["bass_degree"] = bass_degree;
   manifest["root_degree"] = root_degree;
   manifest["right_offsets"] = right_offsets_json;
-  if (!voicing_source_path_.empty()) {
-    manifest["voicings_source"] = voicing_source_path_;
-  }
+  manifest["right_voicing_id"] = sampled_voicing_id;
+  manifest["voicings_source"] = voicing_source_id_;
   nlohmann::json bass_offsets_json = nlohmann::json::array();
-  for (int value : bass_options) {
-    bass_offsets_json.push_back(value);
+  nlohmann::json bass_voicings_json = nlohmann::json::array();
+  for (const auto& option : bass_options) {
+    bass_offsets_json.push_back(option.degree_offset);
+    nlohmann::json entry = nlohmann::json::object();
+    entry["id"] = option.id;
+    entry["offset"] = option.degree_offset;
+    bass_voicings_json.push_back(entry);
   }
   manifest["available_bass_offsets"] = bass_offsets_json;
+  manifest["available_bass_voicings"] = bass_voicings_json;
+  nlohmann::json right_voicings_json = nlohmann::json::array();
+  for (const auto& option : right_options) {
+    nlohmann::json entry = nlohmann::json::object();
+    entry["id"] = option.id;
+    nlohmann::json offsets = nlohmann::json::array();
+    for (int offset : option.degree_offsets) {
+      offsets.push_back(offset);
+    }
+    entry["offsets"] = std::move(offsets);
+    right_voicings_json.push_back(std::move(entry));
+  }
+  manifest["available_right_voicings"] = right_voicings_json;
   nlohmann::json tracks = nlohmann::json::array();
 
   if (split_tracks) {
@@ -418,6 +430,7 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   question_payload["voicing_midi"] = midi_tones;
   question_payload["tonic_midi"] = tonic_midi;
   question_payload["voicing_index"] = sampled_voicing_index;
+  question_payload["voicing_id"] = sampled_voicing_id;
   question_payload["bass_midi"] = bass_midi;
   nlohmann::json right_midi_json = nlohmann::json::array();
   for (int value : right_midi) {
@@ -426,11 +439,10 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   question_payload["right_hand_midi"] = right_midi_json;
   question_payload["bass_degree"] = bass_degree;
   question_payload["bass_offset"] = sampled_bass_offset;
+  question_payload["bass_voicing_id"] = sampled_bass_id;
 
   question_payload["right_offsets"] = right_offsets_json;
-  if (!voicing_source_path_.empty()) {
-    question_payload["voicings_source"] = voicing_source_path_;
-  }
+  question_payload["voicings_source"] = voicing_source_id_;
 
   nlohmann::json answer_payload = nlohmann::json::object();
   answer_payload["root_degree"] = root_degree;
@@ -438,6 +450,8 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   nlohmann::json hints = nlohmann::json::object();
   hints["prompt_manifest"] = manifest;
   hints["answer_kind"] = "chord_degree";
+  hints["right_voicing_id"] = sampled_voicing_id;
+  hints["bass_voicing_id"] = sampled_bass_id;
   nlohmann::json allowed = nlohmann::json::array();
   allowed.push_back("Replay");
   allowed.push_back("GuideTone");

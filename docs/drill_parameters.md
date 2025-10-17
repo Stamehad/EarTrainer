@@ -129,9 +129,15 @@ Parameters (`params`):
 - `avoid_repeat: bool` — fallback for repeat avoidance.
 - `add_seventh: bool` — optional flag in payload (generator currently triad‑based).
 - `chord_range_semitones: int` — influences register mapping when realizing degrees to MIDI (via helpers).
+- `chord_right_voicing: str` — pick an explicit right-hand voicing id (e.g. `root_pos`, `first_inv`, `second_inv`, `root_with_octave`, `drop2_cluster`).
+- `chord_bass_voicing: str` — request a specific bass pattern (`root_low`, `root`, `first_inv`, `second_inv`).
+- `chord_voicing_profile: str` — optional tag surfaced in the prompt manifest/metadata to distinguish voicing banks (defaults to `builtin_diatonic_triads`).
 
 Prompt shape:
-- Block chord (‘midi_block’): simultaneous note_on with shared duration; bass + right‑hand voicing realized near targets.
+- Block chord (‘midi_block’): simultaneous note_on with shared duration; bass + right-hand voicing realized near targets.
+
+Implementation notes:
+- Voicings are sourced from the built-in `ChordVoicingEngine`, which provides deterministic bass/right-hand definitions for diatonic triads. Future extensions (sevenths, non-diatonic shapes) will layer on the same engine without requiring external JSON resources.
 
 Example:
 ```yaml

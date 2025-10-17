@@ -148,7 +148,7 @@ The C++ session engine provides a deterministic, embeddable core for generating 
   - `MelodyDrill` maintains the weighted diatonic step model (recent-sequence suppression) and emits count-in multi-note prompts (`melody_notes` answers, `Replay`/`TempoDown` assists).
 
 - eartrainer/eartrainer_Cpp/cpp/drills/chord.hpp/.cpp
-  - `ChordDrill` samples degree/quality/voicing internally (including bass offsets) and renders block-chord prompts (`chord_degree` answers, `Replay`/`GuideTone` assists).
+  - `ChordDrill` samples degree/quality/voicing via the built-in `ChordVoicingEngine`, producing consistent bass/right-hand selections without external JSON (`chord_degree` answers, `Replay`/`GuideTone` assists).
 
 - eartrainer/eartrainer_Cpp/cpp/assistance/assistance.hpp/.cpp
   - Assistance generation: returns `AssistBundle` for `Replay`, `GuideTone`, `TempoDown`, `PathwayHint`, optionally altering `PromptPlan` and adding `ui_delta` messages. Main: `assistance::make_assist`.
