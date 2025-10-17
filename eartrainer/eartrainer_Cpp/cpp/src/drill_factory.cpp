@@ -298,18 +298,18 @@ int json_number_to_int(const json& node, int fallback) {
 
 } // namespace
 
-void apply_prompt_rendering(const DrillSpec& spec, DrillOutput& output) {
-  if (!output.prompt.has_value()) {
+void apply_prompt_rendering(const DrillSpec& spec, QuestionBundle& bundle) {
+  if (!bundle.prompt.has_value()) {
     return;
   }
-  auto& plan = output.prompt.value();
+  auto& plan = bundle.prompt.value();
   if (plan.modality == "midi-clip" && plan.midi_clip.has_value()) {
     return;
   }
-  if (!output.ui_hints.is_object() || !output.ui_hints.contains("prompt_manifest")) {
+  if (!bundle.ui_hints.is_object() || !bundle.ui_hints.contains("prompt_manifest")) {
     return;
   }
-  const auto& manifest = output.ui_hints["prompt_manifest"];
+  const auto& manifest = bundle.ui_hints["prompt_manifest"];
   if (!manifest.is_object()) {
     return;
   }

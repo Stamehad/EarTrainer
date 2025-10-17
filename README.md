@@ -133,7 +133,7 @@ The C++ session engine provides a deterministic, embeddable core for generating 
   - Simple xorshift RNG utilities: `advance_rng`, `rand_int`, `rand_unit` used for deterministic sampling.
 
 - eartrainer/eartrainer_Cpp/cpp/drills/drill.hpp
-  - Abstractions: `DrillModule::configure(SessionSpec)` primes per-session state; `DrillModule::next_question(spec, rng)` returns a `DrillOutput` (typed question, correct answer, optional `PromptPlan`, `ui_hints`).
+  - Abstractions: `DrillModule::configure(SessionSpec)` primes per-session state; `DrillModule::next_question(spec, rng)` returns a `QuestionBundle` (caller stamps `question_id`, bundle already carries prompt/ui hints).
 
 - eartrainer/eartrainer_Cpp/cpp/drills/common.hpp
   - Music theory helpers and MIDI mapping: `normalize_degree_index`, `degree_to_offset`, `tonic_from_key`, `central_tonic_midi`, range helpers, `midi_candidates_for_degree`, `degree_to_midi`.

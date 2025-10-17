@@ -211,7 +211,7 @@ void ChordDrill::configure(const DrillSpec& spec) {
   last_voicing_.reset();
 }
 
-DrillOutput ChordDrill::next_question(std::uint64_t& rng_state) {
+QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   int degree = pick_degree(spec_, rng_state, last_degree_);
   last_degree_ = degree;
 
@@ -448,10 +448,13 @@ DrillOutput ChordDrill::next_question(std::uint64_t& rng_state) {
   }
   hints["assist_budget"] = budget;
 
-  return DrillOutput{TypedPayload{"chord", question_payload},
-                     TypedPayload{"chord_degree", answer_payload},
-                     plan,
-                     hints};
+  QuestionBundle bundle;
+  bundle.question_id.clear();
+  bundle.question = TypedPayload{"chord", question_payload};
+  bundle.correct_answer = TypedPayload{"chord_degree", answer_payload};
+  bundle.prompt = plan;
+  bundle.ui_hints = hints;
+  return bundle;
 }
 
 } // namespace ear

@@ -252,7 +252,7 @@ void MelodyDrill::configure(const DrillSpec& spec) {
   recent_sequences_.clear();
 }
 
-DrillOutput MelodyDrill::next_question(std::uint64_t& rng_state) {
+QuestionBundle MelodyDrill::next_question(std::uint64_t& rng_state) {
   std::vector<int> degrees;
   std::vector<int> midis;
 
@@ -329,10 +329,13 @@ DrillOutput MelodyDrill::next_question(std::uint64_t& rng_state) {
   }
   hints["assist_budget"] = budget;
 
-  return DrillOutput{TypedPayload{"melody", question_payload},
-                     TypedPayload{"melody_notes", answer_payload},
-                     plan,
-                     hints};
+  QuestionBundle bundle;
+  bundle.question_id.clear();
+  bundle.question = TypedPayload{"melody", question_payload};
+  bundle.correct_answer = TypedPayload{"melody_notes", answer_payload};
+  bundle.prompt = plan;
+  bundle.ui_hints = hints;
+  return bundle;
 }
 
 } // namespace ear

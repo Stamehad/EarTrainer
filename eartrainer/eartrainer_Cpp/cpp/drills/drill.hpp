@@ -8,14 +8,6 @@
 
 namespace ear {
 
-// A generated question ready to be handed to the UI layer.
-struct DrillOutput {
-  TypedPayload question;
-  TypedPayload correct_answer;
-  std::optional<PromptPlan> prompt;
-  nlohmann::json ui_hints;
-};
-
 class DrillModule {
 public:
   virtual ~DrillModule() = default;
@@ -24,7 +16,7 @@ public:
   virtual void configure(const DrillSpec& spec) = 0;
 
   // Produce the next question. `rng_state` is a mutable seed owned by the caller.
-  virtual DrillOutput next_question(std::uint64_t& rng_state) = 0;
+  virtual QuestionBundle next_question(std::uint64_t& rng_state) = 0;
 
   // Allow modules to observe feedback when available. Default is no-op.
   virtual void apply_feedback(const ResultReport& /*report*/) {}

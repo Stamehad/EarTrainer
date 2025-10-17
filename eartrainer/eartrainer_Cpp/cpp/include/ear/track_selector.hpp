@@ -40,4 +40,8 @@ std::vector<TrackPhaseCatalog> load_track_phase_catalogs(
 
 TrackSelectionResult compute_track_phase_weights(const std::vector<int>& current_levels);
 
+// Parallel API (no files)
+TrackPhaseCatalog load_track_phase_catalog_builtin(std::string_view name);
+std::vector<TrackPhaseCatalog> load_track_phase_catalogs_builtin(const std::vector<std::string_view>& names);
+
 } // namespace ear::adaptive

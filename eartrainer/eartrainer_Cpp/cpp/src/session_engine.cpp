@@ -52,7 +52,7 @@ DrillFactory& ensure_factory() {
 
 struct QuestionState {
   std::string id;
-  std::optional<DrillOutput> output;
+  std::optional<QuestionBundle> bundle;
   bool served = false;
   bool answered = false;
   std::optional<std::string> adaptive_question_id;
@@ -96,16 +96,10 @@ struct SessionData {
 };
 
 QuestionBundle make_bundle(SessionData& session, QuestionState& state) {
-  if (!state.output.has_value()) {
+  if (!state.bundle.has_value()) {
     throw std::runtime_error("Question output missing");
   }
-  QuestionBundle bundle;
-  bundle.question_id = state.id;
-  bundle.question = state.output->question;
-  bundle.correct_answer = state.output->correct_answer;
-  bundle.prompt = state.output->prompt;
-  bundle.ui_hints = state.output->ui_hints;
-  return bundle;
+  return *state.bundle;
 }
 
 void ensure_question(SessionData& session, std::size_t index) {
@@ -113,9 +107,11 @@ void ensure_question(SessionData& session, std::size_t index) {
     throw std::out_of_range("question index out of range");
   }
   auto& state = session.questions[index];
-  if (!state.output.has_value()) {
-    state.output = session.module->next_question(session.rng_state);
-    apply_prompt_rendering(session.drill_spec, *state.output);
+  if (!state.bundle.has_value()) {
+    auto bundle = session.module->next_question(session.rng_state);
+    apply_prompt_rendering(session.drill_spec, bundle);
+    bundle.question_id = state.id;
+    state.bundle = std::move(bundle);
   }
 }
 
@@ -382,7 +378,7 @@ public:
         throw std::runtime_error("Unknown question id");
       }
       auto& state = session.questions[it->second];
-      if (!state.output.has_value()) {
+      if (!state.bundle.has_value()) {
         throw std::runtime_error("Question not yet materialised");
       }
       auto bundle = make_bundle(session, state);
@@ -731,10 +727,8 @@ SessionEngine::Next SessionEngineImpl::next_question_adaptive(const std::string&
   QuestionState state;
   state.id = question_id;
   state.adaptive_question_id = bundle_from_ad.question_id;
-  state.output = DrillOutput{bundle_from_ad.question,
-                             bundle_from_ad.correct_answer,
-                             bundle_from_ad.prompt,
-                             bundle_from_ad.ui_hints};
+  bundle_from_ad.question_id = question_id;
+  state.bundle = std::move(bundle_from_ad);
   state.served = true;
   state.answered = false;
 

@@ -150,7 +150,7 @@ Example:
 - Legacy naming: older YAML used `sampler_params`; the core now merges `drill_params` and `sampler_params` into `params` inside `DrillSpec`. Both are accepted for backward compatibility.
 
 ## Output Summary
-- Each drill emits a `DrillOutput`:
+- Each drill now emits a `QuestionBundle` (leaving `question_id` blank for the caller to stamp):
   - `question`: TypedPayload (e.g., `"note"`, `"interval"`, `"melody"`, `"chord"`)
   - `correct_answer`: TypedPayload
   - `prompt`: PromptPlan (modality `"midi"` or `"midi_block"`); converted to `"midi-clip"` JSON by the bridge

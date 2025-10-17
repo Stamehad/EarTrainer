@@ -144,7 +144,7 @@ void NoteDrill::configure(const DrillSpec& spec) {
   last_midi_.reset();
 }
 
-DrillOutput NoteDrill::next_question(std::uint64_t& rng_state) {
+QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
   int degree = pick_degree(spec_, rng_state, last_degree_);
   last_degree_ = degree;
 
@@ -268,10 +268,13 @@ DrillOutput NoteDrill::next_question(std::uint64_t& rng_state) {
   }
   hints["assist_budget"] = budget;
 
-  return DrillOutput{TypedPayload{"note", q_payload},
-                     TypedPayload{"degree", answer_payload},
-                     plan,
-                     hints};
+  QuestionBundle bundle;
+  bundle.question_id.clear();
+  bundle.question = TypedPayload{"note", q_payload};
+  bundle.correct_answer = TypedPayload{"degree", answer_payload};
+  bundle.prompt = plan;
+  bundle.ui_hints = hints;
+  return bundle;
 }
 
 } // namespace ear

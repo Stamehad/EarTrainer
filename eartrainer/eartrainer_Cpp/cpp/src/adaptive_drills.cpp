@@ -283,17 +283,12 @@ QuestionBundle AdaptiveDrills::next() {
   auto& slot = slots_[static_cast<std::size_t>(pick)];
   pick_counts_[static_cast<std::size_t>(pick)] += 1;
   last_pick_ = static_cast<std::size_t>(pick);
-  auto output = slot.module->next_question(slot.rng_state);
-  apply_prompt_rendering(slot.spec, output);
+  auto bundle = slot.module->next_question(slot.rng_state);
+  apply_prompt_rendering(slot.spec, bundle);
 
-  QuestionBundle bundle;
   std::string question_id = make_question_id();
   question_slot_index_[question_id] = static_cast<std::size_t>(pick);
   bundle.question_id = std::move(question_id);
-  bundle.question = std::move(output.question);
-  bundle.correct_answer = std::move(output.correct_answer);
-  bundle.prompt = std::move(output.prompt);
-  bundle.ui_hints = std::move(output.ui_hints);
   return bundle;
 }
 

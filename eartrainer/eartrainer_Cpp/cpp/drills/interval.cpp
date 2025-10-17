@@ -93,7 +93,7 @@ void IntervalDrill::configure(const DrillSpec& spec) {
   last_bottom_midi_.reset();
 }
 
-DrillOutput IntervalDrill::next_question(std::uint64_t& rng_state) {
+QuestionBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
   int bottom_degree = pick_bottom_degree(spec_, rng_state, last_bottom_degree_);
   int size = pick_interval_size(spec_, rng_state);
   int top_degree = bottom_degree + size;
@@ -164,10 +164,13 @@ DrillOutput IntervalDrill::next_question(std::uint64_t& rng_state) {
   }
   hints["assist_budget"] = budget;
 
-  return DrillOutput{TypedPayload{"interval", question_payload},
-                     TypedPayload{"interval_class", answer_payload},
-                     plan,
-                     hints};
+  QuestionBundle bundle;
+  bundle.question_id.clear();
+  bundle.question = TypedPayload{"interval", question_payload};
+  bundle.correct_answer = TypedPayload{"interval_class", answer_payload};
+  bundle.prompt = plan;
+  bundle.ui_hints = hints;
+  return bundle;
 }
 
 } // namespace ear
