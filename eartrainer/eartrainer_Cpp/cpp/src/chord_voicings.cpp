@@ -14,7 +14,13 @@ using Quality = ChordVoicingEngine::TriadQuality;
 using BassPattern = ChordVoicingEngine::BassPattern;
 using RightPattern = ChordVoicingEngine::RightHandPattern;
 
-std::vector<BassPattern> make_triad_bass_patterns() {
+constexpr std::array<Quality, 3> kAllQualities = {
+    Quality::Major,
+    Quality::Minor,
+    Quality::Diminished,
+};
+
+std::vector<BassPattern> make_default_triad_bass_patterns() {
   return {
       {"root_low", -14},
       {"root", 0},
@@ -23,13 +29,29 @@ std::vector<BassPattern> make_triad_bass_patterns() {
   };
 }
 
-std::vector<RightPattern> make_triad_right_patterns() {
+std::vector<RightPattern> make_default_triad_right_patterns() {
   return {
       {"root_pos", {0, 2, 4}},
       {"first_inv", {2, 4, 7}},
       {"second_inv", {4, 7, 9}},
       {"root_with_octave", {0, 2, 4, 7}},
       {"drop2_cluster", {-3, 0, 2}},
+  };
+}
+
+std::vector<BassPattern> make_strings_triad_bass_patterns() {
+  // Mirrors the bass offsets defined in resources/voicings/strings_voicing.json.
+  return {
+      {"strings_root_low", -14},
+  };
+}
+
+std::vector<RightPattern> make_strings_triad_right_patterns() {
+  // Mirrors the degree offsets defined in resources/voicings/strings_voicing.json.
+  return {
+      {"strings_open_spread", {-7, -3, 2, 7}},
+      {"strings_open_five_low", {-7, -3, 0, 4, 9}},
+      {"strings_open_five_high", {-7, -3, 2, 7, 11}},
   };
 }
 
@@ -51,18 +73,33 @@ const char* quality_name(Quality quality) {
 
 } // namespace
 
+const std::string& ChordVoicingEngine::default_profile_id() {
+  static const std::string kDefault = "builtin_diatonic_triads";
+  return kDefault;
+}
+
 ChordVoicingEngine::ChordVoicingEngine() {
-  const auto bass = make_triad_bass_patterns();
-  const auto right = make_triad_right_patterns();
+  Profile piano;
+  piano.id = default_profile_id();
+  const auto default_bass = make_default_triad_bass_patterns();
+  const auto default_right = make_default_triad_right_patterns();
+  for (Quality quality : kAllQualities) {
+    auto& set = piano.triads[index_for(quality)];
+    set.bass = default_bass;
+    set.right = default_right;
+  }
+  profiles_.emplace(piano.id, std::move(piano));
 
-  triads_[index_for(Quality::Major)].bass = bass;
-  triads_[index_for(Quality::Major)].right = right;
-
-  triads_[index_for(Quality::Minor)].bass = bass;
-  triads_[index_for(Quality::Minor)].right = right;
-
-  triads_[index_for(Quality::Diminished)].bass = bass;
-  triads_[index_for(Quality::Diminished)].right = right;
+  Profile strings;
+  strings.id = "strings_ensemble";
+  const auto strings_bass = make_strings_triad_bass_patterns();
+  const auto strings_right = make_strings_triad_right_patterns();
+  for (Quality quality : kAllQualities) {
+    auto& set = strings.triads[index_for(quality)];
+    set.bass = strings_bass;
+    set.right = strings_right;
+  }
+  profiles_.emplace(strings.id, std::move(strings));
 }
 
 const ChordVoicingEngine& ChordVoicingEngine::instance() {
@@ -74,19 +111,24 @@ std::size_t ChordVoicingEngine::quality_index(TriadQuality quality) {
   return index_for(quality);
 }
 
+const std::string& ChordVoicingEngine::resolve_profile_id(std::string_view profile_id) const {
+  return profile_for(profile_id).id;
+}
+
 const std::vector<ChordVoicingEngine::BassPattern>&
-ChordVoicingEngine::bass_options(TriadQuality quality) const {
-  return triads_[quality_index(quality)].bass;
+ChordVoicingEngine::bass_options(TriadQuality quality, std::string_view profile_id) const {
+  return profile_for(profile_id).triads[quality_index(quality)].bass;
 }
 
 const std::vector<ChordVoicingEngine::RightHandPattern>&
-ChordVoicingEngine::right_hand_options(TriadQuality quality) const {
-  return triads_[quality_index(quality)].right;
+ChordVoicingEngine::right_hand_options(TriadQuality quality, std::string_view profile_id) const {
+  return profile_for(profile_id).triads[quality_index(quality)].right;
 }
 
 const ChordVoicingEngine::BassPattern&
-ChordVoicingEngine::bass(TriadQuality quality, const std::string& id) const {
-  const auto& options = bass_options(quality);
+ChordVoicingEngine::bass(TriadQuality quality, const std::string& id,
+                         std::string_view profile_id) const {
+  const auto& options = bass_options(quality, profile_id);
   auto it = std::find_if(options.begin(), options.end(),
                          [&id](const BassPattern& pattern) { return pattern.id == id; });
   if (it == options.end()) {
@@ -96,8 +138,9 @@ ChordVoicingEngine::bass(TriadQuality quality, const std::string& id) const {
 }
 
 const ChordVoicingEngine::RightHandPattern&
-ChordVoicingEngine::right_hand(TriadQuality quality, const std::string& id) const {
-  const auto& options = right_hand_options(quality);
+ChordVoicingEngine::right_hand(TriadQuality quality, const std::string& id,
+                               std::string_view profile_id) const {
+  const auto& options = right_hand_options(quality, profile_id);
   auto it = std::find_if(options.begin(), options.end(),
                          [&id](const RightPattern& pattern) { return pattern.id == id; });
   if (it == options.end()) {
@@ -111,9 +154,10 @@ ChordVoicingEngine::pick_triad(TriadQuality quality,
                                std::uint64_t& rng_state,
                                std::optional<std::string> preferred_right,
                                std::optional<std::string> preferred_bass,
-                               std::optional<std::string> avoid_right) const {
-  const auto& basses = bass_options(quality);
-  const auto& rights = right_hand_options(quality);
+                               std::optional<std::string> avoid_right,
+                               std::string_view profile_id) const {
+  const auto& basses = bass_options(quality, profile_id);
+  const auto& rights = right_hand_options(quality, profile_id);
 
   if (basses.empty() || rights.empty()) {
     throw std::runtime_error("ChordVoicingEngine: triad voicings unavailable for quality '" +
@@ -124,13 +168,13 @@ ChordVoicingEngine::pick_triad(TriadQuality quality,
   const RightPattern* right_choice = nullptr;
 
   if (preferred_bass.has_value()) {
-    bass_choice = &bass(quality, *preferred_bass);
+    bass_choice = &bass(quality, *preferred_bass, profile_id);
   } else {
     bass_choice = &basses.front();
   }
 
   if (preferred_right.has_value()) {
-    right_choice = &right_hand(quality, *preferred_right);
+    right_choice = &right_hand(quality, *preferred_right, profile_id);
   } else {
     std::size_t count = rights.size();
     std::size_t idx = 0;
@@ -160,6 +204,23 @@ ChordVoicingEngine::pick_triad(TriadQuality quality,
   selection.bass = bass_choice;
   selection.right_hand = right_choice;
   return selection;
+}
+
+const ChordVoicingEngine::Profile&
+ChordVoicingEngine::profile_for(std::string_view profile_id) const {
+  if (!profile_id.empty()) {
+    auto it = profiles_.find(std::string(profile_id));
+    if (it != profiles_.end()) {
+      return it->second;
+    }
+  }
+
+  auto fallback = profiles_.find(default_profile_id());
+  if (fallback != profiles_.end()) {
+    return fallback->second;
+  }
+
+  throw std::runtime_error("ChordVoicingEngine: default profile is not registered");
 }
 
 ChordVoicingEngine::TriadQuality triad_quality_from_string(const std::string& quality) {

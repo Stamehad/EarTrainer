@@ -11,6 +11,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -137,18 +138,6 @@ nlohmann::json build_degrees_payload(int root_degree,
   return payload;
 }
 
-std::vector<int> to_vector(const nlohmann::json& array_node) {
-  std::vector<int> values;
-  if (!array_node.is_array()) {
-    return values;
-  }
-  const auto& arr = array_node.get_array();
-  for (const auto& item : arr) {
-    values.push_back(item.get<int>());
-  }
-  return values;
-}
-
 int spec_param_int(const DrillSpec& spec, const std::string& key, int fallback) {
   if (!spec.params.is_object()) {
     return fallback;
@@ -178,102 +167,74 @@ bool spec_param_bool(const DrillSpec& spec, const std::string& key, bool fallbac
   return fallback;
 }
 
-} // namespace
-
-void ChordDrill::configure(const DrillSpec& spec) {
-  spec_ = spec;
-  last_degree_.reset();
-  last_voicing_id_.reset();
-  preferred_right_voicing_ = spec_param_string(spec_, "chord_right_voicing");
-  preferred_bass_voicing_ = spec_param_string(spec_, "chord_bass_voicing");
-  if (auto profile = spec_param_string(spec_, "chord_voicing_profile")) {
-    voicing_source_id_ = *profile;
-  } else {
-    voicing_source_id_ = "builtin_diatonic_triads";
-  }
-}
-
-QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
-  int degree = pick_degree(spec_, rng_state, last_degree_);
-  last_degree_ = degree;
-
+// Core chord materials shared across different playback styles.
+struct ChordQuestionCore {
+  int root_degree = 0;
   bool add_seventh = false;
-  if (spec_.params.contains("add_seventh")) {
-    add_seventh = spec_.params["add_seventh"].get<bool>();
+  std::string quality;
+  ChordVoicingEngine::TriadQuality quality_enum = ChordVoicingEngine::TriadQuality::Major;
+  const ChordVoicingEngine::RightHandPattern* right_pattern = nullptr;
+  const ChordVoicingEngine::BassPattern* bass_pattern = nullptr;
+  std::string right_voicing_id;
+  std::string bass_voicing_id;
+  int bass_offset = 0;
+  int bass_degree = 0;
+  std::vector<int> right_degrees;
+  int tonic_midi = 60;
+  std::string profile_id;
+};
+
+ChordQuestionCore prepare_chord_question_core(const DrillSpec& spec,
+                                              std::uint64_t& rng_state,
+                                              std::optional<int>& last_degree,
+                                              std::optional<std::string>& last_voicing,
+                                              const std::optional<std::string>& preferred_right,
+                                              const std::optional<std::string>& preferred_bass,
+                                              std::string_view profile_id) {
+  ChordQuestionCore core;
+  core.root_degree = pick_degree(spec, rng_state, last_degree);
+  last_degree = core.root_degree;
+
+  if (spec.params.contains("add_seventh")) {
+    core.add_seventh = spec.params["add_seventh"].get<bool>();
   }
 
-  std::string quality = chord_quality_for_degree(degree);
-  auto quality_enum = triad_quality_from_string(quality);
+  core.quality = chord_quality_for_degree(core.root_degree);
+  core.quality_enum = triad_quality_from_string(core.quality);
   const auto& voicing_eng = ChordVoicingEngine::instance();
+  core.profile_id = std::string(voicing_eng.resolve_profile_id(profile_id));
 
   std::optional<std::string> avoid_voicing;
-  if (avoid_repetition(spec_) && last_voicing_id_.has_value()) {
-    avoid_voicing = last_voicing_id_;
+  if (avoid_repetition(spec) && last_voicing.has_value()) {
+    avoid_voicing = last_voicing;
   }
 
-  auto selection = voicing_eng.pick_triad(quality_enum, rng_state,
-                                     preferred_right_voicing_,
-                                     preferred_bass_voicing_,
-                                     avoid_voicing);
-
+  auto selection = voicing_eng.pick_triad(core.quality_enum, rng_state,
+                                          preferred_right, preferred_bass, avoid_voicing,
+                                          core.profile_id);
   if (!selection.right_hand || !selection.bass) {
-    throw std::runtime_error("ChordDrill: missing voicing definition for quality '" + quality + "'");
+    throw std::runtime_error("ChordDrill: missing voicing definition for quality '" + core.quality + "'");
   }
 
-  last_voicing_id_ = selection.right_hand->id;
+  core.right_pattern = selection.right_hand;
+  core.bass_pattern = selection.bass;
+  core.right_voicing_id = selection.right_hand->id;
+  core.bass_voicing_id = selection.bass->id;
+  core.bass_offset = selection.bass->degree_offset;
+  core.bass_degree = core.root_degree + core.bass_offset;
+  core.tonic_midi = drills::central_tonic_midi(spec.key);
 
-  int bass_offset = selection.bass->degree_offset;
-  auto payload = build_degrees_payload(degree,
-                                       quality,
-                                       *selection.right_hand,
-                                       bass_offset,
-                                       selection.right_hand->id,
-                                       add_seventh);
-  payload["bass_voicing_id"] = selection.bass->id;
-  payload["right_voicing_id"] = selection.right_hand->id;
-
-  int root_degree = payload["root"].get<int>();
-  std::string sampled_quality = payload["quality"].get<std::string>();
-  std::string sampled_voicing_id = payload["voicing_id"].get<std::string>();
-  std::string sampled_bass_id = payload["bass_voicing_id"].get<std::string>();
-  int bass_degree = payload["bass_degree"].get<int>();
-  int sampled_bass_offset = payload["bass_offset"].get<int>();
-
-  nlohmann::json right_offsets_json = payload["right_offsets"];
-  nlohmann::json degrees_node = payload["degrees"];
-  auto right_degrees = to_vector(degrees_node);
-  if (right_degrees.empty()) {
-    auto right_offsets = to_vector(right_offsets_json);
-    for (int offset : right_offsets) {
-      right_degrees.push_back(root_degree + offset);
-    }
+  core.right_degrees.reserve(core.right_pattern->degree_offsets.size());
+  for (int offset : core.right_pattern->degree_offsets) {
+    core.right_degrees.push_back(core.root_degree + offset);
   }
 
-  const auto& bass_options = voicing_eng.bass_options(quality_enum);
-  const auto& right_options = voicing_eng.right_hand_options(quality_enum);
+  last_voicing = core.right_voicing_id;
+  return core;
+}
 
-  int sampled_voicing_index = 0;
-  for (std::size_t i = 0; i < right_options.size(); ++i) {
-    if (right_options[i].id == sampled_voicing_id) {
-      sampled_voicing_index = static_cast<int>(i);
-      break;
-    }
-  }
-
-  PromptPlan plan;
-  plan.modality = "midi-clip";
-  plan.tempo_bpm = spec_.tempo_bpm;
-  plan.count_in = false;
-
-  const int prompt_tempo = plan.tempo_bpm.has_value() ? plan.tempo_bpm.value() : 90;
-  constexpr int kChordDurMs = 900;
-  const int default_program = spec_param_int(spec_, "chord_prompt_program", 0);
-  const bool split_tracks = spec_param_bool(spec_, "chord_prompt_split_tracks", true);
-  const int strum_step_ms = spec_param_int(spec_, "chord_prompt_strum_step_ms", 0);
-  const int default_velocity = spec_param_int(spec_, "chord_prompt_velocity", 90);
-
-  int tonic_midi = drills::central_tonic_midi(spec_.key);
-  int bass_base = tonic_midi + drills::degree_to_offset(bass_degree);
+int select_bass_midi(const ChordQuestionCore& core) {
+  int bass_base = core.tonic_midi + drills::degree_to_offset(core.bass_degree);
   constexpr int kBassTarget = 36; // C2
   int best_bass = bass_base;
   int best_diff = std::numeric_limits<int>::max();
@@ -288,18 +249,14 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
       best_bass = candidate;
     }
   }
-  int bass_midi = drills::clamp_to_range(best_bass, 0, 127);
+  return drills::clamp_to_range(best_bass, 0, 127);
+}
 
-  nlohmann::json midi_tones = nlohmann::json::array();
-  nlohmann::json realised_degrees = nlohmann::json::array();
-  midi_tones.push_back(bass_midi);
-  realised_degrees.push_back(bass_degree);
-  plan.notes.push_back({bass_midi, kChordDurMs, std::nullopt, std::nullopt});
-
+std::vector<int> voice_right_hand_midi(const ChordQuestionCore& core, int bass_midi) {
   std::vector<int> base_right_midi;
-  base_right_midi.reserve(right_degrees.size());
-  for (int degree_value : right_degrees) {
-    base_right_midi.push_back(tonic_midi + drills::degree_to_offset(degree_value));
+  base_right_midi.reserve(core.right_degrees.size());
+  for (int degree_value : core.right_degrees) {
+    base_right_midi.push_back(core.tonic_midi + drills::degree_to_offset(degree_value));
   }
 
   constexpr int kRightTarget = 60; // C4
@@ -321,17 +278,97 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   std::vector<int> right_midi;
   right_midi.reserve(chosen_right.size());
   int previous = bass_midi;
-  for (std::size_t i = 0; i < chosen_right.size(); ++i) {
-    int midi = chosen_right[i];
+  for (int midi : chosen_right) {
     while (midi <= previous) {
       midi += 12;
     }
     midi = drills::clamp_to_range(midi, 0, 127);
     right_midi.push_back(midi);
-    realised_degrees.push_back(right_degrees[i]);
-    midi_tones.push_back(midi);
-    plan.notes.push_back({midi, kChordDurMs, std::nullopt, std::nullopt});
     previous = midi;
+  }
+  return right_midi;
+}
+
+int find_voicing_index(const std::vector<ChordVoicingEngine::RightHandPattern>& options,
+                       const std::string& id) {
+  for (std::size_t i = 0; i < options.size(); ++i) {
+    if (options[i].id == id) {
+      return static_cast<int>(i);
+    }
+  }
+  return 0;
+}
+
+} // namespace
+
+void ChordDrill::configure(const DrillSpec& spec) {
+  spec_ = spec;
+  last_degree_.reset();
+  last_voicing_id_.reset();
+  preferred_right_voicing_ = spec_param_string(spec_, "chord_right_voicing");
+  preferred_bass_voicing_ = spec_param_string(spec_, "chord_bass_voicing");
+  if (auto profile = spec_param_string(spec_, "chord_voicing_profile")) {
+    voicing_source_id_ = ChordVoicingEngine::instance().resolve_profile_id(*profile);
+  } else {
+    voicing_source_id_ = ChordVoicingEngine::default_profile_id();
+  }
+}
+
+QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
+  auto core = prepare_chord_question_core(spec_, rng_state, last_degree_, last_voicing_id_,
+                                          preferred_right_voicing_, preferred_bass_voicing_,
+                                          voicing_source_id_);
+  const auto& voicing_eng = ChordVoicingEngine::instance();
+
+  auto payload = build_degrees_payload(core.root_degree,
+                                       core.quality,
+                                       *core.right_pattern,
+                                       core.bass_offset,
+                                       core.right_voicing_id,
+                                       core.add_seventh);
+  payload["bass_voicing_id"] = core.bass_voicing_id;
+  payload["right_voicing_id"] = core.right_voicing_id;
+
+  int root_degree = core.root_degree;
+  std::string sampled_quality = core.quality;
+  std::string sampled_voicing_id = core.right_voicing_id;
+  std::string sampled_bass_id = core.bass_voicing_id;
+  int bass_degree = core.bass_degree;
+  int sampled_bass_offset = core.bass_offset;
+
+  nlohmann::json right_offsets_json = payload["right_offsets"];
+  std::vector<int> right_degrees = core.right_degrees;
+
+  const auto& bass_options = voicing_eng.bass_options(core.quality_enum, core.profile_id);
+  const auto& right_options = voicing_eng.right_hand_options(core.quality_enum, core.profile_id);
+  int sampled_voicing_index = find_voicing_index(right_options, sampled_voicing_id);
+
+  PromptPlan plan;
+  plan.modality = "midi-clip";
+  plan.tempo_bpm = spec_.tempo_bpm;
+  plan.count_in = false;
+
+  const int prompt_tempo = plan.tempo_bpm.has_value() ? plan.tempo_bpm.value() : 90;
+  constexpr int kChordDurMs = 900;
+  const int default_program = spec_param_int(spec_, "chord_prompt_program", 0);
+  const bool split_tracks = spec_param_bool(spec_, "chord_prompt_split_tracks", true);
+  const int strum_step_ms = spec_param_int(spec_, "chord_prompt_strum_step_ms", 0);
+  const int default_velocity = spec_param_int(spec_, "chord_prompt_velocity", 90);
+
+  int tonic_midi = core.tonic_midi;
+  int bass_midi = select_bass_midi(core);
+
+  nlohmann::json midi_tones = nlohmann::json::array();
+  nlohmann::json realised_degrees = nlohmann::json::array();
+  midi_tones.push_back(bass_midi);
+  realised_degrees.push_back(bass_degree);
+  plan.notes.push_back({bass_midi, kChordDurMs, std::nullopt, std::nullopt});
+
+  std::vector<int> right_midi = voice_right_hand_midi(core, bass_midi);
+  for (std::size_t i = 0; i < right_midi.size(); ++i) {
+    realised_degrees.push_back(right_degrees[i]);
+    midi_tones.push_back(right_midi[i]);
+    plan.notes.push_back({right_midi[i], kChordDurMs, std::nullopt, std::nullopt});
   }
 
   auto make_track = [](const std::string& name, int channel, int program) {
@@ -356,7 +393,7 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   manifest["format"] = "multi_track_prompt/v1";
   manifest["tempo_bpm"] = prompt_tempo;
   manifest["ppq"] = 480;
-  manifest["add_seventh"] = add_seventh;
+  manifest["add_seventh"] = core.add_seventh;
   manifest["quality"] = sampled_quality;
   manifest["voicing_id"] = sampled_voicing_id;
   manifest["voicing_index"] = sampled_voicing_index;
@@ -366,7 +403,7 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   manifest["root_degree"] = root_degree;
   manifest["right_offsets"] = right_offsets_json;
   manifest["right_voicing_id"] = sampled_voicing_id;
-  manifest["voicings_source"] = voicing_source_id_;
+  manifest["voicings_source"] = core.profile_id;
   nlohmann::json bass_offsets_json = nlohmann::json::array();
   nlohmann::json bass_voicings_json = nlohmann::json::array();
   for (const auto& option : bass_options) {
@@ -440,9 +477,8 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   question_payload["bass_degree"] = bass_degree;
   question_payload["bass_offset"] = sampled_bass_offset;
   question_payload["bass_voicing_id"] = sampled_bass_id;
-
   question_payload["right_offsets"] = right_offsets_json;
-  question_payload["voicings_source"] = voicing_source_id_;
+  question_payload["voicings_source"] = core.profile_id;
 
   nlohmann::json answer_payload = nlohmann::json::object();
   answer_payload["root_degree"] = root_degree;
