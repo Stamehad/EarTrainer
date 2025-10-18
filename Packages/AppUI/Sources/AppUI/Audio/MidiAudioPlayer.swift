@@ -42,6 +42,8 @@ final class MidiAudioPlayer {
         var candidates = searchPaths
         let fileManager = FileManager.default
         var inspected = Set<ObjectIdentifier>()
+        var discoveredFonts: [URL] = []
+        var seenFonts = Set<URL>()
 
         func appendResources(from bundle: Bundle) {
             let identifier = ObjectIdentifier(bundle)
@@ -108,10 +110,14 @@ final class MidiAudioPlayer {
         #endif
 
         for baseURL in candidates {
-            if let found = findSoundFont(in: baseURL) {
-                soundFontURL = found
-                break
+            let fonts = findSoundFonts(in: baseURL)
+            for font in fonts where !seenFonts.contains(font) {
+                seenFonts.insert(font)
+                discoveredFonts.append(font)
             }
+        }
+        if soundFontURL == nil {
+            soundFontURL = selectPreferredSoundFont(from: discoveredFonts)
         }
         if soundFontURL == nil {
             // Generic: first sf2 at bundle root
@@ -129,6 +135,12 @@ final class MidiAudioPlayer {
         }
 
         #if DEBUG
+        if discoveredFonts.isEmpty {
+            print("[MidiAudioPlayer] No custom soundfonts discovered.")
+        } else {
+            print("[MidiAudioPlayer] Discovered soundfonts:")
+            discoveredFonts.forEach { print("  • \($0.lastPathComponent) @ \($0.path)") }
+        }
         if let sf = soundFontURL {
             print("[MidiAudioPlayer] Using soundfont:", sf.path)
         } else {
@@ -151,12 +163,24 @@ final class MidiAudioPlayer {
         }
         queue.async { [weak self] in
             guard let self else { return }
-            #if DEBUG
+#if DEBUG
+            print("[MidiAudioPlayer] Preparing AVMIDIPlayer with soundfont:", soundFontURL.lastPathComponent)
+            do {
+                let attributes = try FileManager.default.attributesOfItem(atPath: soundFontURL.path)
+                if let size = attributes[.size] as? NSNumber {
+                    print("[MidiAudioPlayer] Soundfont size: \(size.intValue) bytes")
+                }
+            } catch {
+                print("[MidiAudioPlayer] Unable to read soundfont attributes:", error)
+            }
+            for track in clip.tracks {
+                print("[MidiAudioPlayer] Track '\(track.name)' channel=\(track.channel) program=\(track.program ?? -1) events=\(track.events.count)")
+            }
             print("[MidiAudioPlayer] Play request: tempo=\(clip.tempoBpm), ppq=\(clip.ppq), tracks=\(clip.tracks.count)")
-            #endif
-            #if os(iOS)
+#endif
+#if os(iOS)
             self.setupAudioSession()
-            #endif
+#endif
             do {
                 let midiData = try MidiSequenceBuilder.midiData(from: clip)
                 let player = try AVMIDIPlayer(data: midiData, soundBankURL: soundFontURL)
@@ -172,16 +196,42 @@ final class MidiAudioPlayer {
         }
     }
 
-    private func findSoundFont(in baseURL: URL) -> URL? {
-        guard let children = try? FileManager.default.contentsOfDirectory(at: baseURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else {
-            return nil
+    private func findSoundFonts(in baseURL: URL) -> [URL] {
+        guard let children = try? FileManager.default.contentsOfDirectory(at: baseURL,
+                                                                          includingPropertiesForKeys: nil,
+                                                                          options: [.skipsHiddenFiles]) else {
+            return []
         }
-        for candidate in children {
-            if candidate.pathExtension.lowercased() == "sf2" || candidate.pathExtension.lowercased() == "dls" {
-                return candidate
+        let soundFonts = children.filter { url in
+            let ext = url.pathExtension.lowercased()
+            return ext == "sf2" || ext == "dls"
+        }
+        return soundFonts.sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
+    }
+
+    private func selectPreferredSoundFont(from fonts: [URL]) -> URL? {
+        guard !fonts.isEmpty else { return nil }
+        let preferredNames = [
+            "fluidr3_gm",
+            "fluidr3",
+            "ai_grand_piano",
+            "ai-grand-piano",
+            "grandpiano",
+            "grand_piano",
+            "grand-piano",
+            "acousticgrand",
+            "acousticgrandpiano",
+            "default",
+            "gm"
+        ]
+        for name in preferredNames {
+            if let match = fonts.first(where: {
+                $0.deletingPathExtension().lastPathComponent.lowercased() == name
+            }) {
+                return match
             }
         }
-        return nil
+        return fonts.first
     }
 }
 
