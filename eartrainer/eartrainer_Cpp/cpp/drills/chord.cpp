@@ -167,6 +167,12 @@ bool spec_param_bool(const DrillSpec& spec, const std::string& key, bool fallbac
   return fallback;
 }
 
+void ensure_params_object(nlohmann::json& node) {
+  if (!node.is_object()) {
+    node = nlohmann::json::object();
+  }
+}
+
 // Core chord materials shared across different playback styles.
 struct ChordQuestionCore {
   int root_degree = 0;
@@ -314,6 +320,37 @@ void ChordDrill::configure(const DrillSpec& spec) {
   }
 }
 
+void SustainChordDrill::configure(const DrillSpec& spec) {
+  DrillSpec adjusted = spec;
+  ensure_params_object(adjusted.params);
+
+  auto& params = adjusted.params;
+  if (!params.contains("chord_voicing_profile")) {
+    params["chord_voicing_profile"] = "strings_ensemble";
+  }
+
+  const int kDefaultStringsProgram = 48; // General MIDI: Strings Ensemble 1
+  if (!params.contains("chord_prompt_split_tracks")) {
+    params["chord_prompt_split_tracks"] = false;
+  }
+  if (!params.contains("chord_prompt_program")
+      && !params.contains("chord_prompt_right_program")
+      && !params.contains("chord_prompt_bass_program")) {
+    params["chord_prompt_program"] = kDefaultStringsProgram;
+  }
+  if (!params.contains("chord_prompt_channel")) {
+    params["chord_prompt_channel"] = 0;
+  }
+  if (!params.contains("chord_prompt_velocity")) {
+    params["chord_prompt_velocity"] = 96;
+  }
+  if (!params.contains("chord_prompt_duration_ms")) {
+    params["chord_prompt_duration_ms"] = 10000;
+  }
+
+  ChordDrill::configure(adjusted);
+}
+
 QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   auto core = prepare_chord_question_core(spec_, rng_state, last_degree_, last_voicing_id_,
                                           preferred_right_voicing_, preferred_bass_voicing_,
@@ -349,7 +386,10 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   plan.count_in = false;
 
   const int prompt_tempo = plan.tempo_bpm.has_value() ? plan.tempo_bpm.value() : 90;
-  constexpr int kChordDurMs = 900;
+  int chord_dur_ms = spec_param_int(spec_, "chord_prompt_duration_ms", 900);
+  if (chord_dur_ms <= 0) {
+    chord_dur_ms = 900;
+  }
   const int default_program = spec_param_int(spec_, "chord_prompt_program", 0);
   const bool split_tracks = spec_param_bool(spec_, "chord_prompt_split_tracks", true);
   const int strum_step_ms = spec_param_int(spec_, "chord_prompt_strum_step_ms", 0);
@@ -362,13 +402,13 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   nlohmann::json realised_degrees = nlohmann::json::array();
   midi_tones.push_back(bass_midi);
   realised_degrees.push_back(bass_degree);
-  plan.notes.push_back({bass_midi, kChordDurMs, std::nullopt, std::nullopt});
+  plan.notes.push_back({bass_midi, chord_dur_ms, std::nullopt, std::nullopt});
 
   std::vector<int> right_midi = voice_right_hand_midi(core, bass_midi);
   for (std::size_t i = 0; i < right_midi.size(); ++i) {
     realised_degrees.push_back(right_degrees[i]);
     midi_tones.push_back(right_midi[i]);
-    plan.notes.push_back({right_midi[i], kChordDurMs, std::nullopt, std::nullopt});
+    plan.notes.push_back({right_midi[i], chord_dur_ms, std::nullopt, std::nullopt});
   }
 
   auto make_track = [](const std::string& name, int channel, int program) {
@@ -433,14 +473,14 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
     const int bass_channel = spec_param_int(spec_, "chord_prompt_bass_channel", 1);
     const int bass_program = spec_param_int(spec_, "chord_prompt_bass_program", default_program);
     auto bass_track = make_track("bass", bass_channel, bass_program);
-    bass_track["notes"].push_back(make_note(bass_midi, 0, kChordDurMs, default_velocity));
+    bass_track["notes"].push_back(make_note(bass_midi, 0, chord_dur_ms, default_velocity));
 
     const int right_channel = spec_param_int(spec_, "chord_prompt_right_channel", 0);
     const int right_program = spec_param_int(spec_, "chord_prompt_right_program", default_program);
     auto right_track = make_track("right", right_channel, right_program);
     for (std::size_t i = 0; i < right_midi.size(); ++i) {
       int onset_ms = strum_step_ms > 0 ? static_cast<int>(i) * strum_step_ms : 0;
-      right_track["notes"].push_back(make_note(right_midi[i], onset_ms, kChordDurMs, default_velocity));
+      right_track["notes"].push_back(make_note(right_midi[i], onset_ms, chord_dur_ms, default_velocity));
     }
 
     tracks.push_back(std::move(bass_track));
@@ -448,10 +488,10 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   } else {
     const int merged_channel = spec_param_int(spec_, "chord_prompt_channel", 0);
     auto prompt_track = make_track("prompt", merged_channel, default_program);
-    prompt_track["notes"].push_back(make_note(bass_midi, 0, kChordDurMs, default_velocity));
+    prompt_track["notes"].push_back(make_note(bass_midi, 0, chord_dur_ms, default_velocity));
     for (std::size_t i = 0; i < right_midi.size(); ++i) {
       int onset_ms = strum_step_ms > 0 ? static_cast<int>(i) * strum_step_ms : 0;
-      prompt_track["notes"].push_back(make_note(right_midi[i], onset_ms, kChordDurMs, default_velocity));
+      prompt_track["notes"].push_back(make_note(right_midi[i], onset_ms, chord_dur_ms, default_velocity));
     }
     tracks.push_back(std::move(prompt_track));
   }

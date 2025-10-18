@@ -455,6 +455,7 @@ void register_builtin_drills(DrillFactory& factory) {
 
   factory.register_family("chord", []() { return std::make_unique<ChordDrill>(); });
   factory.register_family("chord_melody", []() { return std::make_unique<ChordDrill>(); });
+  factory.register_family("chord_sustain", []() { return std::make_unique<SustainChordDrill>(); });
 }
 
 } // namespace ear

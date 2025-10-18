@@ -21,4 +21,9 @@ private:
   std::string voicing_source_id_ = "builtin_diatonic_triads";
 };
 
+class SustainChordDrill : public ChordDrill {
+public:
+  void configure(const DrillSpec& spec) override;
+};
+
 } // namespace ear

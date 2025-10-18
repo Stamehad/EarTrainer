@@ -55,6 +55,18 @@ std::vector<RightPattern> make_strings_triad_right_patterns() {
   };
 }
 
+std::vector<BassPattern> make_simple_triad_bass_patterns() {
+  return {
+      {"simple_root", 0},
+  };
+}
+
+std::vector<RightPattern> make_simple_triad_right_patterns() {
+  return {
+      {"simple_root", {0, 2, 4}},
+  };
+}
+
 std::size_t index_for(Quality quality) {
   return static_cast<std::size_t>(quality);
 }
@@ -100,6 +112,17 @@ ChordVoicingEngine::ChordVoicingEngine() {
     set.right = strings_right;
   }
   profiles_.emplace(strings.id, std::move(strings));
+
+  Profile simple;
+  simple.id = "simple_triads";
+  const auto simple_bass = make_simple_triad_bass_patterns();
+  const auto simple_right = make_simple_triad_right_patterns();
+  for (Quality quality : kAllQualities) {
+    auto& set = simple.triads[index_for(quality)];
+    set.bass = simple_bass;
+    set.right = simple_right;
+  }
+  profiles_.emplace(simple.id, std::move(simple));
 }
 
 const ChordVoicingEngine& ChordVoicingEngine::instance() {
