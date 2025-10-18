@@ -105,6 +105,7 @@ private:
   std::size_t bout_score_count_ = 0;
   std::vector<std::optional<double>> drill_scores_;
   std::optional<int> active_track_index_;
+  bool using_builtin_catalogs_ = false;
 
   // helpers
   static int weighted_pick(const std::vector<int>& weights, std::uint64_t& rng_state);

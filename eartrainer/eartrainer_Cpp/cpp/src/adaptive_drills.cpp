@@ -1,13 +1,18 @@
-#include "../include/ear/adaptive_drills.hpp"
+#include "ear/adaptive_drills.hpp"
 
-#include "../include/ear/adaptive_catalog.hpp"
-#include "../include/ear/track_selector.hpp"
-#include "../include/ear/drill_factory.hpp"
+#include "ear/adaptive_catalog.hpp"
+#include "ear/track_selector.hpp"
+#include "ear/drill_factory.hpp"
+#include "resources/adaptive_catalog_builtin.hpp"
+#include "resources/track_selector_builtin.hpp"
+#include "resources/builtin_degree_levels.hpp"
+#include "resources/builtin_melody_levels.hpp"
 #include "rng.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <string_view>
 #include <stdexcept>
 #include <mutex>
 #include <sstream>
@@ -25,6 +30,13 @@ void ensure_factory_registered() {
   });
 }
 
+std::vector<DrillSpec> load_catalog_for_level(const adaptive::TrackPhaseCatalog& catalog, int level) {
+  if (!catalog.resolved_path.empty()) {
+    return adaptive::load_level_catalog(catalog.resolved_path.string(), level);
+  }
+  return adaptive::load_level_catalog_builtin(catalog.descriptor.name, level);
+}
+
 } // namespace
 
 AdaptiveDrills::AdaptiveDrills(std::string resources_dir, std::uint64_t seed)
@@ -37,11 +49,29 @@ AdaptiveDrills::AdaptiveDrills(std::string resources_dir, std::uint64_t seed)
     resources_dir_ = std::filesystem::current_path() / resources_dir_;
   }
 
-  std::vector<adaptive::TrackCatalogDescriptor> descriptors;
-  descriptors = adaptive::track_catalogs_from_resources(resources_dir_);
+  std::vector<std::string_view> builtin_catalogs = {
+      ear::builtin::DegreeLevels::name,
+      ear::builtin::MelodyLevels::name,
+  };
+
+  track_phase_catalogs_ = adaptive::load_track_phase_catalogs_builtin(builtin_catalogs);
+  if (!track_phase_catalogs_.empty()) {
+    using_builtin_catalogs_ = true;
+    track_catalog_error_.reset();
+    return;
+  }
+
+  std::vector<adaptive::TrackCatalogDescriptor> descriptors =
+      adaptive::track_catalogs_from_resources(resources_dir_);
 
   try {
     track_phase_catalogs_ = adaptive::load_track_phase_catalogs(descriptors);
+    using_builtin_catalogs_ = false;
+    if (track_phase_catalogs_.empty()) {
+      track_catalog_error_ = "AdaptiveDrills: no track catalogs loaded from filesystem";
+    } else {
+      track_catalog_error_.reset();
+    }
   } catch (const std::exception& ex) {
     track_phase_catalogs_.clear();
     track_catalog_error_ = ex.what();
@@ -182,7 +212,7 @@ void AdaptiveDrills::set_bout(const std::vector<int>& track_levels) {
   int target_level = scope.front();
 
   const auto& descriptor = track_phase_catalogs_[static_cast<std::size_t>(track_index)];
-  auto specs = adaptive::load_level_catalog(descriptor.resolved_path.string(), target_level);
+  auto specs = load_catalog_for_level(descriptor, target_level);
   initialize_bout(target_level, specs);
   active_track_index_ = track_index;
 }
@@ -415,6 +445,7 @@ AdaptiveDrills::BoutReport AdaptiveDrills::end_bout() const {
 nlohmann::json AdaptiveDrills::diagnostic() const {
   nlohmann::json info = nlohmann::json::object();
   info["resources_dir"] = resources_dir_.string();
+  info["catalog_mode"] = using_builtin_catalogs_ ? "builtin" : "filesystem";
   info["level"] = current_level_;
   info["slots"] = static_cast<int>(slots_.size());
   info["questions_emitted"] = static_cast<int>(question_counter_);

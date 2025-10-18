@@ -37,6 +37,8 @@ public:
   virtual nlohmann::json debug_state(const std::string& session_id) = 0;
 
   virtual nlohmann::json capabilities() const = 0;
+
+  virtual nlohmann::json adaptive_diagnostics(const std::string& session_id) = 0;
 };
 
 std::unique_ptr<SessionEngine> make_engine();

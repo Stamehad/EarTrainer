@@ -133,6 +133,10 @@ public:
     return json_to_py(engine_->debug_state(session_id));
   }
 
+  py::object adaptive_diagnostics(const std::string& session_id) {
+    return json_to_py(engine_->adaptive_diagnostics(session_id));
+  }
+
   py::object end_session(const std::string& session_id) {
     auto package = engine_->end_session(session_id);
     return json_to_py(ear::bridge::to_json(package));
@@ -156,7 +160,8 @@ PYBIND11_MODULE(_earcore, m) {
       .def("orientation_prompt", &PySessionEngine::orientation_prompt)
       .def("end_session", &PySessionEngine::end_session)
       .def("capabilities", &PySessionEngine::capabilities)
-      .def("debug_state", &PySessionEngine::debug_state);
+      .def("debug_state", &PySessionEngine::debug_state)
+      .def("adaptive_diagnostics", &PySessionEngine::adaptive_diagnostics);
 
   py::class_<ear::AdaptiveDrills>(m, "AdaptiveDrills")
       .def(py::init<std::string, std::uint64_t>(),

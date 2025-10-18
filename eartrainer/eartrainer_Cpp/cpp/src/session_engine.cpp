@@ -456,6 +456,20 @@ public:
     return response;
   }
 
+  nlohmann::json adaptive_diagnostics(const std::string& session_id) override {
+    auto it = sessions_.find(session_id);
+    if (it == sessions_.end()) {
+      throw std::runtime_error("Session not found");
+    }
+    const auto& session = it->second;
+    if (session.adaptive_drills) {
+      return session.adaptive_drills->diagnostic();
+    }
+    nlohmann::json info = nlohmann::json::object();
+    info["status"] = "Engine not using adaptive drills.";
+    return info;
+  }
+
   nlohmann::json capabilities() const override {
     nlohmann::json caps = nlohmann::json::object();
     caps["version"] = "v1";

@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.DS_Store
+*.sf2
 /soundfonts/
 scripts/
 
@@ -15,6 +16,7 @@ codemap.md
 ear_training_modules.md
 melody_sampler_demo.ipynb
 temp.md
+temp.sh
 
 # C++ core build artifacts (eartrainer_Cpp)
 /eartrainer/eartrainer_Cpp/build/
@@ -32,6 +34,20 @@ temp.md
 *.egg-info/
 **/.pytest_cache/
 **/__pycache__/
+*.dist-info/
+
+# Python packaging/build artifacts for the C++ bridge
+/eartrainer/eartrainer_Cpp/python/build/
+/eartrainer/eartrainer_Cpp/python/dist/
+/eartrainer/eartrainer_Cpp/python/*.egg-info/
+/eartrainer/eartrainer_Cpp/python/eartrainer/_earcore*.so
+/eartrainer/eartrainer_Cpp/_earcore*.so
+
+# Coverage and tooling caches
+.coverage
+.coverage.*
+coverage.xml
+.hypothesis/
 
 # Jupyter checkpoints
 **/.ipynb_checkpoints/

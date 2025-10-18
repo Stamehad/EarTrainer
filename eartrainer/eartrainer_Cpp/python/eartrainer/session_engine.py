@@ -64,5 +64,11 @@ class SessionEngine:
     def capabilities(self) -> dict:
         return dict(self._engine.capabilities())
 
+    def debug_state(self, session_id: str) -> dict:
+        return dict(self._engine.debug_state(session_id))
+
+    def adaptive_diagnostics(self, session_id: str) -> dict:
+        return dict(self._engine.adaptive_diagnostics(session_id))
+
 
 __all__ = ["SessionEngine", "Next"]
