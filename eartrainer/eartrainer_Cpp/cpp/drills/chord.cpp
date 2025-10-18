@@ -173,6 +173,43 @@ void ensure_params_object(nlohmann::json& node) {
   }
 }
 
+std::vector<int> spec_param_degree_list(const DrillSpec& spec, const std::string& key) {
+  std::vector<int> values;
+  if (!spec.params.is_object() || !spec.params.contains(key)) {
+    return values;
+  }
+  const auto& node = spec.params[key];
+  if (!node.is_array()) {
+    return values;
+  }
+  for (const auto& entry : node.get_array()) {
+    if (entry.is_number_integer()) {
+      values.push_back(drills::normalize_degree_index(entry.get<int>()));
+    }
+  }
+  std::sort(values.begin(), values.end());
+  values.erase(std::unique(values.begin(), values.end()), values.end());
+  return values;
+}
+
+int pattern_top_degree(const ChordVoicingEngine::RightHandPattern& pattern, int root_degree) {
+  if (pattern.degree_offsets.empty()) {
+    return drills::normalize_degree_index(root_degree);
+  }
+  int top_offset = *std::max_element(pattern.degree_offsets.begin(), pattern.degree_offsets.end());
+  return drills::normalize_degree_index(root_degree + top_offset);
+}
+
+std::vector<int> continuity_degrees(int top_degree) {
+  std::vector<int> values;
+  values.push_back(drills::normalize_degree_index(top_degree));
+  values.push_back(drills::normalize_degree_index(top_degree + 1));
+  values.push_back(drills::normalize_degree_index(top_degree - 1));
+  std::sort(values.begin(), values.end());
+  values.erase(std::unique(values.begin(), values.end()), values.end());
+  return values;
+}
+
 // Core chord materials shared across different playback styles.
 struct ChordQuestionCore {
   int root_degree = 0;
@@ -188,12 +225,14 @@ struct ChordQuestionCore {
   std::vector<int> right_degrees;
   int tonic_midi = 60;
   std::string profile_id;
+  int top_degree = 0;
 };
 
 ChordQuestionCore prepare_chord_question_core(const DrillSpec& spec,
                                               std::uint64_t& rng_state,
                                               std::optional<int>& last_degree,
                                               std::optional<std::string>& last_voicing,
+                                              std::optional<int>& last_top_degree,
                                               const std::optional<std::string>& preferred_right,
                                               const std::optional<std::string>& preferred_bass,
                                               std::string_view profile_id) {
@@ -215,8 +254,79 @@ ChordQuestionCore prepare_chord_question_core(const DrillSpec& spec,
     avoid_voicing = last_voicing;
   }
 
+  std::optional<std::string> desired_right = preferred_right;
+
+  const auto& right_options = voicing_eng.right_hand_options(core.quality_enum, core.profile_id);
+
+  if (!desired_right.has_value()) {
+    std::vector<const ChordVoicingEngine::RightHandPattern*> candidates;
+    candidates.reserve(right_options.size());
+    for (const auto& option : right_options) {
+      candidates.push_back(&option);
+    }
+
+    auto apply_filter = [&](const std::vector<int>& allowed) {
+      if (allowed.empty()) {
+        return;
+      }
+      std::vector<const ChordVoicingEngine::RightHandPattern*> filtered;
+      filtered.reserve(candidates.size());
+      for (const auto* candidate : candidates) {
+        int top_deg = pattern_top_degree(*candidate, core.root_degree);
+        if (std::find(allowed.begin(), allowed.end(), top_deg) != allowed.end()) {
+          filtered.push_back(candidate);
+        }
+      }
+      if (!filtered.empty()) {
+        candidates = std::move(filtered);
+      }
+    };
+
+    auto allowed_top = spec_param_degree_list(spec, "chord_allowed_top_degrees");
+    if (!allowed_top.empty()) {
+      apply_filter(allowed_top);
+    }
+
+    bool smooth = spec_param_bool(spec, "chord_voice_leading_continuity", false);
+    if (smooth && last_top_degree.has_value()) {
+      auto before = candidates;
+      apply_filter(continuity_degrees(*last_top_degree));
+      if (candidates.empty()) {
+        candidates = std::move(before);
+      }
+    }
+
+    if (avoid_voicing.has_value() && candidates.size() > 1) {
+      candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
+                                      [&](const auto* candidate) {
+                                        return candidate->id == avoid_voicing.value();
+                                      }),
+                       candidates.end());
+      if (candidates.empty()) {
+        candidates.reserve(right_options.size());
+        for (const auto& option : right_options) {
+          candidates.push_back(&option);
+        }
+      }
+    }
+
+    if (candidates.empty()) {
+      candidates.reserve(right_options.size());
+      for (const auto& option : right_options) {
+        candidates.push_back(&option);
+      }
+    }
+
+    std::size_t pick_idx = candidates.size() == 1
+                               ? 0
+                               : static_cast<std::size_t>(
+                                     rand_int(rng_state, 0,
+                                              static_cast<int>(candidates.size()) - 1));
+    desired_right = candidates[pick_idx]->id;
+  }
+
   auto selection = voicing_eng.pick_triad(core.quality_enum, rng_state,
-                                          preferred_right, preferred_bass, avoid_voicing,
+                                          desired_right, preferred_bass, avoid_voicing,
                                           core.profile_id);
   if (!selection.right_hand || !selection.bass) {
     throw std::runtime_error("ChordDrill: missing voicing definition for quality '" + core.quality + "'");
@@ -229,6 +339,7 @@ ChordQuestionCore prepare_chord_question_core(const DrillSpec& spec,
   core.bass_offset = selection.bass->degree_offset;
   core.bass_degree = core.root_degree + core.bass_offset;
   core.tonic_midi = drills::central_tonic_midi(spec.key);
+  core.top_degree = pattern_top_degree(*core.right_pattern, core.root_degree);
 
   core.right_degrees.reserve(core.right_pattern->degree_offsets.size());
   for (int offset : core.right_pattern->degree_offsets) {
@@ -236,6 +347,7 @@ ChordQuestionCore prepare_chord_question_core(const DrillSpec& spec,
   }
 
   last_voicing = core.right_voicing_id;
+  last_top_degree = core.top_degree;
   return core;
 }
 
@@ -311,6 +423,7 @@ void ChordDrill::configure(const DrillSpec& spec) {
   spec_ = spec;
   last_degree_.reset();
   last_voicing_id_.reset();
+  last_top_degree_.reset();
   preferred_right_voicing_ = spec_param_string(spec_, "chord_right_voicing");
   preferred_bass_voicing_ = spec_param_string(spec_, "chord_bass_voicing");
   if (auto profile = spec_param_string(spec_, "chord_voicing_profile")) {
@@ -347,12 +460,16 @@ void SustainChordDrill::configure(const DrillSpec& spec) {
   if (!params.contains("chord_prompt_duration_ms")) {
     params["chord_prompt_duration_ms"] = 10000;
   }
+  if (!params.contains("chord_voice_leading_continuity")) {
+    params["chord_voice_leading_continuity"] = true;
+  }
 
   ChordDrill::configure(adjusted);
 }
 
 QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   auto core = prepare_chord_question_core(spec_, rng_state, last_degree_, last_voicing_id_,
+                                          last_top_degree_,
                                           preferred_right_voicing_, preferred_bass_voicing_,
                                           voicing_source_id_);
   const auto& voicing_eng = ChordVoicingEngine::instance();
@@ -544,6 +661,7 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   bundle.correct_answer = TypedPayload{"chord_degree", answer_payload};
   bundle.prompt = plan;
   bundle.ui_hints = hints;
+  last_top_degree_ = core.top_degree;
   return bundle;
 }
 
