@@ -250,9 +250,30 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
       plan.notes.push_back({kRestPitch, rest_ms, kRestVelocity, std::nullopt});
     }
 
+    auto pick_resolution_pitch = [&](int resolution_degree, int reference_pitch) {
+      int span = std::max(12, spec_.range_max - spec_.range_min);
+      auto candidates = drills::midi_candidates_for_degree(spec_, resolution_degree, span);
+      if (!candidates.empty()) {
+        auto it = std::min_element(
+            candidates.begin(), candidates.end(),
+            [&](int lhs, int rhs) {
+              int lhs_diff = std::abs(lhs - reference_pitch);
+              int rhs_diff = std::abs(rhs - reference_pitch);
+              if (lhs_diff == rhs_diff) {
+                return lhs < rhs;
+              }
+              return lhs_diff < rhs_diff;
+            });
+        return *it;
+      }
+      return drills::degree_to_midi(spec_, resolution_degree);
+    };
+
     auto resolution_degrees = pathway_resolution_degrees(pathway->primary, degree, repeat_lead);
+    int reference_pitch = midi;
     for (int resolution_degree : resolution_degrees) {
-      int resolution_midi = drills::degree_to_midi(spec_, resolution_degree);
+      int resolution_midi = pick_resolution_pitch(resolution_degree, reference_pitch);
+      reference_pitch = resolution_midi;
       plan.notes.push_back({resolution_midi, note_duration_ms, std::nullopt, std::nullopt});
     }
   }
