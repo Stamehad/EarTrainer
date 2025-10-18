@@ -108,6 +108,7 @@
 			buildPhases = (
 				DBEAC23A2E9C70E600ED909F /* Sources */,
 				DBEAC23B2E9C70E600ED909F /* Frameworks */,
+				DBEAC26F2E9CFE2500ED909F /* ShellScript */,
 				DBEAC23C2E9C70E600ED909F /* Resources */,
 			);
 			buildRules = (
@@ -242,6 +243,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		DBEAC26F2E9CFE2500ED909F /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 12;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "
+";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		DBEAC23A2E9C70E600ED909F /* Sources */ = {

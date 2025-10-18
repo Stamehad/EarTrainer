@@ -202,7 +202,7 @@ public struct MidiEvent: Codable, Equatable {
 public struct MidiTrack: Codable, Equatable {
     public var name: String
     public var channel: Int
-    public var program: Int
+    public var program: Int?
     public var events: [MidiEvent]
 }
 

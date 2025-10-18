@@ -27,6 +27,7 @@ public final class SessionViewModel: ObservableObject {
     private var profile: ProfileSnapshot?
     private var hasBootstrapped = false
     private var questionsAnswered = 0
+    private let audioPlayer = MidiAudioPlayer.shared
 
     private let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -142,6 +143,11 @@ public final class SessionViewModel: ObservableObject {
 #endif
     }
 
+    public func replayPromptAudio() {
+        guard let clip = currentQuestion?.bundle.prompt?.midiClip else { return }
+        audioPlayer.play(clip: clip)
+    }
+
     // MARK: - Private helpers
 
     private func prepareEngine() throws {
@@ -153,48 +159,106 @@ public final class SessionViewModel: ObservableObject {
     private func ensureResourcesAvailable(at root: URL) throws {
         let fileManager = FileManager.default
         let destination = root.appendingPathComponent("resources", isDirectory: true)
-        // Prefer resources shipped in the host app bundle (copied by Xcode build phase),
-        // fall back to package resources for previews/tests.
-        var source: URL?
-        if let mainURL = Bundle.main.url(forResource: "CoreResources", withExtension: nil) {
-            source = mainURL
-        }
-        #if SWIFT_PACKAGE
-        if source == nil {
-            source = Bundle.module.url(forResource: "CoreResources", withExtension: nil)
-        }
-        #endif
-        guard let source else { throw BridgeError.missingData("CoreResources folder not found in app bundle") }
         if !fileManager.fileExists(atPath: destination.path) {
             try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
         }
-        if let enumerator = fileManager.enumerator(at: source, includingPropertiesForKeys: [.isDirectoryKey]) {
-            for case let fileURL as URL in enumerator {
-                let resourceValues = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
-                let relativePath = fileURL.path.replacingOccurrences(of: source.path + "/", with: "")
-                let targetURL = destination.appendingPathComponent(relativePath)
-                if resourceValues.isDirectory == true {
-                    try fileManager.createDirectory(at: targetURL, withIntermediateDirectories: true)
-                } else {
-                    if fileManager.fileExists(atPath: targetURL.path) {
-                        try fileManager.removeItem(at: targetURL)
+        var searchPaths: [URL] = [destination]
+
+        if let source = locateCoreResourcesFolder() {
+            if let enumerator = fileManager.enumerator(at: source, includingPropertiesForKeys: [.isDirectoryKey]) {
+                for case let fileURL as URL in enumerator {
+                    let resourceValues = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
+                    let relativePath = fileURL.path.replacingOccurrences(of: source.path + "/", with: "")
+                    let targetURL = destination.appendingPathComponent(relativePath)
+                    if resourceValues.isDirectory == true {
+                        try fileManager.createDirectory(at: targetURL, withIntermediateDirectories: true)
+                    } else {
+                        if fileManager.fileExists(atPath: targetURL.path) {
+                            try fileManager.removeItem(at: targetURL)
+                        }
+                        try fileManager.copyItem(at: fileURL, to: targetURL)
                     }
-                    try fileManager.copyItem(at: fileURL, to: targetURL)
+                }
+            }
+        } else {
+#if DEBUG
+            print("[SessionVM] CoreResources not bundled; relying on built-in defaults and top-level resources.")
+#endif
+        }
+        if let mainResources = Bundle.main.resourceURL {
+            searchPaths.append(mainResources)
+        }
+        audioPlayer.configureIfAvailable(searchPaths: searchPaths)
+    }
+
+    private func locateCoreResourcesFolder() -> URL? {
+        let fileManager = FileManager.default
+        var inspected = Set<ObjectIdentifier>()
+        var inspectedBundles: [Bundle] = []
+
+        func bundlesToInspect() -> [Bundle] {
+            var bundles: [Bundle] = [
+                Bundle.main,
+                Bundle(for: SessionViewModel.self)
+            ]
+#if SWIFT_PACKAGE
+            bundles.append(Bundle.module)
+#endif
+            bundles.append(contentsOf: Bundle.allBundles)
+            bundles.append(contentsOf: Bundle.allFrameworks)
+            if let embedded = Bundle.main.urls(forResourcesWithExtension: "bundle", subdirectory: nil) {
+                for url in embedded {
+                    if let bundle = Bundle(url: url) {
+                        bundles.append(bundle)
+                    }
+                }
+            }
+            return bundles
+        }
+
+        for bundle in bundlesToInspect() {
+            let identifier = ObjectIdentifier(bundle)
+            guard !inspected.contains(identifier) else { continue }
+            inspected.insert(identifier)
+            inspectedBundles.append(bundle)
+
+            if let url = bundle.url(forResource: "CoreResources", withExtension: nil),
+               fileManager.fileExists(atPath: url.path) {
+                return url
+            }
+            if let resourceURL = bundle.resourceURL {
+                let candidate = resourceURL.appendingPathComponent("CoreResources", isDirectory: true)
+                if fileManager.fileExists(atPath: candidate.path) {
+                    return candidate
                 }
             }
         }
-    }
 
-    private enum ResourceBundle {
-        static var bundle: Bundle = {
-            #if SWIFT_PACKAGE
-            return Bundle.module
-            #else
-            return Bundle(for: BundleMarker.self)
-            #endif
-        }()
+        if let frameworksURL = Bundle.main.privateFrameworksURL {
+            if let contents = try? fileManager.contentsOfDirectory(at: frameworksURL, includingPropertiesForKeys: nil) {
+                for url in contents where url.pathExtension == "bundle" {
+                    if let bundle = Bundle(url: url) {
+                        let identifier = ObjectIdentifier(bundle)
+                        if !inspected.contains(identifier) {
+                            inspected.insert(identifier)
+                            inspectedBundles.append(bundle)
+                        }
+                        if let resourceURL = bundle.resourceURL {
+                            let candidate = resourceURL.appendingPathComponent("CoreResources", isDirectory: true)
+                            if fileManager.fileExists(atPath: candidate.path) {
+                                return candidate
+                            }
+                        }
+                        if let location = bundle.url(forResource: "CoreResources", withExtension: nil),
+                           fileManager.fileExists(atPath: location.path) {
+                            return location
+                        }
+                    }
+                }
+            }
+        }
 
-        private final class BundleMarker {}
+        return nil
     }
 
     private func loadProfileSnapshot() throws {
@@ -270,6 +334,9 @@ public final class SessionViewModel: ObservableObject {
             questionJSON = prettyJSONString(envelope.bundle)
             debugJSON = envelope.debug?.prettyPrinted()
             route = .game
+            if let clip = envelope.bundle.prompt?.midiClip {
+                audioPlayer.play(clip: clip)
+            }
         case let .summary(report):
             currentQuestion = nil
             questionJSON = nil
@@ -366,4 +433,5 @@ public final class SessionViewModel: ObservableObject {
     private func presentError(_ error: Error) {
         errorBanner = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
+
 }

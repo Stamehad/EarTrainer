@@ -24,6 +24,13 @@ public struct GameView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 HStack(spacing: 16) {
+                    if viewModel.currentQuestion?.bundle.prompt?.midiClip != nil {
+                        Button("Replay Audio") {
+                            viewModel.replayPromptAudio()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
                     Button("Submit Auto Result") {
                         submitAnswer()
                     }
