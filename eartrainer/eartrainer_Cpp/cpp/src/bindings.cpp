@@ -106,6 +106,14 @@ public:
     return json_to_py(ear::bridge::to_json(assist_bundle));
   }
 
+  void set_level(const std::string& session_id, int level, int tier) {
+    engine_->set_level(session_id, level, tier);
+  }
+
+  std::string level_catalog_overview(const std::string& session_id) {
+    return engine_->level_catalog_overview(session_id);
+  }
+
   py::object submit_result(const std::string& session_id, py::object report_obj) {
     auto report_json = py_to_json(report_obj);
     auto report = ear::bridge::result_report_from_json(report_json);
@@ -155,6 +163,8 @@ PYBIND11_MODULE(_earcore, m) {
       .def("next_question", &PySessionEngine::next_question)
       .def("assist", &PySessionEngine::assist)
       .def("session_assist", &PySessionEngine::session_assist)
+      .def("set_level", &PySessionEngine::set_level)
+      .def("level_catalog_overview", &PySessionEngine::level_catalog_overview)
       .def("submit_result", &PySessionEngine::submit_result)
       .def("session_key", &PySessionEngine::session_key)
       .def("orientation_prompt", &PySessionEngine::orientation_prompt)

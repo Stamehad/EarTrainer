@@ -168,18 +168,25 @@ nlohmann::json to_json(const SessionSpec& spec) {
   }
   json_spec["assistance_policy"] = assistance;
   json_spec["sampler_params"] = spec.sampler_params;
-  if (!spec.track_levels.empty()) {
-    nlohmann::json track_levels = nlohmann::json::array();
-    for (int level : spec.track_levels) track_levels.push_back(level);
-    json_spec["track_levels"] = track_levels;
-  }
-  json_spec["seed"] = static_cast<std::int64_t>(spec.seed);
-  json_spec["adaptive"] = spec.adaptive;
   nlohmann::json track_levels = nlohmann::json::array();
   for (int level : spec.track_levels) {
     track_levels.push_back(level);
   }
   json_spec["track_levels"] = track_levels;
+  json_spec["seed"] = static_cast<std::int64_t>(spec.seed);
+  json_spec["adaptive"] = spec.adaptive;
+  json_spec["mode"] = to_string(spec.mode);
+  json_spec["level_inspect"] = spec.level_inspect;
+  if (spec.inspect_level.has_value()) {
+    json_spec["inspect_level"] = spec.inspect_level.value();
+  } else {
+    json_spec["inspect_level"] = nullptr;
+  }
+  if (spec.inspect_tier.has_value()) {
+    json_spec["inspect_tier"] = spec.inspect_tier.value();
+  } else {
+    json_spec["inspect_tier"] = nullptr;
+  }
   return json_spec;
 }
 
@@ -220,16 +227,34 @@ SessionSpec session_spec_from_json(const nlohmann::json& json_spec) {
   if (json_spec.contains("adaptive")) {
     spec.adaptive = json_spec["adaptive"].get<bool>();
   }
-  if (json_spec.contains("track_levels")) {
-    const auto& levels = json_spec["track_levels"];
-    if (levels.is_array()) {
-      spec.track_levels.clear();
-      for (const auto& entry : levels.get_array()) {
-        if (entry.is_number_integer()) {
-          spec.track_levels.push_back(entry.get<int>());
-        }
-      }
+  if (json_spec.contains("mode") && json_spec["mode"].is_string()) {
+    try {
+      spec.mode = session_mode_from_string(json_spec["mode"].get<std::string>());
+    } catch (const std::exception&) {
+      spec.mode = spec.adaptive ? SessionMode::Adaptive : SessionMode::Manual;
     }
+  } else if (json_spec.contains("level_inspect") && json_spec["level_inspect"].is_boolean() &&
+             json_spec["level_inspect"].get<bool>()) {
+    spec.mode = SessionMode::LevelInspector;
+  } else if (spec.adaptive) {
+    spec.mode = SessionMode::Adaptive;
+  } else {
+    spec.mode = SessionMode::Manual;
+  }
+  if (json_spec.contains("level_inspect")) {
+    spec.level_inspect = json_spec["level_inspect"].get<bool>();
+    if (spec.level_inspect) {
+      spec.mode = SessionMode::LevelInspector;
+    }
+  } else {
+    spec.level_inspect = (spec.mode == SessionMode::LevelInspector);
+  }
+  spec.adaptive = (spec.mode == SessionMode::Adaptive);
+  if (json_spec.contains("inspect_level") && !json_spec["inspect_level"].is_null()) {
+    spec.inspect_level = json_spec["inspect_level"].get<int>();
+  }
+  if (json_spec.contains("inspect_tier") && !json_spec["inspect_tier"].is_null()) {
+    spec.inspect_tier = json_spec["inspect_tier"].get<int>();
   }
   return spec;
 }

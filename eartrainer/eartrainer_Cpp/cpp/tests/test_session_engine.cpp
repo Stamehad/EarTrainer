@@ -285,6 +285,33 @@ int main() {
   }
 
   {
+    auto engine = ear::make_engine();
+    auto spec = make_spec("note", "manual", 31415, 0);
+    spec.mode = ear::SessionMode::LevelInspector;
+    spec.level_inspect = true;
+    spec.inspect_level = 1;
+    spec.inspect_tier = 0;
+    spec.n_questions = 0;
+    auto session = engine->create_session(spec);
+    auto overview = engine->level_catalog_overview(session);
+    suite.require(overview.find("Level 1") != std::string::npos,
+                  "Level inspector overview should mention level 1");
+    auto initial_variant = engine->next_question(session);
+    auto* initial_bundle = std::get_if<ear::QuestionBundle>(&initial_variant);
+    suite.require(initial_bundle != nullptr, "Level inspector should return question bundle");
+    suite.require(initial_bundle->question_id.rfind("li-", 0) == 0,
+                  "Level inspector question id must start with li-");
+    auto follow_variant = engine->submit_result(session, make_report(*initial_bundle));
+    suite.require(std::holds_alternative<ear::QuestionBundle>(follow_variant) ||
+                      std::holds_alternative<ear::SessionSummary>(follow_variant),
+                  "Level inspector submit should produce bundle or summary");
+    engine->set_level(session, 1, 0);
+    auto after_reset = engine->next_question(session);
+    suite.require(std::holds_alternative<ear::QuestionBundle>(after_reset),
+                  "Level inspector should provide question after reset");
+  }
+
+  {
     ear::scoring::MelodyScoringConfig cfg;
     cfg.tempo_min = 60.0;
     cfg.tempo_max = 180.0;

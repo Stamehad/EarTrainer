@@ -19,6 +19,10 @@ class SessionSpec:
     seed: int = 1
     adaptive: bool = False
     track_levels: List[int] = field(default_factory=list)
+    mode: str = "manual"
+    level_inspect: bool = False
+    inspect_level: Optional[int] = None
+    inspect_tier: Optional[int] = None
 
     def to_json(self) -> Dict[str, Any]:
         data = asdict(self)
@@ -44,6 +48,10 @@ class SessionSpec:
             seed=int(data.get("seed", 1)),
             adaptive=bool(data.get("adaptive", False)),
             track_levels=list(data.get("track_levels", [])),
+            mode=data.get("mode", "manual"),
+            level_inspect=bool(data.get("level_inspect", False)),
+            inspect_level=data.get("inspect_level"),
+            inspect_tier=data.get("inspect_tier"),
         )
 
 

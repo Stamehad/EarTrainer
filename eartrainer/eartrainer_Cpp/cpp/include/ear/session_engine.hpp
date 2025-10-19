@@ -39,6 +39,10 @@ public:
   virtual nlohmann::json capabilities() const = 0;
 
   virtual nlohmann::json adaptive_diagnostics(const std::string& session_id) = 0;
+
+  virtual void set_level(const std::string& session_id, int level, int tier) = 0;
+
+  virtual std::string level_catalog_overview(const std::string& session_id) = 0;
 };
 
 std::unique_ptr<SessionEngine> make_engine();

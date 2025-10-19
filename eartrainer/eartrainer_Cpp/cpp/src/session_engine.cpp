@@ -7,6 +7,7 @@
 #include "../include/ear/drill_hub.hpp"
 #include "../include/ear/drill_factory.hpp"
 #include "../include/ear/adaptive_drills.hpp"
+#include "../include/ear/level_inspector.hpp"
 #include "rng.hpp"
 
 #include <algorithm>
@@ -41,6 +42,20 @@ std::string factory_family_for(const std::string& kind) {
     return "chord";
   }
   return kind;
+}
+
+std::string catalog_basename_for(const std::string& kind) {
+  const auto family = factory_family_for(kind);
+  if (family == "note") {
+    return "degree";
+  }
+  if (family == "melody") {
+    return "melody";
+  }
+  if (family == "chord" || family == "chord_sustain") {
+    return "chord";
+  }
+  return family;
 }
 
 DrillFactory& ensure_factory() {
@@ -79,6 +94,7 @@ struct SessionData {
   SessionSummary summary_cache;
   bool summary_ready = false;
   std::unordered_map<std::string, PromptPlan> session_assists;
+  SessionMode mode = SessionMode::Manual;
 
   bool adaptive = false;
   std::unique_ptr<DrillHub> drill_hub;
@@ -93,6 +109,9 @@ struct SessionData {
   double adaptive_bout_score = 0.0;
   std::vector<std::optional<double>> adaptive_drill_scores;
   std::optional<AdaptiveDrills::BoutOutcome> adaptive_bout_outcome;
+  std::unique_ptr<LevelInspector> level_inspector;
+  std::optional<int> inspector_level;
+  std::optional<int> inspector_tier;
 };
 
 QuestionBundle make_bundle(SessionData& session, QuestionState& state) {
@@ -297,66 +316,35 @@ AssistBundle session_assist_bundle(SessionData& session, const std::string& kind
 class SessionEngineImpl : public SessionEngine {
 public:
   std::string create_session(const SessionSpec& spec) override {
+    SessionMode mode = spec.mode;
     if (spec.adaptive) {
-      return create_adaptive_session(spec);
+      mode = SessionMode::Adaptive;
+    } else if (spec.level_inspect) {
+      mode = SessionMode::LevelInspector;
     }
 
-    SessionData session;
-    session.spec = spec;
-    session.drill_spec = DrillSpec::from_session(spec);
-    auto& factory = ensure_factory();
-    session.module = factory.create_module(factory_family_for(spec.drill_kind));
-    session.module->configure(session.drill_spec);
-    session.rng_state = spec.seed == 0 ? 1 : spec.seed;
-    session.summary_cache.session_id = "";
-    session.summary_cache.totals = nlohmann::json::object();
-    session.summary_cache.by_category = nlohmann::json::array();
-    session.summary_cache.results = nlohmann::json::array();
-
-    session.questions.reserve(spec.n_questions);
-    for (int i = 0; i < spec.n_questions; ++i) {
-      QuestionState state;
-      state.id = make_question_id(i);
-      session.id_lookup[state.id] = session.questions.size();
-      session.questions.push_back(state);
+    switch (mode) {
+      case SessionMode::Adaptive:
+        return create_adaptive_session(spec);
+      case SessionMode::LevelInspector:
+        return create_level_inspector_session(spec);
+      case SessionMode::Manual:
+      default:
+        return create_manual_session(spec);
     }
-
-    std::string session_id = generate_session_id();
-    session.summary_cache.session_id = session_id;
-    session.session_assists = build_session_assists(session.spec);
-    sessions_.emplace(session_id, std::move(session));
-    return session_id;
   }
 
   Next next_question(const std::string& session_id) override {
     auto& session = get_session(session_id);
-    if (session.adaptive) {
-      return next_question_adaptive(session_id, session);
+    switch (session.mode) {
+      case SessionMode::Adaptive:
+        return next_question_adaptive(session_id, session);
+      case SessionMode::LevelInspector:
+        return next_question_level_inspector(session_id, session);
+      case SessionMode::Manual:
+      default:
+        return next_question_manual(session_id, session);
     }
-    if (session.active_question.has_value()) {
-      auto& state = session.questions[session.active_question.value()];
-      return make_bundle(session, state);
-    }
-
-    if (session.result_log.size() >= session.questions.size()) {
-      if (!session.summary_ready) {
-        session.summary_cache =
-            build_summary(session_id, session.spec.drill_kind, session.result_log);
-        session.summary_ready = true;
-      }
-      return session.summary_cache;
-    }
-
-    if (session.spec.generation == "eager" && !session.eager_materialised) {
-      materialise_all(session);
-    }
-
-    std::size_t index = session.result_log.size();
-    ensure_question(session, index);
-    auto& state = session.questions[index];
-    state.served = true;
-    session.active_question = index;
-    return make_bundle(session, state);
   }
 
   AssistBundle assist(const std::string& session_id, const std::string& question_id,
@@ -372,7 +360,7 @@ public:
       }
       return session_assist_bundle(session, kind, question_id);
     }
-    if (session.adaptive) {
+    if (session.mode == SessionMode::Adaptive) {
       auto it = session.id_lookup.find(question_id);
       if (it == session.id_lookup.end()) {
         throw std::runtime_error("Unknown question id");
@@ -392,7 +380,11 @@ public:
     if (!state.served) {
       throw std::runtime_error("Question not yet served");
     }
-    ensure_question(session, it->second);
+    if (session.mode != SessionMode::LevelInspector) {
+      ensure_question(session, it->second);
+    } else if (!state.bundle.has_value()) {
+      throw std::runtime_error("Level inspector question missing payload");
+    }
     auto bundle = make_bundle(session, state);
     return assistance::make_assist(bundle, kind);
   }
@@ -403,57 +395,21 @@ public:
     return session_assist_bundle(session, kind, "");
   }
 
+  void set_level(const std::string& session_id, int level, int tier) override;
+
+  std::string level_catalog_overview(const std::string& session_id) override;
+
   Next submit_result(const std::string& session_id, const ResultReport& report) override {
     auto& session = get_session(session_id);
-    if (session.adaptive) {
-      return submit_result_adaptive(session_id, session, report);
+    switch (session.mode) {
+      case SessionMode::Adaptive:
+        return submit_result_adaptive(session_id, session, report);
+      case SessionMode::LevelInspector:
+        return submit_result_level_inspector(session_id, session, report);
+      case SessionMode::Manual:
+      default:
+        return submit_result_manual(session_id, session, report);
     }
-    auto cache_it = session.submit_cache.find(report.question_id);
-    if (cache_it != session.submit_cache.end()) {
-      if (cache_it->second.is_summary) {
-        return cache_it->second.summary.value();
-      }
-      return cache_it->second.question.value();
-    }
-
-    auto id_it = session.id_lookup.find(report.question_id);
-    if (id_it == session.id_lookup.end()) {
-      throw std::runtime_error("Unknown question id");
-    }
-    auto& state = session.questions[id_it->second];
-    if (!state.served) {
-      throw std::runtime_error("Cannot submit result for unserved question");
-    }
-    if (!state.answered) {
-      session.result_log.push_back(report);
-      state.answered = true;
-      if (session.active_question == id_it->second) {
-        session.active_question.reset();
-      }
-    }
-
-    Next response;
-    SubmitCache submit_cache{report};
-
-    if (session.result_log.size() >= session.questions.size()) {
-      if (!session.summary_ready) {
-        session.summary_cache =
-            build_summary(session_id, session.spec.drill_kind, session.result_log);
-        session.summary_ready = true;
-      }
-      response = session.summary_cache;
-      submit_cache.is_summary = true;
-      submit_cache.summary = session.summary_cache;
-    } else {
-      ensure_question(session, id_it->second);
-      auto bundle = make_bundle(session, state);
-      response = bundle;
-      submit_cache.is_summary = false;
-      submit_cache.question = bundle;
-    }
-
-    session.submit_cache[report.question_id] = submit_cache;
-    return response;
   }
 
   nlohmann::json adaptive_diagnostics(const std::string& session_id) override {
@@ -496,44 +452,82 @@ public:
     auto& session = get_session(session_id);
     nlohmann::json info = nlohmann::json::object();
     info["session_id"] = session_id;
-    info["mode"] = session.adaptive ? "adaptive" : "manual";
+    info["mode"] = to_string(session.mode);
     info["summary_ready"] = session.summary_ready;
     info["result_count"] = static_cast<int>(session.result_log.size());
 
-    if (session.adaptive) {
-      info["adaptive_fitness"] = session.adaptive_fitness;
-      info["adaptive_asked"] = static_cast<int>(session.adaptive_asked);
-      info["adaptive_target"] = static_cast<int>(session.adaptive_target_questions);
-      nlohmann::json counts = nlohmann::json::object();
-      for (const auto& kv : session.adaptive_counts) {
-        counts[kv.first] = static_cast<int>(kv.second);
+    switch (session.mode) {
+      case SessionMode::Adaptive: {
+        info["adaptive_fitness"] = session.adaptive_fitness;
+        info["adaptive_asked"] = static_cast<int>(session.adaptive_asked);
+        info["adaptive_target"] = static_cast<int>(session.adaptive_target_questions);
+        nlohmann::json counts = nlohmann::json::object();
+        for (const auto& kv : session.adaptive_counts) {
+          counts[kv.first] = static_cast<int>(kv.second);
+        }
+        info["drill_counts"] = counts;
+        if (session.adaptive_bout_score_valid) {
+          info["adaptive_bout_score"] = session.adaptive_bout_score;
+        }
+        if (session.adaptive_bout_outcome.has_value()) {
+          info["adaptive_level_up_threshold"] =
+              session.adaptive_bout_outcome->graduate_threshold;
+          info["adaptive_level_up"] = session.adaptive_bout_outcome->level_up;
+        }
+        if (!session.adaptive_drill_scores.empty()) {
+          nlohmann::json drill_scores = nlohmann::json::array();
+          for (const auto& value : session.adaptive_drill_scores) {
+            if (value.has_value()) {
+              drill_scores.push_back(value.value());
+            } else {
+              drill_scores.push_back(nullptr);
+            }
+          }
+          info["adaptive_drill_scores"] = drill_scores;
+        }
+        if (session.adaptive_drills) {
+          info["adaptive_drills"] = session.adaptive_drills->diagnostic();
+        }
+        break;
       }
-      info["drill_counts"] = counts;
-      if (session.adaptive_bout_score_valid) {
-        info["adaptive_bout_score"] = session.adaptive_bout_score;
-      }
-      if (session.adaptive_bout_outcome.has_value()) {
-        info["adaptive_level_up_threshold"] = session.adaptive_bout_outcome->graduate_threshold;
-        info["adaptive_level_up"] = session.adaptive_bout_outcome->level_up;
-      }
-      if (!session.adaptive_drill_scores.empty()) {
-        nlohmann::json drill_scores = nlohmann::json::array();
-        for (const auto& value : session.adaptive_drill_scores) {
-          if (value.has_value()) {
-            drill_scores.push_back(value.value());
-          } else {
-            drill_scores.push_back(nullptr);
+      case SessionMode::LevelInspector: {
+        info["drill_kind"] = session.spec.drill_kind;
+        if (session.inspector_level.has_value()) {
+          info["level_inspector_level"] = session.inspector_level.value();
+        } else {
+          info["level_inspector_level"] = nullptr;
+        }
+        if (session.inspector_tier.has_value()) {
+          info["level_inspector_tier"] = session.inspector_tier.value();
+        } else {
+          info["level_inspector_tier"] = nullptr;
+        }
+        if (session.level_inspector) {
+          info["level_catalog_overview"] = session.level_inspector->overview();
+          nlohmann::json levels = nlohmann::json::array();
+          for (int level : session.level_inspector->known_levels()) {
+            levels.push_back(level);
+          }
+          info["level_inspector_levels"] = std::move(levels);
+          if (session.inspector_level.has_value()) {
+            nlohmann::json tiers = nlohmann::json::array();
+            for (int tier :
+                 session.level_inspector->tiers_for_level(session.inspector_level.value())) {
+              tiers.push_back(tier);
+            }
+            info["level_inspector_available_tiers"] = std::move(tiers);
           }
         }
-        info["adaptive_drill_scores"] = drill_scores;
+        info["total_questions"] = static_cast<int>(session.questions.size());
+        break;
       }
-      if (session.adaptive_drills) {
-        info["adaptive_drills"] = session.adaptive_drills->diagnostic();
+      case SessionMode::Manual:
+      default: {
+        info["drill_kind"] = session.spec.drill_kind;
+        info["total_questions"] = static_cast<int>(session.questions.size());
+        info["eager_materialised"] = session.eager_materialised;
+        break;
       }
-    } else {
-      info["drill_kind"] = session.spec.drill_kind;
-      info["total_questions"] = static_cast<int>(session.questions.size());
-      info["eager_materialised"] = session.eager_materialised;
     }
 
     return info;
@@ -542,7 +536,7 @@ public:
   MemoryPackage end_session(const std::string& session_id) override {
     auto& session = get_session(session_id);
     if (!session.summary_ready) {
-      if (session.adaptive) {
+      if (session.mode == SessionMode::Adaptive) {
         if (!session.summary_ready) {
           session.summary_cache =
               build_summary(session_id, session.spec.drill_kind, session.result_log);
@@ -554,13 +548,13 @@ public:
             build_summary(session_id, session.spec.drill_kind, session.result_log);
         session.summary_ready = true;
       }
-    } else if (session.adaptive) {
+    } else if (session.mode == SessionMode::Adaptive) {
       attach_adaptive_summary(session);
     }
 
     MemoryPackage package;
     package.summary = session.summary_cache;
-    if (session.adaptive && session.adaptive_drills) {
+    if (session.mode == SessionMode::Adaptive && session.adaptive_drills) {
       const auto report = session.adaptive_drills->end_bout();
       MemoryPackage::AdaptiveData adaptive;
       adaptive.has_score = report.has_score;
@@ -591,10 +585,18 @@ public:
   PromptPlan orientation_prompt(const std::string& session_id) override;
 
 private:
+  std::string create_manual_session(const SessionSpec& spec);
   std::string create_adaptive_session(const SessionSpec& spec);
+  std::string create_level_inspector_session(const SessionSpec& spec);
+  Next next_question_manual(const std::string& session_id, SessionData& session);
   Next next_question_adaptive(const std::string& session_id, SessionData& session);
+  Next next_question_level_inspector(const std::string& session_id, SessionData& session);
+  Next submit_result_manual(const std::string& session_id, SessionData& session,
+                            const ResultReport& report);
   Next submit_result_adaptive(const std::string& session_id, SessionData& session,
                               const ResultReport& report);
+  Next submit_result_level_inspector(const std::string& session_id, SessionData& session,
+                                     const ResultReport& report);
 
   SessionData& get_session(const std::string& session_id) {
     auto it = sessions_.find(session_id);
@@ -618,10 +620,42 @@ std::unique_ptr<SessionEngine> make_engine() {
   return std::make_unique<SessionEngineImpl>();
 }
 
+std::string SessionEngineImpl::create_manual_session(const SessionSpec& spec) {
+  SessionData session;
+  session.spec = spec;
+  session.mode = SessionMode::Manual;
+  session.spec.mode = SessionMode::Manual;
+  session.drill_spec = DrillSpec::from_session(spec);
+  auto& factory = ensure_factory();
+  session.module = factory.create_module(factory_family_for(spec.drill_kind));
+  session.module->configure(session.drill_spec);
+  session.rng_state = spec.seed == 0 ? 1 : spec.seed;
+  session.summary_cache.session_id = "";
+  session.summary_cache.totals = nlohmann::json::object();
+  session.summary_cache.by_category = nlohmann::json::array();
+  session.summary_cache.results = nlohmann::json::array();
+
+  session.questions.reserve(spec.n_questions);
+  for (int i = 0; i < spec.n_questions; ++i) {
+    QuestionState state;
+    state.id = make_question_id(i);
+    session.id_lookup[state.id] = session.questions.size();
+    session.questions.push_back(state);
+  }
+
+  std::string session_id = generate_session_id();
+  session.summary_cache.session_id = session_id;
+  session.session_assists = build_session_assists(session.spec);
+  sessions_.emplace(session_id, std::move(session));
+  return session_id;
+}
+
 std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) {
   SessionData session;
   session.spec = spec;
   session.spec.drill_kind = "adaptive";
+  session.mode = SessionMode::Adaptive;
+  session.spec.mode = SessionMode::Adaptive;
   session.adaptive = true;
   session.summary_cache.session_id = "";
   session.summary_cache.totals = nlohmann::json::object();
@@ -702,6 +736,162 @@ std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) 
   return session_id;
 }
 
+std::string SessionEngineImpl::create_level_inspector_session(const SessionSpec& spec) {
+  SessionData session;
+  session.spec = spec;
+  session.mode = SessionMode::LevelInspector;
+  session.spec.mode = SessionMode::LevelInspector;
+  session.summary_cache.session_id = "";
+  session.summary_cache.totals = nlohmann::json::object();
+  session.summary_cache.by_category = nlohmann::json::array();
+  session.summary_cache.results = nlohmann::json::array();
+  session.session_assists = build_session_assists(session.spec);
+  session.inspector_level = spec.inspect_level;
+  session.inspector_tier = spec.inspect_tier;
+
+  std::filesystem::path resources_dir = "resources";
+  if (!std::filesystem::exists(resources_dir)) {
+    resources_dir = std::filesystem::path("eartrainer/eartrainer_Cpp/resources");
+  }
+
+  const auto catalog_name = catalog_basename_for(spec.drill_kind);
+  session.level_inspector =
+      std::make_unique<LevelInspector>(resources_dir, catalog_name, spec.seed);
+
+  if (session.inspector_level.has_value() && session.inspector_tier.has_value()) {
+    try {
+      session.level_inspector->select(session.inspector_level.value(), session.inspector_tier.value());
+    } catch (const std::exception& ex) {
+      throw std::runtime_error(std::string("LevelInspector: failed to select level ") +
+                               std::to_string(session.inspector_level.value()) + ", tier " +
+                               std::to_string(session.inspector_tier.value()) + ": " + ex.what());
+    }
+  }
+
+  std::string session_id = generate_session_id();
+  session.summary_cache.session_id = session_id;
+  sessions_.emplace(session_id, std::move(session));
+  return session_id;
+}
+
+void SessionEngineImpl::set_level(const std::string& session_id, int level, int tier) {
+  auto& session = get_session(session_id);
+  if (session.mode != SessionMode::LevelInspector) {
+    throw std::runtime_error("set_level is only available in level inspector mode");
+  }
+  if (!session.level_inspector) {
+    throw std::runtime_error("Level inspector module is not initialised");
+  }
+  try {
+    session.level_inspector->select(level, tier);
+  } catch (const std::exception& ex) {
+    throw std::runtime_error(std::string("Failed to select level ") + std::to_string(level) +
+                             ", tier " + std::to_string(tier) + ": " + ex.what());
+  }
+
+  session.inspector_level = level;
+  session.inspector_tier = tier;
+  session.spec.inspect_level = level;
+  session.spec.inspect_tier = tier;
+  session.questions.clear();
+  session.id_lookup.clear();
+  session.submit_cache.clear();
+  session.result_log.clear();
+  session.active_question.reset();
+  session.summary_ready = false;
+  session.summary_cache.results = nlohmann::json::array();
+  session.summary_cache.by_category = nlohmann::json::array();
+  session.summary_cache.totals = nlohmann::json::object();
+  session.summary_cache.session_id = session_id;
+}
+
+std::string SessionEngineImpl::level_catalog_overview(const std::string& session_id) {
+  auto& session = get_session(session_id);
+  if (session.mode != SessionMode::LevelInspector || !session.level_inspector) {
+    throw std::runtime_error("Level catalog overview only available in level inspector mode");
+  }
+  return session.level_inspector->overview();
+}
+
+SessionEngine::Next SessionEngineImpl::next_question_manual(const std::string& session_id,
+                                                             SessionData& session) {
+  if (session.active_question.has_value()) {
+    auto& state = session.questions[session.active_question.value()];
+    return make_bundle(session, state);
+  }
+
+  if (session.result_log.size() >= session.questions.size()) {
+    if (!session.summary_ready) {
+      session.summary_cache =
+          build_summary(session_id, session.spec.drill_kind, session.result_log);
+      session.summary_ready = true;
+    }
+    return session.summary_cache;
+  }
+
+  if (session.spec.generation == "eager" && !session.eager_materialised) {
+    materialise_all(session);
+  }
+
+  std::size_t index = session.result_log.size();
+  ensure_question(session, index);
+  auto& state = session.questions[index];
+  state.served = true;
+  session.active_question = index;
+  return make_bundle(session, state);
+}
+
+SessionEngine::Next SessionEngineImpl::submit_result_manual(const std::string& session_id,
+                                                            SessionData& session,
+                                                            const ResultReport& report) {
+  auto cache_it = session.submit_cache.find(report.question_id);
+  if (cache_it != session.submit_cache.end()) {
+    if (cache_it->second.is_summary) {
+      return cache_it->second.summary.value();
+    }
+    return cache_it->second.question.value();
+  }
+
+  auto id_it = session.id_lookup.find(report.question_id);
+  if (id_it == session.id_lookup.end()) {
+    throw std::runtime_error("Unknown question id");
+  }
+  auto& state = session.questions[id_it->second];
+  if (!state.served) {
+    throw std::runtime_error("Cannot submit result for unserved question");
+  }
+  if (!state.answered) {
+    session.result_log.push_back(report);
+    state.answered = true;
+    if (session.active_question == id_it->second) {
+      session.active_question.reset();
+    }
+  }
+
+  Next response;
+  SubmitCache submit_cache{report};
+
+  if (session.result_log.size() >= session.questions.size()) {
+    if (!session.summary_ready) {
+      session.summary_cache =
+          build_summary(session_id, session.spec.drill_kind, session.result_log);
+      session.summary_ready = true;
+    }
+    response = session.summary_cache;
+    submit_cache.is_summary = true;
+    submit_cache.summary = session.summary_cache;
+  } else {
+    ensure_question(session, id_it->second);
+    auto bundle = make_bundle(session, state);
+    response = bundle;
+    submit_cache.is_summary = false;
+    submit_cache.question = bundle;
+  }
+
+  session.submit_cache[report.question_id] = submit_cache;
+  return response;
+}
+
 SessionEngine::Next SessionEngineImpl::next_question_adaptive(const std::string& session_id,
                                                               SessionData& session) {
   if (session.summary_ready &&
@@ -754,6 +944,30 @@ SessionEngine::Next SessionEngineImpl::next_question_adaptive(const std::string&
 
   auto& stored = session.questions.back();
   return make_bundle(session, stored);
+}
+
+SessionEngine::Next SessionEngineImpl::next_question_level_inspector(const std::string& session_id,
+                                                                     SessionData& session) {
+  if (session.active_question.has_value()) {
+    auto& state = session.questions[session.active_question.value()];
+    return make_bundle(session, state);
+  }
+  if (!session.level_inspector || !session.level_inspector->has_selection()) {
+    throw std::runtime_error(
+        "Level inspector mode requires selecting a level and tier before requesting questions");
+  }
+
+  QuestionBundle bundle = session.level_inspector->next();
+  QuestionState state;
+  state.id = bundle.question_id;
+  state.bundle = bundle;
+  state.served = true;
+  state.answered = false;
+  const std::size_t index = session.questions.size();
+  session.id_lookup[state.id] = index;
+  session.questions.push_back(std::move(state));
+  session.active_question = index;
+  return make_bundle(session, session.questions.back());
 }
 
 SessionEngine::Next SessionEngineImpl::submit_result_adaptive(const std::string& session_id,
@@ -815,6 +1029,72 @@ SessionEngine::Next SessionEngineImpl::submit_result_adaptive(const std::string&
     response = bundle;
     submit_cache.is_summary = false;
     submit_cache.question = bundle;
+  }
+
+  session.submit_cache[report.question_id] = submit_cache;
+  return response;
+}
+
+SessionEngine::Next SessionEngineImpl::submit_result_level_inspector(
+    const std::string& session_id, SessionData& session, const ResultReport& report) {
+  auto cache_it = session.submit_cache.find(report.question_id);
+  if (cache_it != session.submit_cache.end()) {
+    if (cache_it->second.is_summary) {
+      return cache_it->second.summary.value();
+    }
+    return cache_it->second.question.value();
+  }
+
+  auto id_it = session.id_lookup.find(report.question_id);
+  if (id_it == session.id_lookup.end()) {
+    throw std::runtime_error("Unknown question id");
+  }
+  auto& state = session.questions[id_it->second];
+  if (!state.served) {
+    throw std::runtime_error("Cannot submit result for unserved question");
+  }
+  if (!state.answered) {
+    session.result_log.push_back(report);
+    state.answered = true;
+    if (session.active_question == id_it->second) {
+      session.active_question.reset();
+    }
+  }
+
+  const bool limited =
+      session.spec.n_questions > 0 &&
+      session.result_log.size() >= static_cast<std::size_t>(session.spec.n_questions);
+
+  Next response;
+  SubmitCache submit_cache{report};
+
+  if (limited) {
+    if (!session.summary_ready) {
+      session.summary_cache =
+          build_summary(session_id, session.spec.drill_kind, session.result_log);
+      session.summary_ready = true;
+    }
+    response = session.summary_cache;
+    submit_cache.is_summary = true;
+    submit_cache.summary = session.summary_cache;
+  } else {
+    if (!session.level_inspector || !session.level_inspector->has_selection()) {
+      throw std::runtime_error(
+          "Level inspector selection missing while preparing next question");
+    }
+    QuestionBundle next_bundle = session.level_inspector->next();
+    QuestionState next_state;
+    next_state.id = next_bundle.question_id;
+    next_state.bundle = next_bundle;
+    next_state.served = true;
+    next_state.answered = false;
+    const std::size_t index = session.questions.size();
+    session.id_lookup[next_state.id] = index;
+    session.questions.push_back(std::move(next_state));
+    session.active_question = index;
+    response = next_bundle;
+    submit_cache.is_summary = false;
+    submit_cache.question = next_bundle;
   }
 
   session.submit_cache[report.question_id] = submit_cache;

@@ -9,6 +9,7 @@ add_library(ear_core STATIC
     src/adaptive_catalog.cpp
     src/adaptive_catalog_builtin.cpp
     src/adaptive_drills.cpp
+    src/level_inspector.cpp
     src/track_selector_builtin.cpp
     src/track_selector.cpp
     src/session_engine.cpp

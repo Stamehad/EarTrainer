@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <stdexcept>
 
 #include "../nlohmann/json.hpp"
 
@@ -19,6 +20,34 @@ inline double clip01(double value) {
 
 } // namespace detail
 
+enum class SessionMode {
+  Manual,
+  Adaptive,
+  LevelInspector
+};
+
+inline std::string to_string(SessionMode mode) {
+  switch (mode) {
+    case SessionMode::Manual: return "manual";
+    case SessionMode::Adaptive: return "adaptive";
+    case SessionMode::LevelInspector: return "level_inspector";
+  }
+  return "manual";
+}
+
+inline SessionMode session_mode_from_string(const std::string& value) {
+  if (value == "manual") {
+    return SessionMode::Manual;
+  }
+  if (value == "adaptive") {
+    return SessionMode::Adaptive;
+  }
+  if (value == "level_inspector") {
+    return SessionMode::LevelInspector;
+  }
+  throw std::invalid_argument("Unknown session mode: " + value);
+}
+
 struct SessionSpec {
   std::string version;
   std::string drill_kind;
@@ -31,8 +60,12 @@ struct SessionSpec {
   std::unordered_map<std::string, int> assistance_policy;
   nlohmann::json sampler_params;
   std::uint64_t seed;
+  SessionMode mode = SessionMode::Manual;
   bool adaptive = false;
+  bool level_inspect = false;
   std::vector<int> track_levels;
+  std::optional<int> inspect_level;
+  std::optional<int> inspect_tier;
 };
 
 struct Note {
