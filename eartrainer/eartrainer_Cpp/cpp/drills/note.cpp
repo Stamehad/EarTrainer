@@ -1,8 +1,10 @@
 #include "note.hpp"
 
-#include "common.hpp"
 #include "../src/rng.hpp"
+#include "common.hpp"
+#include "params.hpp"
 #include "pathways.hpp"
+#include "prompt_utils.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -20,61 +22,6 @@ const pathways::PathwayOptions* resolve_pathway(const DrillSpec& spec, int degre
 constexpr int kDefaultTempoBpm = 120;
 constexpr double kDefaultStepBeats = 1.0;
 constexpr double kDefaultRestBeats = 0.5;
-constexpr int kRestPitch = -1;
-constexpr int kRestVelocity = 0;
-
-bool flag_param(const DrillSpec& spec, const std::string& key, bool fallback) {
-  if (!spec.params.is_object() || !spec.params.contains(key)) {
-    return fallback;
-  }
-  const auto& node = spec.params[key];
-  if (node.is_boolean()) {
-    return node.get<bool>();
-  }
-  if (node.is_number_integer()) {
-    return node.get<int>() != 0;
-  }
-  return fallback;
-}
-
-double beats_param(const DrillSpec& spec, const std::string& key, double fallback) {
-  if (!spec.params.is_object() || !spec.params.contains(key)) {
-    return fallback;
-  }
-  const auto& node = spec.params[key];
-  if (node.is_number_float()) {
-    return node.get<double>();
-  }
-  if (node.is_number_integer()) {
-    return static_cast<double>(node.get<int>());
-  }
-  return fallback;
-}
-
-int tempo_param(const DrillSpec& spec, const std::string& key) {
-  if (spec.params.is_object() && spec.params.contains(key)) {
-    const auto& node = spec.params[key];
-    if (node.is_number_float()) {
-      return std::max(1, static_cast<int>(std::lround(node.get<double>())));
-    }
-    if (node.is_number_integer()) {
-      return std::max(1, node.get<int>());
-    }
-  }
-  if (spec.tempo_bpm.has_value()) {
-    return std::max(1, spec.tempo_bpm.value());
-  }
-  return kDefaultTempoBpm;
-}
-
-int beats_to_ms(double beats, int tempo_bpm) {
-  if (beats <= 0.0) {
-    return 0;
-  }
-  int tempo = std::max(1, tempo_bpm);
-  double quarter_ms = 60000.0 / static_cast<double>(tempo);
-  return static_cast<int>(std::lround(quarter_ms * beats));
-}
 
 std::vector<int> pathway_resolution_degrees(const pathways::PathwayPattern& pattern, int degree,
                                             bool include_lead) {
@@ -173,29 +120,27 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
   nlohmann::json answer_payload = nlohmann::json::object();
   answer_payload["degree"] = degree;
 
-  bool pathways_requested = flag_param(spec_, "use_pathway", false);
+  bool pathways_requested = drills::param_flag(spec_, "use_pathway", false);
   const pathways::PathwayOptions* pathway =
       pathways_requested ? resolve_pathway(spec_, degree) : nullptr;
   bool pathways_active = pathways_requested && pathway != nullptr;
-  bool repeat_lead = pathways_active && flag_param(spec_, "pathway_repeat_lead", false);
+  bool repeat_lead =
+      pathways_active && drills::param_flag(spec_, "pathway_repeat_lead", false);
 
   std::string tempo_key = pathways_active ? "pathway_tempo_bpm" : "note_tempo_bpm";
-  int tempo_bpm = tempo_param(spec_, tempo_key);
-  double note_beats = pathways_active ? beats_param(spec_, "pathway_step_beats", kDefaultStepBeats)
-                                      : beats_param(spec_, "note_step_beats", kDefaultStepBeats);
-  int note_duration_ms = beats_to_ms(note_beats, tempo_bpm);
+  int tempo_bpm = drills::param_tempo(spec_, tempo_key, kDefaultTempoBpm);
+  double note_beats =
+      pathways_active ? drills::param_double(spec_, "pathway_step_beats", kDefaultStepBeats)
+                      : drills::param_double(spec_, "note_step_beats", kDefaultStepBeats);
+  int note_duration_ms = drills::beats_to_ms(note_beats, tempo_bpm);
   if (note_duration_ms <= 0) {
-    note_duration_ms = beats_to_ms(kDefaultStepBeats, tempo_bpm);
+    note_duration_ms = drills::beats_to_ms(kDefaultStepBeats, tempo_bpm);
   }
 
   PromptPlan plan;
   plan.modality = "midi";
   plan.tempo_bpm = tempo_bpm;
   plan.count_in = false;
-
-  auto add_note = [&](int pitch) {
-    plan.notes.push_back({pitch, note_duration_ms, std::nullopt, std::nullopt});
-  };
 
   std::string tonic_anchor = "none";
   if (spec_.params.contains("tonic_anchor") && spec_.params["tonic_anchor"].is_string()) {
@@ -218,7 +163,7 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
       anchor_before = rand_int(rng_state, 0, 1) == 0;
       anchor_after = !anchor_before;
     }
-    anchor_include_octave = flag_param(spec_, "tonic_anchor_include_octave", false);
+    anchor_include_octave = drills::param_flag(spec_, "tonic_anchor_include_octave", false);
   }
 
   auto choose_anchor_pitch = [&](int base_pitch) -> int {
@@ -233,21 +178,20 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
   };
 
   if (anchor_before) {
-    add_note(choose_anchor_pitch(tonic_midi));
+    drills::append_note(plan, choose_anchor_pitch(tonic_midi), note_duration_ms);
   }
 
-  add_note(midi);
+  drills::append_note(plan, midi, note_duration_ms);
 
   if (anchor_after) {
-    add_note(choose_anchor_pitch(tonic_midi));
+    drills::append_note(plan, choose_anchor_pitch(tonic_midi), note_duration_ms);
   }
 
   if (pathways_active) {
-    double rest_beats = beats_param(spec_, "pathway_rest_beats", kDefaultRestBeats);
-    int rest_ms = beats_to_ms(rest_beats, tempo_bpm);
+    double rest_beats = drills::param_double(spec_, "pathway_rest_beats", kDefaultRestBeats);
+    int rest_ms = drills::beats_to_ms(rest_beats, tempo_bpm);
     if (rest_ms > 0) {
-      // Use sentinel pitch/velocity to represent silence between the lead note and pathway.
-      plan.notes.push_back({kRestPitch, rest_ms, kRestVelocity, std::nullopt});
+      drills::append_rest(plan, rest_ms);
     }
 
     auto pick_resolution_pitch = [&](int resolution_degree, int reference_pitch) {
@@ -274,7 +218,7 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
     for (int resolution_degree : resolution_degrees) {
       int resolution_midi = pick_resolution_pitch(resolution_degree, reference_pitch);
       reference_pitch = resolution_midi;
-      plan.notes.push_back({resolution_midi, note_duration_ms, std::nullopt, std::nullopt});
+      drills::append_note(plan, resolution_midi, note_duration_ms);
     }
   }
 

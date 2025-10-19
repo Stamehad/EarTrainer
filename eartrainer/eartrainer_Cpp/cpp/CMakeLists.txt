@@ -17,6 +17,7 @@ add_library(ear_core STATIC
     src/json_bridge.cpp
     src/midi_clip.cpp
     drills/chord.cpp
+    drills/chord_core.cpp
     drills/interval.cpp
     drills/melody.cpp
     drills/note.cpp

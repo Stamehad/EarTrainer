@@ -158,6 +158,17 @@ inline const std::vector<DrillSpec>& level_223() {
                      {"training_root_enabled", true},
                      {"training_root_delay_beats", 1.5},
                      {"training_root_channel", 4}}),
+      make_drill("CHORD_STRINGS_SMOOTH_TOP",
+                 "chord_sustain",
+                 223,
+                 55,
+                 nlohmann::json{
+                     {"chord_voicing_profile", "strings_ensemble"},
+                     {"chord_voice_leading_continuity", true},
+                     {"chord_allowed_top_degrees", jarray({2, 4})},
+                     {"chord_prompt_program", 48},
+                     {"chord_prompt_velocity", 92},
+                     {"chord_prompt_duration_ms", 12000}}),
       make_drill("CHORD_PIANO_WITH_ROOT_HINT",
                  "chord",
                  223,
@@ -169,7 +180,19 @@ inline const std::vector<DrillSpec>& level_223() {
                      {"chord_prompt_split_tracks", true},
                      {"chord_prompt_program", 0},
                      {"chord_prompt_velocity", 88},
-                     {"chord_prompt_duration_ms", 900}})};
+                     {"chord_prompt_duration_ms", 900}}),
+      make_drill("CHORD_PIANO_SMOOTH_TOP",
+                 "chord",
+                 223,
+                 80,
+                 nlohmann::json{
+                     {"chord_voicing_profile", "simple_triads"},
+                     {"chord_voice_leading_continuity", true},
+                     {"chord_allowed_top_degrees", jarray({0, 2, 4})},
+                     {"chord_prompt_split_tracks", true},
+                     {"chord_prompt_program", 0},
+                     {"chord_prompt_velocity", 85},
+                     {"chord_prompt_duration_ms", 800}})};
   return drills;
 }
 
