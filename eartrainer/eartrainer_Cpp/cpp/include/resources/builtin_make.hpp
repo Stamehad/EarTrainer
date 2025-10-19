@@ -35,6 +35,9 @@ inline DrillSpec make_drill(
     d.drill_params   = std::move(drill_params);
     d.sampler_params = std::move(sampler_params);
 
+    // Materialise defaults so downstream callers see merged params immediately.
+    d.apply_defaults();
+
     // Intentionally NOT setting: d.key, d.range_min, d.range_max.
     // Your adaptive code can/randomly will decide them at runtime.
     return d;

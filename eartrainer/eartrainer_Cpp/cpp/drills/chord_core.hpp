@@ -15,6 +15,7 @@ struct ChordSelectionState {
   std::optional<int> last_degree;
   std::optional<std::string> last_voicing_id;
   std::optional<int> last_top_degree;
+  std::optional<int> last_top_midi;
 };
 
 struct TrainingRootConfig {
@@ -53,7 +54,10 @@ ChordQuestionCore prepare_chord_question(const DrillSpec& spec,
 
 int select_bass_midi(const ChordQuestionCore& core);
 
-std::vector<int> voice_right_hand_midi(const ChordQuestionCore& core, int bass_midi);
+std::vector<int> voice_right_hand_midi(const DrillSpec& spec,
+                                       const ChordQuestionCore& core,
+                                       int bass_midi,
+                                       const std::optional<int>& previous_top_midi);
 
 int find_voicing_index(const std::vector<ear::ChordVoicingEngine::RightHandPattern>& options,
                        const std::string& id);

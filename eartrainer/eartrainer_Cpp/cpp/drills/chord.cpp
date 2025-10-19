@@ -240,11 +240,18 @@ QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   realised_degrees.push_back(bass_degree);
   plan.notes.push_back({bass_midi, chord_dur_ms, std::nullopt, std::nullopt});
 
-  std::vector<int> right_midi = drills::chord::voice_right_hand_midi(core, bass_midi);
+  std::vector<int> right_midi = drills::chord::voice_right_hand_midi(
+      spec_, core, bass_midi, selection_state_.last_top_midi);
   for (std::size_t i = 0; i < right_midi.size(); ++i) {
     realised_degrees.push_back(right_degrees[i]);
     midi_tones.push_back(right_midi[i]);
     plan.notes.push_back({right_midi[i], chord_dur_ms, std::nullopt, std::nullopt});
+  }
+
+  if (!right_midi.empty()) {
+    selection_state_.last_top_midi = right_midi.back();
+  } else {
+    selection_state_.last_top_midi.reset();
   }
 
   if (helper_config.enabled) {

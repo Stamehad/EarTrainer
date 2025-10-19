@@ -125,12 +125,13 @@ inline const std::vector<DrillSpec>& level_222() {
                  nlohmann::json{
                      {"add_seventh", true},
                      {"training_root_enabled", true},
-                     {"training_root_delay_beats", 0.5},
+                     {"training_root_delay_beats", 1},
                      {"training_root_channel", 2},
+                     {"chord_voice_leading_continuity", true},
                      {"chord_voicing_profile", "strings_ensemble"},
                      {"chord_prompt_program", 51},
                      {"chord_prompt_velocity", 94},
-                     {"chord_prompt_duration_ms", 12000}})};
+                     {"chord_prompt_duration_ms", 3000}})};
   return drills;
 }
 

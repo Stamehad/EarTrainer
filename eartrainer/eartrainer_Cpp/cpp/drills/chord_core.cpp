@@ -208,7 +208,10 @@ int select_bass_midi(const ChordQuestionCore& core) {
   return drills::clamp_to_range(best_bass, 0, 127);
 }
 
-std::vector<int> voice_right_hand_midi(const ChordQuestionCore& core, int bass_midi) {
+std::vector<int> voice_right_hand_midi(const DrillSpec& spec,
+                                       const ChordQuestionCore& core,
+                                       int bass_midi,
+                                       const std::optional<int>& previous_top_midi) {
   std::vector<int> base_right_midi;
   base_right_midi.reserve(core.right_degrees.size());
   for (int degree_value : core.right_degrees) {
@@ -216,33 +219,75 @@ std::vector<int> voice_right_hand_midi(const ChordQuestionCore& core, int bass_m
   }
 
   constexpr int kRightTarget = 60; // C4
-  std::vector<int> chosen_right = base_right_midi;
-  double best_distance = std::numeric_limits<double>::infinity();
-  for (int k = -1; k <= 1; ++k) {
-    std::vector<int> candidate;
-    candidate.reserve(base_right_midi.size());
-    for (int value : base_right_midi) {
-      candidate.push_back(value + 12 * k);
+  const bool continuity = drills::param_flag(spec, "chord_voice_leading_continuity", false);
+
+  std::vector<int> best_voicing = base_right_midi;
+  auto evaluate_candidate = [&](const std::vector<int>& candidate) {
+    if (continuity && previous_top_midi.has_value() && !candidate.empty()) {
+      double top_gap = std::abs(candidate.back() - previous_top_midi.value());
+      double center_penalty =
+          std::abs(center_of_mass(candidate) - static_cast<double>(kRightTarget)) * 0.1;
+      return top_gap + center_penalty;
     }
-    double distance = std::abs(center_of_mass(candidate) - static_cast<double>(kRightTarget));
-    if (distance < best_distance) {
-      best_distance = distance;
-      chosen_right = candidate;
+    return std::abs(center_of_mass(candidate) - static_cast<double>(kRightTarget));
+  };
+
+  double best_score = std::numeric_limits<double>::infinity();
+  std::vector<int> candidate;
+  candidate.reserve(base_right_midi.size());
+
+  for (int global_shift = -2; global_shift <= 2; ++global_shift) {
+    candidate = base_right_midi;
+    for (int& value : candidate) {
+      value += 12 * global_shift;
+    }
+
+    std::vector<int> realised;
+    realised.reserve(candidate.size());
+    int previous = bass_midi;
+    bool valid = true;
+    for (int midi : candidate) {
+      while (midi <= previous) {
+        midi += 12;
+        if (midi > 127) {
+          valid = false;
+          break;
+        }
+      }
+      if (!valid) {
+        break;
+      }
+      midi = drills::clamp_to_range(midi, 0, 127);
+      realised.push_back(midi);
+      previous = midi;
+    }
+    if (!valid || realised.size() != candidate.size()) {
+      continue;
+    }
+
+    double score = evaluate_candidate(realised);
+    if (score < best_score) {
+      best_score = score;
+      best_voicing = std::move(realised);
     }
   }
 
-  std::vector<int> right_midi;
-  right_midi.reserve(chosen_right.size());
+  if (best_score < std::numeric_limits<double>::infinity()) {
+    return best_voicing;
+  }
+
+  std::vector<int> fallback;
+  fallback.reserve(base_right_midi.size());
   int previous = bass_midi;
-  for (int midi : chosen_right) {
+  for (int midi : base_right_midi) {
     while (midi <= previous) {
       midi += 12;
     }
     midi = drills::clamp_to_range(midi, 0, 127);
-    right_midi.push_back(midi);
+    fallback.push_back(midi);
     previous = midi;
   }
-  return right_midi;
+  return fallback;
 }
 
 int find_voicing_index(const std::vector<ear::ChordVoicingEngine::RightHandPattern>& options,
