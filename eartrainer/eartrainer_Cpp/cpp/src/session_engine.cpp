@@ -44,20 +44,6 @@ std::string factory_family_for(const std::string& kind) {
   return kind;
 }
 
-std::string catalog_basename_for(const std::string& kind) {
-  const auto family = factory_family_for(kind);
-  if (family == "note") {
-    return "degree";
-  }
-  if (family == "melody") {
-    return "melody";
-  }
-  if (family == "chord" || family == "chord_sustain") {
-    return "chord";
-  }
-  return family;
-}
-
 DrillFactory& ensure_factory() {
   static std::once_flag flag;
   auto& factory = DrillFactory::instance();
@@ -398,6 +384,8 @@ public:
   void set_level(const std::string& session_id, int level, int tier) override;
 
   std::string level_catalog_overview(const std::string& session_id) override;
+  
+  std::string level_catalog_levels(const std::string& session_id) override;
 
   Next submit_result(const std::string& session_id, const ResultReport& report) override {
     auto& session = get_session(session_id);
@@ -754,9 +742,8 @@ std::string SessionEngineImpl::create_level_inspector_session(const SessionSpec&
     resources_dir = std::filesystem::path("eartrainer/eartrainer_Cpp/resources");
   }
 
-  const auto catalog_name = catalog_basename_for(spec.drill_kind);
   session.level_inspector =
-      std::make_unique<LevelInspector>(resources_dir, catalog_name, spec.seed);
+      std::make_unique<LevelInspector>(resources_dir, "all_builtin", spec.seed);
 
   if (session.inspector_level.has_value() && session.inspector_tier.has_value()) {
     try {
@@ -811,6 +798,14 @@ std::string SessionEngineImpl::level_catalog_overview(const std::string& session
     throw std::runtime_error("Level catalog overview only available in level inspector mode");
   }
   return session.level_inspector->overview();
+}
+
+std::string SessionEngineImpl::level_catalog_levels(const std::string& session_id) {
+  auto& session = get_session(session_id);
+  if (session.mode != SessionMode::LevelInspector || !session.level_inspector) {
+    throw std::runtime_error("Level catalog overview only available in level inspector mode");
+  }
+  return session.level_inspector->levels_summary();
 }
 
 SessionEngine::Next SessionEngineImpl::next_question_manual(const std::string& session_id,

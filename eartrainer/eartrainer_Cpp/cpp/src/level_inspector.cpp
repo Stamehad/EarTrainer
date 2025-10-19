@@ -26,14 +26,7 @@ struct CatalogAccess {
   const std::vector<DrillSpec>& (*drills_for_level)(int);
 };
 
-std::string normalize_catalog_key(const std::string& key) {
-  if (key == "degree") return "degree_levels";
-  if (key == "melody") return "melody_levels";
-  if (key == "chord") return "chord_levels";
-  return key;
-}
-
-const CatalogAccess& resolve_catalog(const std::string& key) {
+const std::array<CatalogAccess, 3>& builtin_catalogs() {
   static const std::array<CatalogAccess, 3> catalogs = {{
       {ear::builtin::DegreeLevels::name,
        ear::builtin::DegreeLevels::known_levels,
@@ -45,13 +38,45 @@ const CatalogAccess& resolve_catalog(const std::string& key) {
        ear::builtin::ChordLevels::known_levels,
        ear::builtin::ChordLevels::drills_for_level},
   }};
-  const std::string normalized = normalize_catalog_key(key);
-  for (const auto& catalog : catalogs) {
-    if (normalized == catalog.canonical) {
+  return catalogs;
+}
+
+const CatalogAccess& resolve_catalog(const std::string& key) {
+  for (const auto& catalog : builtin_catalogs()) {
+    if (key == catalog.canonical) {
+      return catalog;
+    }
+    if ((key == "degree") && catalog.canonical == ear::builtin::DegreeLevels::name) {
+      return catalog;
+    }
+    if ((key == "melody") && catalog.canonical == ear::builtin::MelodyLevels::name) {
+      return catalog;
+    }
+    if ((key == "chord" || key == "chord_sustain") &&
+        catalog.canonical == ear::builtin::ChordLevels::name) {
       return catalog;
     }
   }
   throw std::runtime_error("LevelInspector: unknown builtin catalog '" + key + "'");
+}
+
+void append_catalog_entries(const CatalogAccess& catalog,
+                            std::vector<LevelInspector::DrillEntry>& entries,
+                            std::map<int, std::map<int, std::vector<std::size_t>>>& index) {
+  for (int level : catalog.known_levels()) {
+    const auto& drills = catalog.drills_for_level(level);
+    if (drills.empty()) {
+      continue;
+    }
+    for (std::size_t i = 0; i < drills.size(); ++i) {
+      LevelInspector::DrillEntry entry;
+      entry.spec = drills[i];
+      entry.tier = static_cast<int>(i);
+      const std::size_t idx = entries.size();
+      entries.push_back(entry);
+      index[level][entry.tier].push_back(idx);
+    }
+  }
 }
 
 } // namespace
@@ -71,23 +96,19 @@ void LevelInspector::load_catalog() {
   entries_.clear();
   index_.clear();
 
-  const auto& catalog = resolve_catalog(catalog_basename_);
-  catalog_basename_ = normalize_catalog_key(catalog_basename_);
-  catalog_display_name_ = std::string(catalog.canonical);
+  const bool load_all = catalog_basename_.empty() || catalog_basename_ == "all" ||
+                        catalog_basename_ == "builtin" ||
+                        catalog_basename_ == "all_builtin";
 
-  for (int level : catalog.known_levels()) {
-    const auto& drills = catalog.drills_for_level(level);
-    if (drills.empty()) {
-      continue;
+  if (load_all) {
+    catalog_display_name_ = "builtin";
+    for (const auto& catalog : builtin_catalogs()) {
+      append_catalog_entries(catalog, entries_, index_);
     }
-    for (std::size_t i = 0; i < drills.size(); ++i) {
-      DrillEntry drill_entry;
-      drill_entry.spec = drills[i];
-      drill_entry.tier = static_cast<int>(i);
-      const std::size_t idx = entries_.size();
-      entries_.push_back(drill_entry);
-      index_[level][drill_entry.tier].push_back(idx);
-    }
+  } else {
+    const auto& catalog = resolve_catalog(catalog_basename_);
+    catalog_display_name_ = std::string(catalog.canonical);
+    append_catalog_entries(catalog, entries_, index_);
   }
 
   for (auto& [level, tiers] : index_) {
@@ -127,6 +148,32 @@ std::string LevelInspector::overview() const {
       oss << "]";
     }
     oss << "\n";
+  }
+  return oss.str();
+}
+
+std::string LevelInspector::levels_summary() const {
+  if (index_.empty()) {
+    return "Levels: (none)";
+  }
+  std::ostringstream oss;
+  oss << "Levels: ";
+  bool first_level = true;
+  for (const auto& [level, tiers] : index_) {
+    if (!first_level) {
+      oss << ", ";
+    }
+    first_level = false;
+    oss << level << " (";
+    bool first_tier = true;
+    for (const auto& [tier, _] : tiers) {
+      if (!first_tier) {
+        oss << ",";
+      }
+      first_tier = false;
+      oss << tier;
+    }
+    oss << ")";
   }
   return oss.str();
 }

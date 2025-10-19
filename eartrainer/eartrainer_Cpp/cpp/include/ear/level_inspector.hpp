@@ -18,6 +18,7 @@ public:
                  std::uint64_t seed = 1);
 
   std::string overview() const;
+  std::string levels_summary() const;
   std::vector<int> known_levels() const;
   std::vector<int> tiers_for_level(int level) const;
 
@@ -28,11 +29,13 @@ public:
   QuestionBundle next();
 
 private:
+public:
   struct DrillEntry {
     DrillSpec spec;
     int tier = 0;
   };
 
+private:
   struct Slot {
     std::string id;
     DrillSpec spec;

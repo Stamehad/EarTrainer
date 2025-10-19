@@ -44,6 +44,15 @@ class SessionEngine:
         payload = self._engine.session_assist(session_id, kind)
         return models.AssistBundle.from_json(payload)
 
+    def set_level(self, session_id: str, level: int, tier: int) -> None:
+        self._engine.set_level(session_id, int(level), int(tier))
+
+    def level_catalog_overview(self, session_id: str) -> str:
+        return str(self._engine.level_catalog_overview(session_id))
+
+    def level_catalog_levels(self, session_id: str) -> str:
+        return str(self._engine.level_catalog_levels(session_id))
+
     def submit_result(self, session_id: str, report: models.ResultReport) -> Next:
         payload = self._engine.submit_result(session_id, report.to_json())
         if "question" in payload:
