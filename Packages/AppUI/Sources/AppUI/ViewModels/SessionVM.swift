@@ -13,6 +13,25 @@ public final class SessionViewModel: ObservableObject {
         case results
     }
 
+    public enum AnswerInputMode: String, CaseIterable, Identifiable {
+        case keypad3x3
+        case keyboardLinear
+        case ringPad
+
+        public var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .keypad3x3:
+                return "Keypad 3×3"
+            case .keyboardLinear:
+                return "Linear Keyboard"
+            case .ringPad:
+                return "Ring Pad"
+            }
+        }
+    }
+
     @Published public private(set) var route: Route = .entrance
     @Published public var spec: SessionSpec
     @Published public private(set) var currentQuestion: QuestionEnvelope?
@@ -22,6 +41,7 @@ public final class SessionViewModel: ObservableObject {
     @Published public var errorBanner: String?
     @Published public private(set) var isProcessing: Bool = false
     @Published public private(set) var inspectorOptions: [LevelCatalogEntry] = []
+    @Published public var answerInputMode: AnswerInputMode = .keypad3x3
 
     private let engine: SessionEngine
     private let profileName: String
@@ -106,10 +126,36 @@ public final class SessionViewModel: ObservableObject {
         }
     }
 
+    public func submit(answer: TypedPayload, isCorrect: Bool, latencyMs: Int = 3_000) {
+        guard !isProcessing, let question = currentQuestion else { return }
+        perform {
+            let report = buildReport(
+                for: question.bundle,
+                answer: answer,
+                isCorrect: isCorrect,
+                latencyMs: latencyMs,
+                autoSubmit: false
+            )
+            let response = try engine.submit(report)
+            questionsAnswered += 1
+            if let response {
+                handle(response: response, delay: 0.5)
+            } else {
+                currentQuestion = nil
+            }
+        }
+    }
+
     public func submit(latencyMs: Int = 1_000) {
         guard !isProcessing, let question = currentQuestion else { return }
         perform {
-            let report = buildReport(for: question.bundle, latencyMs: latencyMs)
+            let report = buildReport(
+                for: question.bundle,
+                answer: question.bundle.correctAnswer,
+                isCorrect: true,
+                latencyMs: latencyMs,
+                autoSubmit: true
+            )
             let response = try engine.submit(report)
             questionsAnswered += 1
             if let response {
@@ -349,7 +395,20 @@ public final class SessionViewModel: ObservableObject {
         }
     }
 
-    private func handle(response: EngineResponse) {
+    private func handle(response: EngineResponse, delay: TimeInterval = 0) {
+        guard delay <= 0 else {
+            Task { [weak self] in
+                let nanoseconds = UInt64(max(delay, 0) * 1_000_000_000)
+                try await Task.sleep(nanoseconds: nanoseconds)
+                await self?.apply(response: response)
+            }
+            return
+        }
+        apply(response: response)
+    }
+
+    @MainActor
+    private func apply(response: EngineResponse) {
         switch response {
         case let .question(envelope):
             currentQuestion = envelope
@@ -457,7 +516,13 @@ public final class SessionViewModel: ObservableObject {
         }
     }
 
-    private func buildReport(for bundle: QuestionBundle, latencyMs: Int) -> ResultReport {
+    private func buildReport(
+        for bundle: QuestionBundle,
+        answer: TypedPayload,
+        isCorrect: Bool,
+        latencyMs: Int,
+        autoSubmit: Bool
+    ) -> ResultReport {
         let metrics = ResultMetrics(
             rtMs: latencyMs,
             attempts: 1,
@@ -465,14 +530,18 @@ public final class SessionViewModel: ObservableObject {
             assistsUsed: [:],
             firstInputRtMs: latencyMs
         )
-        let clientInfo: [String: JSONValue] = [
-            "auto_submit": .bool(true),
-            "latency_ms": .int(latencyMs)
+        var clientInfo: [String: JSONValue] = [
+            "auto_submit": .bool(autoSubmit),
+            "latency_ms": .int(latencyMs),
+            "is_correct": .bool(isCorrect)
         ]
+        if !autoSubmit {
+            clientInfo["input_mode"] = .string(answerInputMode.rawValue)
+        }
         return ResultReport(
             questionId: bundle.questionId,
-            finalAnswer: bundle.correctAnswer,
-            correct: true,
+            finalAnswer: answer,
+            correct: isCorrect,
             metrics: metrics,
             attempts: [],
             clientInfo: clientInfo

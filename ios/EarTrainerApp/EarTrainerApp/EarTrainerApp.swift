@@ -22,6 +22,12 @@ struct EarTrainerApp: App {
                 .environmentObject(viewModel)
         }
     }
+    
+//    var body: some Scene {
+//        WindowGroup {
+//            DegreeKeyboardLinear_Harness()
+//        }
+//    }
 }
 
 #Preview("Entrance") {

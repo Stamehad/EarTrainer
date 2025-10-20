@@ -3,106 +3,488 @@ import Bridge
 
 public struct GameView: View {
     @EnvironmentObject private var viewModel: SessionViewModel
-    @State private var questionStartedAt = Date()
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
+    @State private var answerContext: AnswerContext?
+    @State private var answerSlots: [Degree?] = []
+    @State private var answerCursor: Int = 0
+    @State private var submissionResult: SubmissionResult?
+    @State private var inputLocked = false
+    @State private var preparedQuestion: QuestionEnvelope?
+    @State private var slotStates: [SlotState] = []
+
+    private let defaultLatencyMs = 3_000
 
     public init() {}
 
     public var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             if let envelope = viewModel.currentQuestion {
-                VStack(spacing: 16) {
-                    HStack {
-                        Button("Play Orientation") {
-                            viewModel.playOrientationPrompt()
-                        }
-                        .buttonStyle(.bordered)
-                        Spacer()
-                    }
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Question ID: \(envelope.bundle.questionId)")
-                                .font(.headline)
-                            if let questionJSON = viewModel.questionJSON {
-                                DebugPanel(title: "Question Highlights", content: questionJSON)
-                            }
-                            if let debugJSON = viewModel.debugJSON, !debugJSON.isEmpty {
-                                DebugPanel(title: "Engine Diagnostic Summary", content: debugJSON)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    HStack(spacing: 16) {
-                        if viewModel.currentQuestion?.bundle.prompt?.midiClip != nil {
-                            Button("Replay Audio") {
-                                viewModel.replayPromptAudio()
-                            }
-                            .buttonStyle(.bordered)
-                        }
-
-                        Button("Submit Auto Result") {
-                            submitAnswer()
-                        }
-                        .buttonStyle(.borderedProminent)
-
-                        Button("Finish Session") {
-                            viewModel.finish()
-                        }
-                        .buttonStyle(.bordered)
-
-                        Spacer()
-                    }
-                }
+                questionContent(for: envelope)
             } else {
-                if #available(iOS 17, macOS 14, *) {
-                    ContentUnavailableView(label: {
-                        Label("No question", systemImage: "questionmark")
-                    }, description: {
-                        Text("Tap Back to return to the entrance screen.")
-                    })
-                } else {
-                    Text("No question available")
-                        .foregroundStyle(.secondary)
-                }
-                Button("Back to Entrance") {
-                    viewModel.resetToEntrance()
-                }
+                noQuestionState
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding()
+        .background(Color.appBackground)
         .onAppear {
-            questionStartedAt = Date()
+            syncQuestionStateIfNeeded()
         }
-        .onChange(of: viewModel.currentQuestion?.bundle.questionId) { _ in
-            questionStartedAt = Date()
+        .onChange(of: viewModel.currentQuestion) { _ in
+            syncQuestionStateIfNeeded()
         }
     }
 
-    private func submitAnswer() {
-        let latency = Int(Date().timeIntervalSince(questionStartedAt) * 1000)
-        viewModel.submit(latencyMs: max(latency, 0))
+    private func questionContent(for envelope: QuestionEnvelope) -> some View {
+        VStack(spacing: 20) {
+            header(for: envelope)
+            if let context = answerContext {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(context.instruction)
+                        .font(.headline)
+                    AnswerSlotsView(
+                        slots: answerSlots,
+                        states: slotStates,
+                        cursor: answerCursor,
+                        result: submissionResult
+                    )
+                }
+                if !answerSlots.isEmpty {
+                    HStack {
+                        Button("Clear") {
+                            clearAnswer()
+                        }
+                        .disabled(inputLocked || answerSlots.allSatisfy { $0 == nil })
+                        Spacer()
+                    }
+                }
+                Spacer(minLength: 12)
+                bottomInputSurface
+            } else {
+                unsupportedQuestionView(for: envelope)
+                Spacer()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private func header(for envelope: QuestionEnvelope) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 16) {
+                Button {
+                    viewModel.playOrientationPrompt()
+                } label: {
+                    Image(systemName: "tuningfork")
+                        .imageScale(.large)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Play orientation prompt")
+
+                if envelope.bundle.prompt?.midiClip != nil {
+                    Button {
+                        viewModel.replayPromptAudio()
+                    } label: {
+                        Image(systemName: "music.note")
+                            .imageScale(.large)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("Replay question audio")
+                }
+
+                Spacer()
+
+                Button("Finish Session") {
+                    viewModel.finish()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    private var bottomInputSurface: some View {
+        VStack(spacing: 12) {
+            Group {
+                switch currentInputMode {
+                case .keypad3x3:
+                    DegreeGridKeypad(
+                        onDegree: handleDegreeSelection,
+                        onBackspace: handleBackspace,
+                        onAdvance: handleAdvance
+                    )
+                    .frame(height: 260)
+                case .keyboardLinear:
+                    DegreeLinearKeyboard(onTap: handleDegreeSelection)
+                        .frame(height: 180)
+                case .ringPad:
+                    DegreeRingPad(onTap: handleDegreeSelection)
+                        .frame(height: 300)
+                }
+            }
+            .disabled(inputLocked || answerContext == nil)
+        }
+    }
+
+    private var noQuestionState: some View {
+        VStack(spacing: 16) {
+            if #available(iOS 17, macOS 14, *) {
+                ContentUnavailableView(label: {
+                    Label("No question", systemImage: "questionmark")
+                }, description: {
+                    Text("Tap Back to return to the entrance screen.")
+                })
+            } else {
+                Text("No question available")
+                    .foregroundStyle(.secondary)
+            }
+            Button("Back to Entrance") {
+                viewModel.resetToEntrance()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+
+    private func unsupportedQuestionView(for envelope: QuestionEnvelope) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("This question type isn’t supported yet.")
+                .font(.headline)
+            Text("Answer type: \(envelope.bundle.correctAnswer.type)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var currentInputMode: SessionViewModel.AnswerInputMode {
+        if verticalSizeClass == .compact {
+            return .keyboardLinear
+        }
+        return viewModel.answerInputMode
+    }
+
+    private func clearAnswer() {
+        guard !answerSlots.isEmpty else { return }
+        submissionResult = nil
+        answerSlots = Array(repeating: nil, count: answerSlots.count)
+        answerCursor = 0
+        inputLocked = false
+        slotStates = Array(repeating: .empty, count: answerSlots.count)
+    }
+
+    private func handleDegreeSelection(_ degree: Degree) {
+        guard !inputLocked,
+              !viewModel.isProcessing,
+              let context = answerContext,
+              !answerSlots.isEmpty else { return }
+        submissionResult = nil
+
+        switch currentInputMode {
+        case .keypad3x3:
+            setDegree(degree, at: answerCursor, context: context)
+            if answerCursor < answerSlots.count - 1 {
+                answerCursor += 1
+            }
+        case .keyboardLinear, .ringPad:
+            if let targetIndex = answerSlots.firstIndex(where: { $0 == nil }) {
+                setDegree(degree, at: targetIndex, context: context)
+                answerCursor = min(targetIndex + 1, answerSlots.count - 1)
+            } else if let lastIndex = answerSlots.indices.last {
+                setDegree(degree, at: lastIndex, context: context)
+                answerCursor = lastIndex
+            }
+        }
+        evaluateIfReady(using: context)
+    }
+
+    private func handleBackspace() {
+        guard currentInputMode == .keypad3x3,
+              !inputLocked,
+              !answerSlots.isEmpty else { return }
+        submissionResult = nil
+
+        if answerSlots[answerCursor] != nil {
+            answerSlots[answerCursor] = nil
+            if slotStates.indices.contains(answerCursor) {
+                slotStates[answerCursor] = .empty
+            }
+        } else if answerCursor > 0 {
+            answerCursor -= 1
+            answerSlots[answerCursor] = nil
+            if slotStates.indices.contains(answerCursor) {
+                slotStates[answerCursor] = .empty
+            }
+        }
+    }
+
+    private func handleAdvance() {
+        guard currentInputMode == .keypad3x3,
+              !inputLocked,
+              !answerSlots.isEmpty else { return }
+        submissionResult = nil
+        answerCursor = min(answerCursor + 1, answerSlots.count - 1)
+    }
+
+    private func evaluateIfReady(using context: AnswerContext) {
+        guard answerSlots.allSatisfy({ $0 != nil }) else { return }
+        submitAnswer(for: context)
+    }
+
+    private func submitAnswer(for context: AnswerContext) {
+        guard !inputLocked else { return }
+        let zeroIndexed = answerSlots.compactMap { $0?.zeroIndexedValue }
+        guard zeroIndexed.count == context.expectedCount,
+              let payload = context.makePayload(from: zeroIndexed) else { return }
+        let isCorrect = zeroIndexed == context.expectedDegrees
+        submissionResult = isCorrect ? .correct : .incorrect
+        inputLocked = true
+        viewModel.submit(
+            answer: payload,
+            isCorrect: isCorrect,
+            latencyMs: defaultLatencyMs
+        )
+    }
+
+    private func setDegree(_ degree: Degree, at index: Int, context: AnswerContext) {
+        guard answerSlots.indices.contains(index),
+              slotStates.indices.contains(index) else { return }
+        answerSlots[index] = degree
+        let expected = context.expectedDegrees[index]
+        let isCorrect = degree.zeroIndexedValue == expected
+        slotStates[index] = isCorrect ? .correct : .incorrect
+    }
+
+    private func syncQuestionStateIfNeeded() {
+        guard let envelope = viewModel.currentQuestion else {
+            preparedQuestion = nil
+            answerContext = nil
+            answerSlots = []
+            answerCursor = 0
+            submissionResult = nil
+            inputLocked = false
+            slotStates = []
+            return
+        }
+
+        guard preparedQuestion != envelope else { return }
+        preparedQuestion = envelope
+        let context = buildAnswerContext(from: envelope)
+        answerContext = context
+        if let context {
+            answerSlots = Array(repeating: nil, count: context.expectedCount)
+            slotStates = Array(repeating: .empty, count: context.expectedCount)
+        } else {
+            answerSlots = []
+            slotStates = []
+        }
+        answerCursor = 0
+        submissionResult = nil
+        inputLocked = false
+    }
+
+    private func buildAnswerContext(from envelope: QuestionEnvelope) -> AnswerContext? {
+        let answer = envelope.bundle.correctAnswer
+        switch answer.type {
+        case "degree":
+            guard case let .object(values) = answer.payload,
+                  let degreeValue = values["degree"],
+                  case let .int(rawValue) = degreeValue else {
+                return nil
+            }
+            return AnswerContext(
+                type: answer.type,
+                expectedDegrees: [rawValue],
+                singleValueKey: "degree",
+                instruction: "Identify the scale degree."
+            )
+        case "chord_degree":
+            guard case let .object(values) = answer.payload,
+                  let degreeValue = values["root_degree"],
+                  case let .int(rawValue) = degreeValue else {
+                return nil
+            }
+            return AnswerContext(
+                type: answer.type,
+                expectedDegrees: [rawValue],
+                singleValueKey: "root_degree",
+                instruction: "Identify the chord’s scale degree."
+            )
+        case "melody_notes":
+            guard case let .object(values) = answer.payload,
+                  let degreesValue = values["degrees"],
+                  case let .array(items) = degreesValue else {
+                return nil
+            }
+            let degrees = items.compactMap { item -> Int? in
+                if case let .int(value) = item {
+                    return value
+                }
+                return nil
+            }
+            return AnswerContext(
+                type: answer.type,
+                expectedDegrees: degrees,
+                singleValueKey: nil,
+                instruction: "Enter the degrees for each note in the melody."
+            )
+        default:
+            return nil
+        }
     }
 }
 
-private struct DebugPanel: View {
-    let title: String
-    let content: String
-    
+// MARK: - Supporting Types
+
+private struct AnswerSlotsView: View {
+    let slots: [Degree?]
+    let states: [GameView.SlotState]
+    let cursor: Int
+    let result: GameView.SubmissionResult?
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-            ScrollView(.vertical, showsIndicators: true) {
-                Text(content)
-                    .font(.system(.footnote, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                ForEach(Array(slots.enumerated()), id: \.offset) { index, slot in
+                    slotView(for: slot, index: index)
+                }
             }
-            .frame(maxHeight: 220)
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.panelBackground)
+            .frame(maxWidth: .infinity, alignment: .center)
+            if let result {
+                ResultBadge(result: result)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: slots)
+        .animation(.easeInOut(duration: 0.15), value: result)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func slotView(for slot: Degree?, index: Int) -> some View {
+        let size: CGFloat = 54
+        return RoundedRectangle(cornerRadius: 12)
+            .fill(backgroundColor(for: index, slot: slot))
+            .frame(width: size, height: size)
+            .overlay(
+                Text(slot?.label ?? "_")
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(borderColor(for: index), lineWidth: 2)
+            )
+    }
+
+    private func backgroundColor(for index: Int, slot: Degree?) -> Color {
+        if let result = result {
+            return result.tint.opacity(0.18)
+        }
+        switch state(for: index) {
+        case .correct:
+            return Color.green.opacity(0.18)
+        case .incorrect:
+            return Color.red.opacity(0.18)
+        case .empty:
+            return slot == nil ? Color.secondary.opacity(0.08) : Color.secondary.opacity(0.18)
+        }
+    }
+
+    private func borderColor(for index: Int) -> Color {
+        if let result = result {
+            return result.tint
+        }
+        switch state(for: index) {
+        case .correct:
+            return Color.green
+        case .incorrect:
+            return Color.red
+        case .empty:
+            return cursor == index ? Color.accentColor : Color.secondary.opacity(0.35)
+        }
+    }
+
+    private func state(for index: Int) -> GameView.SlotState {
+        guard states.indices.contains(index) else { return .empty }
+        return states[index]
+    }
+}
+
+private struct ResultBadge: View {
+    let result: GameView.SubmissionResult
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: result.systemImage)
+                .foregroundStyle(result.tint)
+            Text(result.message)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(result.tint)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+extension GameView {
+    fileprivate enum SubmissionResult: Equatable {
+        case correct
+        case incorrect
+
+        var isCorrect: Bool {
+            switch self {
+            case .correct:
+                return true
+            case .incorrect:
+                return false
+            }
+        }
+
+        var tint: Color {
+            isCorrect ? .green : .red
+        }
+
+        var message: String {
+            isCorrect ? "Correct" : "Incorrect"
+        }
+
+        var systemImage: String {
+            isCorrect ? "checkmark.circle.fill" : "xmark.circle.fill"
+        }
+    }
+
+    fileprivate enum SlotState: Equatable {
+        case empty
+        case correct
+        case incorrect
+    }
+
+    fileprivate struct AnswerContext: Equatable {
+        let type: String
+        let expectedDegrees: [Int]
+        let singleValueKey: String?
+        let instruction: String
+
+        var expectedCount: Int {
+            max(expectedDegrees.count, 1)
+        }
+
+        func makePayload(from zeroIndexedDegrees: [Int]) -> TypedPayload? {
+            switch type {
+            case "degree", "chord_degree":
+                guard let key = singleValueKey,
+                      let value = zeroIndexedDegrees.first else { return nil }
+                return TypedPayload(
+                    type: type,
+                    payload: .object([key: .int(value)])
+                )
+            case "melody_notes":
+                let arrayValue = zeroIndexedDegrees.map { JSONValue.int($0) }
+                return TypedPayload(
+                    type: type,
+                    payload: .object(["degrees": .array(arrayValue)])
+                )
+            default:
+                return nil
+            }
         }
     }
 }
