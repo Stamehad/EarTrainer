@@ -211,6 +211,22 @@ public struct SessionSpec: Codable, Equatable {
     }
 }
 
+public struct LevelCatalogEntry: Codable, Equatable, Identifiable {
+    public var level: Int
+    public var tier: Int
+    public var label: String
+
+    public init(level: Int, tier: Int, label: String) {
+        self.level = level
+        self.tier = tier
+        self.label = label
+    }
+
+    public var id: String {
+        "\(level)-\(tier)"
+    }
+}
+
 public struct TypedPayload: Codable, Equatable {
     public var type: String
     public var payload: JSONValue

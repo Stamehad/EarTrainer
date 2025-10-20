@@ -21,6 +21,7 @@ public final class SessionViewModel: ObservableObject {
     @Published public private(set) var debugJSON: String?
     @Published public var errorBanner: String?
     @Published public private(set) var isProcessing: Bool = false
+    @Published public private(set) var inspectorOptions: [LevelCatalogEntry] = []
 
     private let engine: SessionEngine
     private let profileName: String
@@ -135,6 +136,18 @@ public final class SessionViewModel: ObservableObject {
         questionJSON = nil
         debugJSON = nil
         route = .entrance
+    }
+
+    // MARK: - Level Inspector
+
+    public func loadInspectorOptionsIfNeeded() {
+        guard inspectorOptions.isEmpty else { return }
+        do {
+            let entries = try engine.levelCatalogEntries(spec)
+            inspectorOptions = entries
+        } catch {
+            presentError(error)
+        }
     }
 
     public func exitApplication() {

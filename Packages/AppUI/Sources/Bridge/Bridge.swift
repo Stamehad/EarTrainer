@@ -13,6 +13,7 @@ public protocol SessionEngine {
     var hasActiveSession: Bool { get }
     func serializeCheckpoint() throws -> Checkpoint?
     func restore(checkpoint: Checkpoint) throws
+    func levelCatalogEntries(_ spec: SessionSpec) throws -> [LevelCatalogEntry]
 }
 
 public final class Bridge: SessionEngine {
@@ -107,6 +108,29 @@ public final class Bridge: SessionEngine {
         let payload = try encode(checkpoint)
         try payload.withCString { pointer in
             try callStatus { deserialize_checkpoint(pointer) }
+        }
+    }
+
+    public func levelCatalogEntries(_ spec: SessionSpec) throws -> [LevelCatalogEntry] {
+        let payload = try encode(spec)
+        guard let response = try payload.withCString({ pointer in
+            try callString { level_catalog_entries(pointer) }
+        }) else {
+            throw BridgeError.missingData("Level catalog entries")
+        }
+        struct CatalogEnvelope: Decodable {
+            let status: String
+            let entries: [LevelCatalogEntry]?
+            let message: String?
+        }
+        let envelope = try decode(CatalogEnvelope.self, from: response)
+        switch envelope.status {
+        case "ok":
+            return envelope.entries ?? []
+        case "error":
+            throw BridgeError.engineError(envelope.message ?? "Engine error")
+        default:
+            throw BridgeError.missingData("Level catalog status")
         }
     }
 

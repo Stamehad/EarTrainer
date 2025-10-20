@@ -20,28 +20,40 @@ final class NoopSessionEngine: SessionEngine {
     func serializeProfile() throws -> ProfileSnapshot {
         ProfileSnapshot(name: "preview", updatedAt: Date())
     }
+    func levelCatalogEntries(_ spec: SessionSpec) throws -> [LevelCatalogEntry] {
+        [
+            LevelCatalogEntry(level: 1, tier: 0, label: "1-0: PREVIEW_NOTE"),
+            LevelCatalogEntry(level: 1, tier: 1, label: "1-1: PREVIEW_CHORD"),
+            LevelCatalogEntry(level: 2, tier: 0, label: "2-0: PREVIEW_MELODY")
+        ]
+    }
     var hasActiveSession: Bool { false }
 }
 
 extension SessionViewModel {
-    /// The safest default: does not auto-play audio, does not touch disk.
     @MainActor
-    public static func preview() -> SessionViewModel {
-        let vm = SessionViewModel(engine: NoopSessionEngine(), profileName: "preview")
-        // Seed any UI state you want to see in Canvas:
-        vm.resetToEntrance()        // .entrance route
-        // You can also set vm.route = .game or prefill vm.summary for results view previews.
+    private static func makePreviewViewModel(startingRoute: Route? = nil) -> SessionViewModel {
+        let useNoop = ProcessInfo.processInfo.environment["PREVIEW_USE_NOOP_ENGINE"] == "1"
+        let engine: SessionEngine = useNoop ? NoopSessionEngine() : Bridge()
+        let vm = SessionViewModel(engine: engine, profileName: "preview")
+        vm.resetToEntrance()
+        vm.loadInspectorOptionsIfNeeded()
+        if let route = startingRoute {
+            vm.setPreviewRoute(route)
+        }
         return vm
     }
 
-    /// Example variants you can use to preview specific screens:
+    /// Default preview used by EntranceView.
+    @MainActor
+    public static func preview() -> SessionViewModel {
+        makePreviewViewModel(startingRoute: nil)
+    }
+
+    /// Example variant you can use to preview specific screens.
     @MainActor
     public static func previewGame() -> SessionViewModel {
-        let vm = SessionViewModel(engine: NoopSessionEngine(), profileName: "preview")
-        vm.spec = SessionSpec()     // customize if your GameView reads spec
-        vm.resetToEntrance()
-        vm.setPreviewRoute(.game)
-        return vm
+        makePreviewViewModel(startingRoute: .game)
     }
 }
 #endif

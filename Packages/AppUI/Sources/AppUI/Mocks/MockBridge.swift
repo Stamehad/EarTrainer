@@ -9,6 +9,7 @@ public final class MockBridge: SessionEngine {
     private var questions: [QuestionBundle] = []
     private var currentIndex: Int = 0
     private var sessionIdentifier: String?
+    private var cachedCatalog: [LevelCatalogEntry] = []
 
     public init() {}
 
@@ -100,6 +101,18 @@ public final class MockBridge: SessionEngine {
         currentIndex = 0
         sessionIdentifier = checkpoint.sessionId
         questions = makeQuestions(from: checkpoint.spec)
+    }
+
+    public func levelCatalogEntries(_ spec: SessionSpec) throws -> [LevelCatalogEntry] {
+        if cachedCatalog.isEmpty {
+            cachedCatalog = [
+                LevelCatalogEntry(level: 1, tier: 0, label: "  1-0: MOCK_LEVEL_A"),
+                LevelCatalogEntry(level: 1, tier: 1, label: "  1-1: MOCK_LEVEL_B"),
+                LevelCatalogEntry(level: 2, tier: 0, label: "  2-0: MOCK_LEVEL_C"),
+                LevelCatalogEntry(level: 112, tier: 1, label: "112-1: MOCK_LEVEL_D")
+            ]
+        }
+        return cachedCatalog
     }
 
     private func makeQuestions(from spec: SessionSpec) -> [QuestionBundle] {
