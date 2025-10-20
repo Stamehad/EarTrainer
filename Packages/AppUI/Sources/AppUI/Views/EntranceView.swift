@@ -1,12 +1,32 @@
 import SwiftUI
 
 public struct EntranceView: View {
+    private enum ModeSelection: String, CaseIterable, Identifiable {
+        case adaptive
+        case levelInspector = "level_inspector"
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .adaptive:
+                return "Adaptive"
+            case .levelInspector:
+                return "Level Inspector"
+            }
+        }
+    }
+
+    private let adaptiveTrackLevels: [Int] = [1, 111, 220]
+
     @EnvironmentObject private var viewModel: SessionViewModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var seedText: String = ""
     @State private var tempoText: String = ""
-    @State private var trackLevelsText: String = ""
     @State private var initialFitnessText: String = ""
+    @State private var selectedMode: ModeSelection = .adaptive
+    @State private var inspectorLevelText: String = ""
+    @State private var inspectorTierText: String = ""
 
     public init() {}
 
@@ -30,7 +50,6 @@ public struct EntranceView: View {
             viewModel.bootstrap()
             seedText = String(viewModel.spec.seed)
             tempoText = viewModel.spec.tempoBpm.map(String.init) ?? ""
-            trackLevelsText = viewModel.spec.trackLevels.map(String.init).joined(separator: ", ")
             if case let .double(value) = viewModel.spec.samplerParams["initial_fitness"] {
                 initialFitnessText = String(value)
             } else if case let .int(value) = viewModel.spec.samplerParams["initial_fitness"] {
@@ -38,9 +57,19 @@ public struct EntranceView: View {
             } else {
                 initialFitnessText = ""
             }
+            selectedMode = viewModel.spec.levelInspect ? .levelInspector : .adaptive
+            inspectorLevelText = viewModel.spec.inspectLevel.map(String.init) ?? ""
+            inspectorTierText = viewModel.spec.inspectTier.map(String.init) ?? ""
+            if selectedMode == .adaptive && viewModel.spec.trackLevels != adaptiveTrackLevels {
+                viewModel.spec.trackLevels = adaptiveTrackLevels
+            }
+            syncSpecWithSelectedMode(preserveInspectorValues: true)
         }
         .onChange(of: scenePhase) { newPhase in
             viewModel.handleScenePhase(newPhase)
+        }
+        .onChange(of: selectedMode) { _ in
+            syncSpecWithSelectedMode(preserveInspectorValues: false)
         }
         .overlay(alignment: .top) {
             if let message = viewModel.errorBanner {
@@ -53,6 +82,15 @@ public struct EntranceView: View {
 
     private var entranceForm: some View {
         Form {
+            Section("Mode") {
+                Picker("Mode", selection: $selectedMode) {
+                    ForEach(ModeSelection.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
             Section("Session") {
                 TextField("Drill Kind", text: Binding(
                     get: { viewModel.spec.drillKind },
@@ -95,21 +133,11 @@ public struct EntranceView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                Toggle("Adaptive Bout", isOn: Binding(
-                    get: { viewModel.spec.adaptive },
-                    set: { viewModel.spec.adaptive = $0 }
-                ))
                 #if os(iOS)
                 TextField("Tempo BPM (optional)", text: $tempoText)
                     .keyboardType(.numberPad)
                 #else
                 TextField("Tempo BPM (optional)", text: $tempoText)
-                #endif
-                #if os(iOS)
-                TextField("Track Levels (comma-separated)", text: $trackLevelsText)
-                    .textInputAutocapitalization(.never)
-                #else
-                TextField("Track Levels (comma-separated)", text: $trackLevelsText)
                 #endif
                 #if os(iOS)
                 TextField("Initial Fitness (optional)", text: $initialFitnessText)
@@ -123,6 +151,23 @@ public struct EntranceView: View {
                 #else
                 TextField("Seed", text: $seedText)
                 #endif
+            }
+
+            if selectedMode == .levelInspector {
+                Section("Level Inspector") {
+                    #if os(iOS)
+                    TextField("Level", text: $inspectorLevelText)
+                        .keyboardType(.numberPad)
+                    #else
+                    TextField("Level", text: $inspectorLevelText)
+                    #endif
+                    #if os(iOS)
+                    TextField("Tier", text: $inspectorTierText)
+                        .keyboardType(.numberPad)
+                    #else
+                    TextField("Tier", text: $inspectorTierText)
+                    #endif
+                }
             }
 
             Section {
@@ -151,16 +196,57 @@ public struct EntranceView: View {
         } else {
             viewModel.spec.tempoBpm = nil
         }
-        let levels = trackLevelsText
-            .split(separator: ",")
-            .compactMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
-        viewModel.spec.trackLevels = levels
         if let fitness = Double(initialFitnessText) {
             viewModel.spec.samplerParams["initial_fitness"] = .double(fitness)
         } else {
             viewModel.spec.samplerParams.removeValue(forKey: "initial_fitness")
         }
+        switch selectedMode {
+        case .adaptive:
+            viewModel.spec.adaptive = true
+            viewModel.spec.levelInspect = false
+            viewModel.spec.trackLevels = adaptiveTrackLevels
+            viewModel.spec.inspectLevel = nil
+            viewModel.spec.inspectTier = nil
+        case .levelInspector:
+            viewModel.spec.adaptive = false
+            viewModel.spec.levelInspect = true
+            viewModel.spec.trackLevels = []
+            viewModel.spec.inspectLevel = parseInteger(inspectorLevelText)
+            viewModel.spec.inspectTier = parseInteger(inspectorTierText)
+        }
         viewModel.start()
+    }
+
+    private func parseInteger(_ text: String) -> Int? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return Int(trimmed)
+    }
+
+    private func syncSpecWithSelectedMode(preserveInspectorValues: Bool) {
+        switch selectedMode {
+        case .adaptive:
+            viewModel.spec.adaptive = true
+            viewModel.spec.levelInspect = false
+            viewModel.spec.trackLevels = adaptiveTrackLevels
+            viewModel.spec.inspectLevel = nil
+            viewModel.spec.inspectTier = nil
+            if !preserveInspectorValues {
+                inspectorLevelText = ""
+                inspectorTierText = ""
+            }
+        case .levelInspector:
+            viewModel.spec.adaptive = false
+            viewModel.spec.levelInspect = true
+            viewModel.spec.trackLevels = []
+            if !preserveInspectorValues {
+                viewModel.spec.inspectLevel = nil
+                viewModel.spec.inspectTier = nil
+                inspectorLevelText = ""
+                inspectorTierText = ""
+            }
+        }
     }
 
     private func rangeValue(index: Int) -> Int {

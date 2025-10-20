@@ -435,3 +435,12 @@ public final class SessionViewModel: ObservableObject {
     }
 
 }
+
+#if DEBUG
+extension SessionViewModel {
+    @MainActor
+    func setPreviewRoute(_ route: Route) {
+        self.route = route
+    }
+}
+#endif

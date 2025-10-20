@@ -135,6 +135,9 @@ public struct SessionSpec: Codable, Equatable {
     public var seed: Int
     public var adaptive: Bool
     public var trackLevels: [Int]
+    public var levelInspect: Bool
+    public var inspectLevel: Int?
+    public var inspectTier: Int?
 
     public init(
         version: String = "v1",
@@ -148,7 +151,10 @@ public struct SessionSpec: Codable, Equatable {
         samplerParams: [String: JSONValue] = [:],
         seed: Int = 1,
         adaptive: Bool = true,
-        trackLevels: [Int] = [1]
+        trackLevels: [Int] = [1],
+        levelInspect: Bool = false,
+        inspectLevel: Int? = nil,
+        inspectTier: Int? = nil
     ) {
         self.version = version
         self.drillKind = drillKind
@@ -162,6 +168,28 @@ public struct SessionSpec: Codable, Equatable {
         self.seed = seed
         self.adaptive = adaptive
         self.trackLevels = trackLevels
+        self.levelInspect = levelInspect
+        self.inspectLevel = inspectLevel
+        self.inspectTier = inspectTier
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decodeIfPresent(String.self, forKey: .version) ?? "v1"
+        drillKind = try container.decodeIfPresent(String.self, forKey: .drillKind) ?? "interval"
+        key = try container.decodeIfPresent(String.self, forKey: .key) ?? "C major"
+        range = try container.decodeIfPresent([Int].self, forKey: .range) ?? [48, 72]
+        tempoBpm = try container.decodeIfPresent(Int.self, forKey: .tempoBpm)
+        nQuestions = try container.decodeIfPresent(Int.self, forKey: .nQuestions) ?? 5
+        generation = try container.decodeIfPresent(String.self, forKey: .generation) ?? "adaptive"
+        assistancePolicy = try container.decodeIfPresent([String: Int].self, forKey: .assistancePolicy) ?? [:]
+        samplerParams = try container.decodeIfPresent([String: JSONValue].self, forKey: .samplerParams) ?? [:]
+        seed = try container.decodeIfPresent(Int.self, forKey: .seed) ?? 1
+        adaptive = try container.decodeIfPresent(Bool.self, forKey: .adaptive) ?? false
+        trackLevels = try container.decodeIfPresent([Int].self, forKey: .trackLevels) ?? [1]
+        levelInspect = try container.decodeIfPresent(Bool.self, forKey: .levelInspect) ?? false
+        inspectLevel = try container.decodeIfPresent(Int.self, forKey: .inspectLevel)
+        inspectTier = try container.decodeIfPresent(Int.self, forKey: .inspectTier)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -177,6 +205,9 @@ public struct SessionSpec: Codable, Equatable {
         case seed
         case adaptive
         case trackLevels = "track_levels"
+        case levelInspect = "level_inspect"
+        case inspectLevel = "inspect_level"
+        case inspectTier = "inspect_tier"
     }
 }
 

@@ -23,3 +23,8 @@ struct EarTrainerApp: App {
         }
     }
 }
+
+#Preview("Entrance") {
+    EntranceView()
+        .environmentObject(SessionViewModel.preview())
+}
