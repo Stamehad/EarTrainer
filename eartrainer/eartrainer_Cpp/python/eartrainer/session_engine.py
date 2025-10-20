@@ -53,6 +53,10 @@ class SessionEngine:
     def level_catalog_levels(self, session_id: str) -> str:
         return str(self._engine.level_catalog_levels(session_id))
 
+    def level_catalog_entries(self, spec: models.SessionSpec) -> list[models.LevelCatalogEntry]:
+        payload = self._engine.level_catalog_entries(spec.to_json())
+        return [models.LevelCatalogEntry.from_json(entry) for entry in payload]
+
     def submit_result(self, session_id: str, report: models.ResultReport) -> Next:
         payload = self._engine.submit_result(session_id, report.to_json())
         if "question" in payload:

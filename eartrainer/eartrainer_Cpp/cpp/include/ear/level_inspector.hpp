@@ -21,6 +21,7 @@ public:
   std::string levels_summary() const;
   std::vector<int> known_levels() const;
   std::vector<int> tiers_for_level(int level) const;
+  std::vector<LevelCatalogEntry> catalog_entries() const;
 
   void select(int level, int tier);
   bool has_selection() const;

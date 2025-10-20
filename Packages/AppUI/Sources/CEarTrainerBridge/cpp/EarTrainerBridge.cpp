@@ -28,6 +28,7 @@ struct EngineState {
   bool profile_loaded = false;
   bool session_active = false;
   std::size_t questions_answered = 0;
+  std::optional<std::vector<ear::LevelCatalogEntry>> level_catalog_cache;
 };
 
 EngineState& state() {
@@ -39,6 +40,7 @@ ear::SessionEngine& ensure_engine() {
   auto& s = state();
   if (!s.engine) {
     s.engine = ear::make_engine();
+    s.level_catalog_cache.reset();
   }
   return *s.engine;
 }
@@ -258,6 +260,33 @@ char* end_session(void) {
     s.session_id.reset();
     s.last_question.reset();
     return copy_json(make_memory_payload(package));
+  } catch (const std::exception& ex) {
+    return copy_json(error_envelope(ex.what()));
+  }
+}
+
+char* level_catalog_entries(const char* spec_json) {
+  if (!spec_json) {
+    return copy_json(error_envelope("Missing session spec json"));
+  }
+  auto& s = state();
+  std::scoped_lock guard(s.mutex);
+  try {
+    auto json_spec = nlohmann::json::parse(spec_json);
+    ear::SessionSpec spec = ear::bridge::session_spec_from_json(json_spec);
+    auto& engine = ensure_engine();
+    if (!s.level_catalog_cache.has_value()) {
+      s.level_catalog_cache = engine.level_catalog_entries(spec);
+    }
+    nlohmann::json payload = ok_envelope();
+    nlohmann::json entries = nlohmann::json::array();
+    if (s.level_catalog_cache.has_value()) {
+      for (const auto& entry : s.level_catalog_cache.value()) {
+        entries.push_back(ear::bridge::to_json(entry));
+      }
+    }
+    payload["entries"] = std::move(entries);
+    return copy_json(payload);
   } catch (const std::exception& ex) {
     return copy_json(error_envelope(ex.what()));
   }

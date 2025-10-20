@@ -118,6 +118,17 @@ public:
     return engine_->level_catalog_levels(session_id);
   }
 
+  py::object level_catalog_entries(py::object spec_obj) {
+    auto spec_json = py_to_json(spec_obj);
+    auto spec = ear::bridge::session_spec_from_json(spec_json);
+    auto entries = engine_->level_catalog_entries(spec);
+    nlohmann::json json_entries = nlohmann::json::array();
+    for (const auto& entry : entries) {
+      json_entries.push_back(ear::bridge::to_json(entry));
+    }
+    return json_to_py(json_entries);
+  }
+
   py::object submit_result(const std::string& session_id, py::object report_obj) {
     auto report_json = py_to_json(report_obj);
     auto report = ear::bridge::result_report_from_json(report_json);
@@ -170,6 +181,7 @@ PYBIND11_MODULE(_earcore, m) {
       .def("set_level", &PySessionEngine::set_level)
       .def("level_catalog_overview", &PySessionEngine::level_catalog_overview)
       .def("level_catalog_levels", &PySessionEngine::level_catalog_levels)
+      .def("level_catalog_entries", &PySessionEngine::level_catalog_entries)
       .def("submit_result", &PySessionEngine::submit_result)
       .def("session_key", &PySessionEngine::session_key)
       .def("orientation_prompt", &PySessionEngine::orientation_prompt)

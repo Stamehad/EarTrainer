@@ -45,6 +45,8 @@ public:
   virtual std::string level_catalog_overview(const std::string& session_id) = 0;
 
   virtual std::string level_catalog_levels(const std::string& session_id) = 0;
+
+  virtual std::vector<LevelCatalogEntry> level_catalog_entries(const SessionSpec& spec) = 0;
 };
 
 std::unique_ptr<SessionEngine> make_engine();

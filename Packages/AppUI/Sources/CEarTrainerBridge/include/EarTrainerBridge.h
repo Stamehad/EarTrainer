@@ -15,6 +15,7 @@ char *start_session(const char *spec_json);
 char *next_question(void);
 char *feedback(const char *answer_json);
 char *end_session(void);
+char *level_catalog_entries(const char *spec_json);
 void free_string(char *ptr);
 
 #ifdef __cplusplus

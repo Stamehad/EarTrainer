@@ -56,6 +56,24 @@ class SessionSpec:
 
 
 @dataclass
+class LevelCatalogEntry:
+    level: int
+    tier: int
+    label: str
+
+    def to_json(self) -> Dict[str, Any]:
+        return {"level": self.level, "tier": self.tier, "label": self.label}
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "LevelCatalogEntry":
+        return cls(
+            level=int(data.get("level", 0)),
+            tier=int(data.get("tier", 0)),
+            label=str(data.get("label", "")),
+        )
+
+
+@dataclass
 class TypedPayload:
     type: str
     payload: Dict[str, Any]

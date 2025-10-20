@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iomanip>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
@@ -198,6 +199,30 @@ std::vector<int> LevelInspector::tiers_for_level(int level) const {
     tiers.push_back(tier);
   }
   return tiers;
+}
+
+std::vector<LevelCatalogEntry> LevelInspector::catalog_entries() const {
+  std::vector<LevelCatalogEntry> entries;
+  if (index_.empty()) {
+    return entries;
+  }
+
+  for (const auto& [level, tiers] : index_) {
+    for (const auto& [tier, indices] : tiers) {
+      if (indices.empty()) {
+        continue;
+      }
+      const auto& spec = entries_[indices.front()].spec;
+      std::ostringstream oss;
+      oss << level << "-" << tier << ": " << spec.id;
+      LevelCatalogEntry entry;
+      entry.level = level;
+      entry.tier = tier;
+      entry.label = oss.str();
+      entries.push_back(std::move(entry));
+    }
+  }
+  return entries;
 }
 
 void LevelInspector::select(int level, int tier) {

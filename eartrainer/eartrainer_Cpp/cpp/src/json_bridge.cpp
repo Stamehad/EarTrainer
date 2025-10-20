@@ -467,4 +467,20 @@ PromptPlan prompt_plan_from_json(const nlohmann::json& json_plan) {
   return prompt_from_json_impl(json_plan);
 }
 
+nlohmann::json to_json(const LevelCatalogEntry& entry) {
+  nlohmann::json json_entry = nlohmann::json::object();
+  json_entry["level"] = entry.level;
+  json_entry["tier"] = entry.tier;
+  json_entry["label"] = entry.label;
+  return json_entry;
+}
+
+LevelCatalogEntry level_catalog_entry_from_json(const nlohmann::json& json_entry) {
+  LevelCatalogEntry entry;
+  entry.level = json_entry["level"].get<int>();
+  entry.tier = json_entry["tier"].get<int>();
+  entry.label = json_entry["label"].get<std::string>();
+  return entry;
+}
+
 } // namespace ear::bridge

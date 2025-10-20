@@ -24,4 +24,7 @@ nlohmann::json to_json(const MemoryPackage& package);
 nlohmann::json to_json(const PromptPlan& plan);
 PromptPlan prompt_plan_from_json(const nlohmann::json& json_plan);
 
+nlohmann::json to_json(const LevelCatalogEntry& entry);
+LevelCatalogEntry level_catalog_entry_from_json(const nlohmann::json& json_entry);
+
 } // namespace ear::bridge

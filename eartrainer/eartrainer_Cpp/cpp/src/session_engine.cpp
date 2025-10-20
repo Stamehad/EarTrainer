@@ -387,6 +387,8 @@ public:
   
   std::string level_catalog_levels(const std::string& session_id) override;
 
+  std::vector<LevelCatalogEntry> level_catalog_entries(const SessionSpec& spec) override;
+
   Next submit_result(const std::string& session_id, const ResultReport& report) override {
     auto& session = get_session(session_id);
     switch (session.mode) {
@@ -806,6 +808,20 @@ std::string SessionEngineImpl::level_catalog_levels(const std::string& session_i
     throw std::runtime_error("Level catalog overview only available in level inspector mode");
   }
   return session.level_inspector->levels_summary();
+}
+
+std::vector<LevelCatalogEntry> SessionEngineImpl::level_catalog_entries(const SessionSpec& spec) {
+  SessionSpec inspector_spec = spec;
+  inspector_spec.mode = SessionMode::LevelInspector;
+  inspector_spec.level_inspect = true;
+
+  std::filesystem::path resources_dir = "resources";
+  if (!std::filesystem::exists(resources_dir)) {
+    resources_dir = std::filesystem::path("eartrainer/eartrainer_Cpp/resources");
+  }
+
+  LevelInspector inspector(resources_dir, "all_builtin", inspector_spec.seed);
+  return inspector.catalog_entries();
 }
 
 SessionEngine::Next SessionEngineImpl::next_question_manual(const std::string& session_id,

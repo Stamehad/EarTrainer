@@ -68,6 +68,12 @@ struct SessionSpec {
   std::optional<int> inspect_tier;
 };
 
+struct LevelCatalogEntry {
+  int level = 0;
+  int tier = 0;
+  std::string label;
+};
+
 struct Note {
   int pitch;
   int dur_ms;
