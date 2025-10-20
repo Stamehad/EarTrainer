@@ -115,6 +115,10 @@ public final class MockBridge: SessionEngine {
         return cachedCatalog
     }
 
+    public func orientationPrompt() throws -> Prompt? {
+        nil
+    }
+
     private func makeQuestions(from spec: SessionSpec) -> [QuestionBundle] {
         let count = max(1, spec.nQuestions)
         return (0..<count).map { index in

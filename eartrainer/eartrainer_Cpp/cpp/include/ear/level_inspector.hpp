@@ -17,6 +17,8 @@ public:
                  std::string catalog_basename,
                  std::uint64_t seed = 1);
 
+  void set_base_spec(const SessionSpec& spec);
+
   std::string overview() const;
   std::string levels_summary() const;
   std::vector<int> known_levels() const;

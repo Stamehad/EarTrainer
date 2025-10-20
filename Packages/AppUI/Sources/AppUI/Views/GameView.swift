@@ -10,38 +10,47 @@ public struct GameView: View {
     public var body: some View {
         VStack(spacing: 20) {
             if let envelope = viewModel.currentQuestion {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Question ID: \(envelope.bundle.questionId)")
-                            .font(.headline)
-                        if let questionJSON = viewModel.questionJSON {
-                            DebugPanel(title: "Question Bundle JSON", content: questionJSON)
-                        }
-                        if let debugJSON = viewModel.debugJSON, !debugJSON.isEmpty {
-                            DebugPanel(title: "Engine Diagnostic", content: debugJSON)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                HStack(spacing: 16) {
-                    if viewModel.currentQuestion?.bundle.prompt?.midiClip != nil {
-                        Button("Replay Audio") {
-                            viewModel.replayPromptAudio()
+                VStack(spacing: 16) {
+                    HStack {
+                        Button("Play Orientation") {
+                            viewModel.playOrientationPrompt()
                         }
                         .buttonStyle(.bordered)
+                        Spacer()
                     }
-
-                    Button("Submit Auto Result") {
-                        submitAnswer()
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Question ID: \(envelope.bundle.questionId)")
+                                .font(.headline)
+                            if let questionJSON = viewModel.questionJSON {
+                                DebugPanel(title: "Question Highlights", content: questionJSON)
+                            }
+                            if let debugJSON = viewModel.debugJSON, !debugJSON.isEmpty {
+                                DebugPanel(title: "Engine Diagnostic Summary", content: debugJSON)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .buttonStyle(.borderedProminent)
+                    HStack(spacing: 16) {
+                        if viewModel.currentQuestion?.bundle.prompt?.midiClip != nil {
+                            Button("Replay Audio") {
+                                viewModel.replayPromptAudio()
+                            }
+                            .buttonStyle(.bordered)
+                        }
 
-                    Button("Finish Session") {
-                        viewModel.finish()
+                        Button("Submit Auto Result") {
+                            submitAnswer()
+                        }
+                        .buttonStyle(.borderedProminent)
+
+                        Button("Finish Session") {
+                            viewModel.finish()
+                        }
+                        .buttonStyle(.bordered)
+
+                        Spacer()
                     }
-                    .buttonStyle(.bordered)
-
-                    Spacer()
                 }
             } else {
                 if #available(iOS 17, macOS 14, *) {

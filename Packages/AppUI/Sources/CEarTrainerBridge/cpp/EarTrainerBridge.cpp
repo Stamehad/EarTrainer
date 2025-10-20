@@ -292,6 +292,23 @@ char* level_catalog_entries(const char* spec_json) {
   }
 }
 
+char* orientation_prompt(void) {
+  auto& s = state();
+  std::scoped_lock guard(s.mutex);
+  if (!s.session_active || !s.session_id.has_value()) {
+    return copy_json(error_envelope("No active session"));
+  }
+  try {
+    auto& engine = ensure_engine();
+    auto plan = engine.orientation_prompt(*s.session_id);
+    nlohmann::json payload = ok_envelope();
+    payload["prompt"] = ear::bridge::to_json(plan);
+    return copy_json(payload);
+  } catch (const std::exception& ex) {
+    return copy_json(error_envelope(ex.what()));
+  }
+}
+
 void free_string(char* ptr) {
   if (ptr != nullptr) {
     std::free(ptr);

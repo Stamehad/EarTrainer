@@ -14,6 +14,7 @@ public protocol SessionEngine {
     func serializeCheckpoint() throws -> Checkpoint?
     func restore(checkpoint: Checkpoint) throws
     func levelCatalogEntries(_ spec: SessionSpec) throws -> [LevelCatalogEntry]
+    func orientationPrompt() throws -> Prompt?
 }
 
 public final class Bridge: SessionEngine {
@@ -131,6 +132,26 @@ public final class Bridge: SessionEngine {
             throw BridgeError.engineError(envelope.message ?? "Engine error")
         default:
             throw BridgeError.missingData("Level catalog status")
+        }
+    }
+
+    public func orientationPrompt() throws -> Prompt? {
+        guard let response = try callString({ orientation_prompt() }) else {
+            throw BridgeError.missingData("Orientation prompt")
+        }
+        struct OrientationEnvelope: Decodable {
+            let status: String
+            let prompt: Prompt?
+            let message: String?
+        }
+        let envelope = try decode(OrientationEnvelope.self, from: response)
+        switch envelope.status {
+        case "ok":
+            return envelope.prompt
+        case "error":
+            throw BridgeError.engineError(envelope.message ?? "Engine error")
+        default:
+            throw BridgeError.missingData("Orientation prompt status")
         }
     }
 

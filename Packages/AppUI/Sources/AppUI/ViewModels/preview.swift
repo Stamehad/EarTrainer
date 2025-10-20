@@ -27,6 +27,9 @@ final class NoopSessionEngine: SessionEngine {
             LevelCatalogEntry(level: 2, tier: 0, label: "2-0: PREVIEW_MELODY")
         ]
     }
+    func orientationPrompt() throws -> Prompt? {
+        nil
+    }
     var hasActiveSession: Bool { false }
 }
 

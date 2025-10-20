@@ -256,14 +256,17 @@ PromptPlan make_scale_arpeggio_prompt(const SessionSpec& spec) {
   plan.tempo_bpm = spec.tempo_bpm.has_value() ? spec.tempo_bpm : std::optional<int>(96);
 
   const std::vector<int> pattern = {0, 1, 2, 3, 4, 5, 6, 7, 4, 2, 0};
-  const int min_pitch = std::max(0, spec.range_min);
-  const int max_pitch = std::min(127, spec.range_max > 0 ? spec.range_max : 127);
-  DrillSpec drill_spec = DrillSpec::from_session(spec);
+  const int tonic = drills::central_tonic_midi(spec.key);
 
   for (std::size_t i = 0; i < pattern.size(); ++i) {
     int degree = pattern[i];
-    int midi = drills::degree_to_midi(drill_spec, degree);
-    midi = std::max(min_pitch, std::min(max_pitch, midi));
+    int midi = tonic + drills::degree_to_offset(degree);
+    while (midi < 0) {
+      midi += 12;
+    }
+    while (midi > 127) {
+      midi -= 12;
+    }
     int dur = (i == pattern.size() - 1) ? 520 : 320;
     plan.notes.push_back({midi, dur, std::nullopt, std::nullopt});
   }
@@ -746,6 +749,7 @@ std::string SessionEngineImpl::create_level_inspector_session(const SessionSpec&
 
   session.level_inspector =
       std::make_unique<LevelInspector>(resources_dir, "all_builtin", spec.seed);
+  session.level_inspector->set_base_spec(session.spec);
 
   if (session.inspector_level.has_value() && session.inspector_tier.has_value()) {
     try {
@@ -771,6 +775,7 @@ void SessionEngineImpl::set_level(const std::string& session_id, int level, int 
   if (!session.level_inspector) {
     throw std::runtime_error("Level inspector module is not initialised");
   }
+  session.level_inspector->set_base_spec(session.spec);
   try {
     session.level_inspector->select(level, tier);
   } catch (const std::exception& ex) {
@@ -821,6 +826,7 @@ std::vector<LevelCatalogEntry> SessionEngineImpl::level_catalog_entries(const Se
   }
 
   LevelInspector inspector(resources_dir, "all_builtin", inspector_spec.seed);
+  inspector.set_base_spec(inspector_spec);
   return inspector.catalog_entries();
 }
 

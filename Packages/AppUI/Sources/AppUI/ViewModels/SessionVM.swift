@@ -29,6 +29,9 @@ public final class SessionViewModel: ObservableObject {
     private var hasBootstrapped = false
     private var questionsAnswered = 0
     private let audioPlayer = MidiAudioPlayer.shared
+    private var suppressNextPromptAutoPlay = false
+    private var needsDeferredPromptPlayback = false
+    private var deferredPromptPlaybackDelay: TimeInterval = 0
 
     private let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -92,7 +95,11 @@ public final class SessionViewModel: ObservableObject {
             questionJSON = nil
             debugJSON = nil
             questionsAnswered = 0
+            suppressNextPromptAutoPlay = false
+            needsDeferredPromptPlayback = false
+            deferredPromptPlaybackDelay = 0
             try engine.startSession(spec)
+            playOrientationPrompt(autoTriggered: true)
             route = .game
             try clearCheckpointOnDisk()
             try fetchNextQuestion()
@@ -136,6 +143,9 @@ public final class SessionViewModel: ObservableObject {
         questionJSON = nil
         debugJSON = nil
         route = .entrance
+        suppressNextPromptAutoPlay = false
+        needsDeferredPromptPlayback = false
+        deferredPromptPlaybackDelay = 0
     }
 
     // MARK: - Level Inspector
@@ -344,11 +354,25 @@ public final class SessionViewModel: ObservableObject {
         case let .question(envelope):
             currentQuestion = envelope
             summary = nil
-            questionJSON = prettyJSONString(envelope.bundle)
-            debugJSON = envelope.debug?.prettyPrinted()
+            questionJSON = summariseQuestionBundle(envelope.bundle) ?? prettyJSONString(envelope.bundle)
+            debugJSON = summariseDebugInfo(envelope.debug) ?? envelope.debug?.prettyPrinted()
             route = .game
-            if let clip = envelope.bundle.prompt?.midiClip {
+            if !suppressNextPromptAutoPlay,
+               let clip = envelope.bundle.prompt?.midiClip {
                 audioPlayer.play(clip: clip)
+            }
+            suppressNextPromptAutoPlay = false
+            if needsDeferredPromptPlayback {
+                let delay = deferredPromptPlaybackDelay
+                needsDeferredPromptPlayback = false
+                deferredPromptPlaybackDelay = 0
+                if delay > 0 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                        self?.replayPromptAudio()
+                    }
+                } else {
+                    replayPromptAudio()
+                }
             }
         case let .summary(report):
             currentQuestion = nil
@@ -363,6 +387,73 @@ public final class SessionViewModel: ObservableObject {
             } catch {
                 presentError(error)
             }
+        }
+    }
+
+    private func summariseQuestionBundle(_ bundle: QuestionBundle) -> String? {
+        var summary: [String: JSONValue] = [:]
+        if case let .object(answerPayload) = bundle.correctAnswer.payload,
+           let degrees = answerPayload["degrees"] {
+            summary["correct_answer"] = .object(["degrees": degrees])
+        } else {
+            summary["correct_answer"] = bundle.correctAnswer.payload
+        }
+        if case let .object(payload) = bundle.question.payload,
+           let degrees = payload["degrees"] {
+            summary["question_degrees"] = degrees
+        }
+        return prettyJSONString(summary)
+    }
+
+    private func summariseDebugInfo(_ debug: JSONValue?) -> String? {
+        guard let debug else { return nil }
+        guard case let .object(items) = debug else { return debug.prettyPrinted() }
+        let keys = [
+            "mode",
+            "session_id",
+            "total_questions",
+            "level_inspector_level",
+            "level_inspector_tier",
+            "drill_kind"
+        ]
+        var summary: [String: JSONValue] = [:]
+        for key in keys {
+            if let value = items[key] {
+                summary[key] = value
+            }
+        }
+        return summary.isEmpty ? nil : prettyJSONString(summary)
+    }
+
+    private func clipDuration(_ clip: MidiClip) -> TimeInterval {
+        guard clip.tempoBpm > 0, clip.ppq > 0 else { return 0 }
+        let beats = Double(clip.lengthTicks) / Double(clip.ppq)
+        let secondsPerBeat = 60.0 / Double(clip.tempoBpm)
+        return beats * secondsPerBeat
+    }
+
+    public func playOrientationPrompt(autoTriggered: Bool = false) {
+        do {
+            let prompt = try engine.orientationPrompt()
+            guard let clip = prompt?.midiClip else {
+                if autoTriggered {
+                    suppressNextPromptAutoPlay = false
+                    needsDeferredPromptPlayback = false
+                    deferredPromptPlaybackDelay = 0
+                }
+                return
+            }
+            if autoTriggered {
+                suppressNextPromptAutoPlay = true
+                needsDeferredPromptPlayback = true
+                deferredPromptPlaybackDelay = max(clipDuration(clip) + 0.1, 0)
+            } else {
+                needsDeferredPromptPlayback = false
+                deferredPromptPlaybackDelay = 0
+            }
+            audioPlayer.play(clip: clip)
+        } catch {
+            presentError(error)
         }
     }
 
