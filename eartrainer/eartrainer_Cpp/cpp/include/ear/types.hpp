@@ -52,8 +52,6 @@ struct SessionSpec {
   std::string version;
   std::string drill_kind;
   std::string key;
-  int range_min;
-  int range_max;
   std::optional<int> tempo_bpm;
   int n_questions;
   std::string generation;

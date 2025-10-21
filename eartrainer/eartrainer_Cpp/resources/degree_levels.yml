@@ -171,8 +171,7 @@ drills:
   #   level: 2
   #   defaults:
   #     tempo_bpm: 72
-  #     range_min: 55
-  #     range_max: 79
+  # Legacy absolute range fields have been removed; use relative semitone spans instead.
   #     assistance_policy: { Replay: 2, GuideTone: 1 }
   #   sampler_params:
   #     interval_allowed_sizes: [1, 2, 3, 4]

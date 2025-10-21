@@ -24,12 +24,6 @@ using nlohmann::json;
 
 void DrillSpec::apply_defaults() {
   key = "C";
-  // Use a wide default absolute range so catalogs can rely on
-  // relative range controls (range_below/above or note_range_semitones)
-  // without being clipped by a tight absolute window.
-  // C2 (36) .. C7 (96)
-  range_min = 36;
-  range_max = 96;
   tempo_bpm.reset();
   assistance_policy.clear();
   nlohmann::json merged_params = params.is_object() ? params : nlohmann::json::object();
@@ -38,12 +32,6 @@ void DrillSpec::apply_defaults() {
     const auto& obj = defaults.get_object();
     if (auto it = obj.find("key"); it != obj.end() && it->second.is_string()) {
       key = it->second.get<std::string>();
-    }
-    if (auto it = obj.find("range_min"); it != obj.end()) {
-      range_min = it->second.get<int>();
-    }
-    if (auto it = obj.find("range_max"); it != obj.end()) {
-      range_max = it->second.get<int>();
     }
     if (auto it = obj.find("tempo_bpm"); it != obj.end()) {
       tempo_bpm = std::max(1, it->second.get<int>());
@@ -212,8 +200,6 @@ DrillSpec DrillSpec::from_session(const ear::SessionSpec& spec) {
   out.family = spec.drill_kind;
   out.level = 0;
   out.key = spec.key;
-  out.range_min = spec.range_min;
-  out.range_max = spec.range_max;
   if (spec.tempo_bpm.has_value()) {
     out.tempo_bpm = spec.tempo_bpm;
   }
@@ -223,8 +209,6 @@ DrillSpec DrillSpec::from_session(const ear::SessionSpec& spec) {
   out.drill_params = nlohmann::json::object();
   out.defaults = nlohmann::json::object();
   out.defaults["key"] = out.key;
-  out.defaults["range_min"] = out.range_min;
-  out.defaults["range_max"] = out.range_max;
   if (out.tempo_bpm.has_value()) {
     out.defaults["tempo_bpm"] = *out.tempo_bpm;
   }

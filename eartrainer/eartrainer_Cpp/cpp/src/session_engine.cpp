@@ -14,6 +14,7 @@
 #include <array>
 #include <cctype>
 #include <filesystem>
+#include <cmath>
 #include <mutex>
 #include <memory>
 #include <optional>
@@ -42,6 +43,56 @@ std::string factory_family_for(const std::string& kind) {
     return "chord";
   }
   return kind;
+}
+
+int json_number_to_nonneg(const nlohmann::json& node, int fallback) {
+  if (node.is_number_integer()) {
+    return std::max(0, node.get<int>());
+  }
+  if (node.is_number_float()) {
+    return std::max(0, static_cast<int>(std::lround(node.get<double>())));
+  }
+  return std::max(0, fallback);
+}
+
+std::pair<int, int> session_pitch_bounds(const SessionSpec& spec) {
+  int below = 12;
+  int above = 12;
+  if (spec.sampler_params.is_object()) {
+    const auto& params = spec.sampler_params;
+    const auto read_optional = [&](const char* key) -> std::optional<int> {
+      if (!params.contains(key)) {
+        return std::nullopt;
+      }
+      return json_number_to_nonneg(params[key], 0);
+    };
+    if (auto value = read_optional("range_below_semitones")) {
+      below = *value;
+    } else if (auto value = read_optional("note_range_semitones")) {
+      below = *value;
+    } else if (auto value = read_optional("interval_range_semitones")) {
+      below = *value;
+    } else if (auto value = read_optional("chord_range_semitones")) {
+      below = *value;
+    }
+    if (auto value = read_optional("range_above_semitones")) {
+      above = *value;
+    } else if (auto value = read_optional("note_range_semitones")) {
+      above = *value;
+    } else if (auto value = read_optional("interval_range_semitones")) {
+      above = *value;
+    } else if (auto value = read_optional("chord_range_semitones")) {
+      above = *value;
+    }
+  }
+
+  const int tonic = drills::central_tonic_midi(spec.key);
+  int lower = std::max(0, tonic - below);
+  int upper = std::min(127, tonic + above);
+  if (lower > upper) {
+    std::swap(lower, upper);
+  }
+  return {lower, upper};
 }
 
 DrillFactory& ensure_factory() {
@@ -241,9 +292,8 @@ PromptPlan make_tonic_prompt(const SessionSpec& spec) {
   plan.tempo_bpm = spec.tempo_bpm.has_value() ? spec.tempo_bpm : std::optional<int>(96);
 
   const int tonic = drills::central_tonic_midi(spec.key);
-  const int min_pitch = std::max(0, spec.range_min);
-  const int max_pitch = std::min(127, spec.range_max > 0 ? spec.range_max : 127);
-  const int clamped = std::max(min_pitch, std::min(max_pitch, tonic));
+  const auto bounds = session_pitch_bounds(spec);
+  const int clamped = std::clamp(tonic, bounds.first, bounds.second);
 
   plan.notes.push_back({clamped, 900, std::nullopt, std::nullopt});
   return plan;
@@ -655,10 +705,6 @@ std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) 
   session.summary_cache.by_category = nlohmann::json::array();
   session.summary_cache.results = nlohmann::json::array();
 
-  if (session.spec.range_min >= session.spec.range_max) {
-    session.spec.range_min = 48;
-    session.spec.range_max = 72;
-  }
   if (!session.spec.tempo_bpm.has_value()) {
     session.spec.tempo_bpm = 96;
   }

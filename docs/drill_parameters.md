@@ -10,7 +10,8 @@ Notes:
 ## Common Defaults (all families)
 - `defaults.key: string` — musical key for tonic/scale inference (e.g., `"C"`, `"Eb"`).
 - `defaults.tempo_bpm: int` — tempo for prompts (and pathways if not overridden).
-- `defaults.range_min: int`, `defaults.range_max: int` — absolute MIDI limits used by realization helpers (melody/chord); may be ignored by some note candidates (see per-family docs).
+- Pitch window defaults to ±12 semitones around the tonic; override via drill `params`
+  (`range_below_semitones` / `range_above_semitones`, or legacy symmetric knobs).
 - `defaults.assistance_policy: { string:int }` — budget of assists exposed to the UI.
 
 ## Note Drill (family: `note`)
@@ -46,8 +47,6 @@ Example (pathway I–IV):
   defaults:
     key: C
     tempo_bpm: 60
-    range_min: 60
-    range_max: 72
     assistance_policy: { Replay: 2, TempoDown: 1 }
   params:
     allowed_degrees: [0, 1, 2, 3]
@@ -65,8 +64,6 @@ Example (tonic arrival, two notes):
   defaults:
     key: C
     tempo_bpm: 60
-    range_min: 60
-    range_max: 72
     assistance_policy: { Replay: 2 }
   params:
     allowed_degrees: [1,2,3,4,5,6] # avoid dominant tonic as first degree
@@ -95,7 +92,7 @@ Example:
 - id: INT_STEPWISE_72
   family: interval
   level: 2
-  defaults: { key: C, tempo_bpm: 72, range_min: 55, range_max: 79, assistance_policy: { Replay: 2, GuideTone: 1 } }
+  defaults: { key: C, tempo_bpm: 72, assistance_policy: { Replay: 2, GuideTone: 1 } }
   params:
     interval_allowed_sizes: [1,2,3,4]
     interval_range_semitones: 24
@@ -116,7 +113,7 @@ Example:
 - id: MELODY_SHORT_60
   family: melody
   level: 1
-  defaults: { key: C, tempo_bpm: 60, range_min: 60, range_max: 72, assistance_policy: { Replay: 2, TempoDown: 1 } }
+  defaults: { key: C, tempo_bpm: 60, assistance_policy: { Replay: 2, TempoDown: 1 } }
   params: { melody_length: 2 }
 ```
 
@@ -144,14 +141,14 @@ Example:
 - id: CHORD_TRIADS_72
   family: chord
   level: 3
-  defaults: { key: C, tempo_bpm: 72, range_min: 48, range_max: 84, assistance_policy: { Replay: 2, GuideTone: 2 } }
+  defaults: { key: C, tempo_bpm: 72, assistance_policy: { Replay: 2, GuideTone: 2 } }
   params: { chord_range_semitones: 24 }
 ```
 
 ## Behavioral Notes
 - Central tonic / register: helper functions compute `central_tonic_midi(key)` and then map degrees via `degree_to_offset`. Register constraints are enforced by per-family logic:
-  - NoteDrill uses `range_below_semitones`/`range_above_semitones` (or the legacy `note_range_semitones`, which sets both) for candidate selection; results are also clamped to `defaults.range_min/max`.
-  - Interval/Chord/Melody rely on helper realizations and may additionally clamp to `defaults.range_min/max`.
+  - NoteDrill uses `range_below_semitones`/`range_above_semitones` (or the legacy symmetric knobs) for candidate selection; results are clamped to the tonic-centric window (bounded by MIDI 0–127).
+  - Interval/Chord/Melody rely on helper realizations that respect the same computed window.
 - Pathway logic: pathway content comes from the pathways bank (see `cpp/drills/pathways.cpp`), inferred from the `key`/scale. The `allowed_degrees` filter only applies to the lead degree for NoteDrill.
 - Legacy naming: older YAML used `sampler_params`; the core now merges `drill_params` and `sampler_params` into `params` inside `DrillSpec`. Both are accepted for backward compatibility.
 

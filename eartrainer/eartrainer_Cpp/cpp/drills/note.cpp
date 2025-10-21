@@ -89,6 +89,23 @@ void NoteDrill::configure(const DrillSpec& spec) {
   spec_ = spec;
   last_degree_.reset();
   last_midi_.reset();
+  if (!spec_.params.is_object()) {
+    spec_.params = nlohmann::json::object();
+  }
+  int below = 12;
+  int above = 12;
+  if (spec_.params.contains("range_below_semitones")) {
+    below = std::max(0, spec_.params["range_below_semitones"].get<int>());
+  }
+  if (spec_.params.contains("range_above_semitones")) {
+    above = std::max(0, spec_.params["range_above_semitones"].get<int>());
+  }
+  if (!spec_.params.contains("range_below_semitones")) {
+    spec_.params["range_below_semitones"] = below;
+  }
+  if (!spec_.params.contains("range_above_semitones")) {
+    spec_.params["range_above_semitones"] = above;
+  }
 }
 
 QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
@@ -96,7 +113,8 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
   last_degree_ = degree;
 
   auto candidates = drills::midi_candidates_for_degree(spec_, degree, 12);
-  int midi = drills::central_tonic_midi(spec_.key) + drills::degree_to_offset(degree);
+  int tonic_midi = drills::central_tonic_midi(spec_.key);
+  int midi = tonic_midi + drills::degree_to_offset(degree);
   if (!candidates.empty()) {
     if (avoid_repetition(spec_) && last_midi_.has_value() && candidates.size() > 1) {
       candidates.erase(std::remove(candidates.begin(), candidates.end(), last_midi_.value()),
@@ -110,7 +128,9 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
   }
   last_midi_ = midi;
 
-  int tonic_midi = drills::central_tonic_midi(spec_.key);
+  auto bounds = drills::relative_bounds(spec_, 12);
+  const int midi_min = bounds.first;
+  const int midi_max = bounds.second;
 
   nlohmann::json q_payload = nlohmann::json::object();
   q_payload["degree"] = degree;
@@ -169,7 +189,7 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
   auto choose_anchor_pitch = [&](int base_pitch) -> int {
     int tonic_pitch = base_pitch;
     if (anchor_include_octave && rand_int(rng_state, 0, 1) == 1) {
-      int octave_pitch = drills::clamp_to_range(tonic_pitch + 12, spec_.range_min, spec_.range_max);
+      int octave_pitch = drills::clamp_to_range(tonic_pitch + 12, midi_min, midi_max);
       if (octave_pitch > tonic_pitch) {
         tonic_pitch = octave_pitch;
       }
@@ -195,7 +215,7 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
     }
 
     auto pick_resolution_pitch = [&](int resolution_degree, int reference_pitch) {
-      int span = std::max(12, spec_.range_max - spec_.range_min);
+      int span = std::max(12, midi_max - midi_min);
       auto candidates = drills::midi_candidates_for_degree(spec_, resolution_degree, span);
       if (!candidates.empty()) {
         auto it = std::min_element(

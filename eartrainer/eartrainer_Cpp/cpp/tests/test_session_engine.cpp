@@ -30,8 +30,6 @@ ear::SessionSpec make_spec(const std::string& drill_kind, const std::string& gen
   spec.version = "v1";
   spec.drill_kind = drill_kind;
   spec.key = "C major";
-  spec.range_min = 48;
-  spec.range_max = 72;
   spec.tempo_bpm = 90;
   spec.n_questions = n_questions;
   spec.generation = generation;

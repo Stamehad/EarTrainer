@@ -75,8 +75,7 @@ inline int clamp_to_range(int midi, int min, int max) {
   return std::max(min, std::min(max, midi));
 }
 
-inline std::pair<int, int> relative_bounds(const DrillSpec& spec, int default_span) {
-  int tonic = central_tonic_midi(spec.key);
+inline std::pair<int, int> semitone_window(const DrillSpec& spec, int default_span) {
   int below = default_span;
   int above = default_span;
   if (spec.params.is_object()) {
@@ -87,10 +86,16 @@ inline std::pair<int, int> relative_bounds(const DrillSpec& spec, int default_sp
       above = std::max(0, spec.params["range_above_semitones"].get<int>());
     }
   }
+  return {below, above};
+}
+
+inline std::pair<int, int> relative_bounds(const DrillSpec& spec, int default_span) {
+  int tonic = central_tonic_midi(spec.key);
+  auto window = semitone_window(spec, default_span);
+  const int below = window.first;
+  const int above = window.second;
   int lower = std::max(0, tonic - below);
   int upper = std::min(127, tonic + above);
-  lower = std::max(lower, spec.range_min);
-  upper = std::min(upper, spec.range_max);
   if (lower > upper) {
     std::swap(lower, upper);
   }

@@ -97,14 +97,10 @@ void LevelInspector::set_base_spec(const SessionSpec& spec) {
   for (auto& entry : entries_) {
     entry.spec.key = spec.key;
     entry.spec.tempo_bpm = spec.tempo_bpm;
-    entry.spec.range_min = spec.range_min;
-    entry.spec.range_max = spec.range_max;
   }
   for (auto& slot : slots_) {
     slot.spec.key = spec.key;
     slot.spec.tempo_bpm = spec.tempo_bpm;
-    slot.spec.range_min = spec.range_min;
-    slot.spec.range_max = spec.range_max;
   }
 }
 

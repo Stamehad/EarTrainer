@@ -187,6 +187,9 @@ std::vector<int> generate_degrees(const DrillSpec& spec, std::uint64_t& rng_stat
 
 std::vector<int> degrees_to_midi(const DrillSpec& spec, const std::vector<int>& degrees) {
   int tonic = drills::central_tonic_midi(spec.key);
+  auto bounds = drills::relative_bounds(spec, 12);
+  const int midi_min = bounds.first;
+  const int midi_max = bounds.second;
   std::vector<int> base_midis;
   base_midis.reserve(degrees.size());
   for (int degree : degrees) {
@@ -194,9 +197,9 @@ std::vector<int> degrees_to_midi(const DrillSpec& spec, const std::vector<int>& 
   }
 
   double target = static_cast<double>(tonic);
-  bool has_range = spec.range_min < spec.range_max;
+  bool has_range = midi_min < midi_max;
   if (has_range) {
-    target = static_cast<double>(spec.range_min + spec.range_max) / 2.0;
+    target = static_cast<double>(midi_min + midi_max) / 2.0;
   }
 
   std::vector<int> best_midis = base_midis;
@@ -210,7 +213,7 @@ std::vector<int> degrees_to_midi(const DrillSpec& spec, const std::vector<int>& 
     for (int value : base_midis) {
       int shifted = value + shift;
       if (has_range) {
-        if (shifted < spec.range_min || shifted > spec.range_max) {
+        if (shifted < midi_min || shifted > midi_max) {
           inside = false;
           break;
         }
@@ -234,10 +237,10 @@ std::vector<int> degrees_to_midi(const DrillSpec& spec, const std::vector<int>& 
 
   if (has_range) {
     for (int& value : best_midis) {
-      if (value < spec.range_min) {
-        value = spec.range_min;
-      } else if (value > spec.range_max) {
-        value = spec.range_max;
+      if (value < midi_min) {
+        value = midi_min;
+      } else if (value > midi_max) {
+        value = midi_max;
       }
     }
   }
@@ -250,6 +253,23 @@ std::vector<int> degrees_to_midi(const DrillSpec& spec, const std::vector<int>& 
 void MelodyDrill::configure(const DrillSpec& spec) {
   spec_ = spec;
   recent_sequences_.clear();
+  if (!spec_.params.is_object()) {
+    spec_.params = nlohmann::json::object();
+  }
+  int below = 12;
+  int above = 12;
+  if (spec_.params.contains("range_below_semitones")) {
+    below = std::max(0, spec_.params["range_below_semitones"].get<int>());
+  }
+  if (spec_.params.contains("range_above_semitones")) {
+    above = std::max(0, spec_.params["range_above_semitones"].get<int>());
+  }
+  if (!spec_.params.contains("range_below_semitones")) {
+    spec_.params["range_below_semitones"] = below;
+  }
+  if (!spec_.params.contains("range_above_semitones")) {
+    spec_.params["range_above_semitones"] = above;
+  }
 }
 
 QuestionBundle MelodyDrill::next_question(std::uint64_t& rng_state) {

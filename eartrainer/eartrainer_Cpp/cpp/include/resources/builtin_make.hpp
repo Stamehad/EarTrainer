@@ -6,7 +6,7 @@
 namespace ear::builtin {
 
 // Minimal, parser-free constructor. Only set what you need.
-// key/range_min/range_max are intentionally omitted.
+// Key defaults to "C"; range is derived from relative semitone params.
 inline DrillSpec make_drill(
     std::string id,
     std::string family,          // "note", "melody", "chord", ...
@@ -38,7 +38,7 @@ inline DrillSpec make_drill(
     // Materialise defaults so downstream callers see merged params immediately.
     d.apply_defaults();
 
-    // Intentionally NOT setting: d.key, d.range_min, d.range_max.
+    // Intentionally NOT setting: d.key (filled by caller); range handled via relative params.
     // Your adaptive code can/randomly will decide them at runtime.
     return d;
 }

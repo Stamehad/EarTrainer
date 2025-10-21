@@ -1,6 +1,10 @@
 #include "json_bridge.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <stdexcept>
+
+#include "../drills/common.hpp"
 
 namespace ear::bridge {
 namespace {
@@ -150,10 +154,6 @@ nlohmann::json to_json(const SessionSpec& spec) {
   json_spec["version"] = spec.version;
   json_spec["drill_kind"] = spec.drill_kind;
   json_spec["key"] = spec.key;
-  nlohmann::json range = nlohmann::json::array();
-  range.push_back(spec.range_min);
-  range.push_back(spec.range_max);
-  json_spec["range"] = range;
   if (spec.tempo_bpm.has_value()) {
     json_spec["tempo_bpm"] = spec.tempo_bpm.value();
   } else {
@@ -195,12 +195,6 @@ SessionSpec session_spec_from_json(const nlohmann::json& json_spec) {
   spec.version = json_spec["version"].get<std::string>();
   spec.drill_kind = json_spec["drill_kind"].get<std::string>();
   spec.key = json_spec["key"].get<std::string>();
-  const auto& range = json_spec["range"].get_array();
-  if (range.size() != 2) {
-    throw std::runtime_error("range must have two elements");
-  }
-  spec.range_min = range[0].get<int>();
-  spec.range_max = range[1].get<int>();
   if (!json_spec["tempo_bpm"].is_null()) {
     spec.tempo_bpm = json_spec["tempo_bpm"].get<int>();
   }
@@ -211,7 +205,42 @@ SessionSpec session_spec_from_json(const nlohmann::json& json_spec) {
   for (const auto& entry : assistance) {
     spec.assistance_policy[entry.first] = entry.second.get<int>();
   }
-  spec.sampler_params = json_spec.value("sampler_params", nlohmann::json::object());
+  spec.sampler_params =
+      json_spec.contains("sampler_params") ? json_spec["sampler_params"] : nlohmann::json::object();
+  if (!spec.sampler_params.is_object()) {
+    spec.sampler_params = nlohmann::json::object();
+  }
+
+  if (json_spec.contains("range") && json_spec["range"].is_array()) {
+    const auto& range = json_spec["range"];
+    if (range.size() == 2) {
+      const auto to_int = [](const nlohmann::json& node, int fallback) -> int {
+        if (node.is_number_integer()) {
+          return node.get<int>();
+        }
+        if (node.is_number_float()) {
+          return static_cast<int>(std::lround(node.get<double>()));
+        }
+        return fallback;
+      };
+      int lower = std::max(0, to_int(range[0], 0));
+      int upper = std::min(127, to_int(range[1], 127));
+      if (lower > upper) {
+        std::swap(lower, upper);
+      }
+      const int tonic = drills::central_tonic_midi(spec.key);
+      const int clamped_tonic = std::clamp(tonic, lower, upper);
+      const int below = std::max(0, clamped_tonic - lower);
+      const int above = std::max(0, upper - clamped_tonic);
+      if (!spec.sampler_params.contains("range_below_semitones")) {
+        spec.sampler_params["range_below_semitones"] = below;
+      }
+      if (!spec.sampler_params.contains("range_above_semitones")) {
+        spec.sampler_params["range_above_semitones"] = above;
+      }
+    }
+  }
+
   if (json_spec.contains("track_levels")) {
     const auto& levels = json_spec["track_levels"];
     if (levels.is_array()) {
