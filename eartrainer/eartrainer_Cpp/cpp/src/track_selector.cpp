@@ -1,6 +1,7 @@
 #include "../include/ear/track_selector.hpp"
 
 #include "../include/ear/drill_spec.hpp"
+#include "../include/ear/adaptive_catalog.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -54,7 +55,7 @@ std::vector<DrillSpec> load_catalog_specs(const std::filesystem::path& catalog_p
   }
   std::string content((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
   auto document = nlohmann::json::parse(content);
-  return DrillSpec::load_json(document);
+  return parse_catalog_document(document);
 }
 
 } // namespace

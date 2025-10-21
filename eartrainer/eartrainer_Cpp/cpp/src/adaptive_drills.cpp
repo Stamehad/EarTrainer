@@ -234,8 +234,8 @@ void AdaptiveDrills::set_bout_from_json(const std::vector<int>& track_levels, co
       throw std::runtime_error("AdaptiveDrills: invalid target level");
     }
 
-    auto specs = DrillSpec::load_json(document);
-    auto filtered = DrillSpec::filter_by_level(specs, target_level);
+    auto specs = adaptive::parse_catalog_document(document);
+    auto filtered = adaptive::filter_catalog_by_level(specs, target_level);
     if (filtered.empty()) {
       throw std::runtime_error("No adaptive drills configured for level " + std::to_string(target_level));
     }
@@ -258,8 +258,8 @@ void AdaptiveDrills::set_bout_from_json(const std::vector<int>& track_levels, co
 
   const auto& descriptor = track_phase_catalogs_[static_cast<std::size_t>(track_index)];
 
-  auto specs = DrillSpec::load_json(document);
-  auto filtered = DrillSpec::filter_by_level(specs, target_level);
+  auto specs = adaptive::parse_catalog_document(document);
+  auto filtered = adaptive::filter_catalog_by_level(specs, target_level);
   if (filtered.empty()) {
     throw std::runtime_error("No adaptive drills configured for level " + std::to_string(target_level));
   }

@@ -1,5 +1,7 @@
 #include "../include/ear/adaptive_catalog.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -8,6 +10,69 @@
 #include "../include/nlohmann/json.hpp"
 
 namespace ear::adaptive {
+
+namespace {
+
+DrillSpec spec_from_json(const nlohmann::json& spec_json) {
+  if (!spec_json.contains("id") || !spec_json.contains("family") || !spec_json.contains("level")) {
+    throw std::runtime_error("DrillSpec JSON missing required fields: 'id', 'family', 'level'");
+  }
+
+  DrillSpec spec;
+  spec.id = spec_json["id"].get<std::string>();
+  spec.family = spec_json["family"].get<std::string>();
+  spec.level = spec_json["level"].get<int>();
+
+  if (spec_json.contains("defaults")) {
+    spec.defaults = spec_json["defaults"];
+  }
+  if (spec_json.contains("drill_params")) {
+    spec.drill_params = spec_json["drill_params"];
+  }
+  if (spec_json.contains("sampler_params")) {
+    spec.sampler_params = spec_json["sampler_params"];
+  }
+  if (spec_json.contains("params")) {
+    spec.params = spec_json["params"];
+  }
+
+  spec.apply_defaults();
+  return spec;
+}
+
+} // namespace
+
+std::vector<DrillSpec> parse_catalog_document(const nlohmann::json& document) {
+  const nlohmann::json* drills_json = &document;
+  if (document.is_object()) {
+    if (!document.contains("drills")) {
+      throw std::runtime_error("Adaptive catalog JSON must contain a 'drills' array");
+    }
+    drills_json = &document["drills"];
+  }
+
+  if (!drills_json->is_array()) {
+    throw std::runtime_error("Adaptive catalog JSON must contain a 'drills' array");
+  }
+
+  const auto& entries = drills_json->get_array();
+  std::vector<DrillSpec> specs;
+  specs.reserve(entries.size());
+  for (const auto& entry : entries) {
+    specs.push_back(spec_from_json(entry));
+  }
+  return specs;
+}
+
+std::vector<DrillSpec> filter_catalog_by_level(const std::vector<DrillSpec>& specs, int level) {
+  std::vector<DrillSpec> out;
+  for (const auto& spec : specs) {
+    if (spec.level == level) {
+      out.push_back(spec);
+    }
+  }
+  return out;
+}
 
 std::vector<DrillSpec> load_level_catalog(const std::string& catalog_path, int level) {
   if (catalog_path.empty()) {
@@ -42,8 +107,8 @@ std::vector<DrillSpec> load_level_catalog(const std::string& catalog_path, int l
   }
   std::string content((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
   auto document = nlohmann::json::parse(content);
-  auto all_specs = DrillSpec::load_json(document);
-  auto filtered = DrillSpec::filter_by_level(all_specs, level);
+  auto all_specs = parse_catalog_document(document);
+  auto filtered = filter_catalog_by_level(all_specs, level);
   if (filtered.empty()) {
     throw std::runtime_error("No adaptive drills configured for level " + std::to_string(level));
   }

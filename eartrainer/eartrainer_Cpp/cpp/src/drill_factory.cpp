@@ -5,13 +5,6 @@
 #include <stdexcept>
 #include <utility>
 
-#if __has_include(<yaml-cpp/yaml.h>)
-#define EAR_HAVE_YAML 1
-#include <yaml-cpp/yaml.h>
-#else
-#define EAR_HAVE_YAML 0
-#endif
-
 #include "../drills/common.hpp"        // parse_key_from_string etc.
 #include "../drills/chord.hpp"
 #include "../drills/interval.hpp"
@@ -62,136 +55,6 @@ void DrillSpec::apply_defaults() {
     }
   }
   params = merged_params;
-}
-
-#if EAR_HAVE_YAML
-
-// ------------------------ DrillSpec YAML impl ------------------------
-
-static json yaml_to_json(const YAML::Node& n) {
-  // Minimal recursive conversion of YAML::Node to nlohmann::json
-  using Node = YAML::Node;
-  if (!n) return json();
-  if (n.IsScalar()) {
-    // try int, double, bool, then string
-    const auto s = n.as<std::string>();
-    // naive numeric/bool detection (good enough for our spec)
-    try { return json(n.as<int>());   } catch (...) {}
-    try { return json(n.as<double>());} catch (...) {}
-    if (s == "true" || s == "false") return json(n.as<bool>());
-    return json(s);
-  }
-  if (n.IsSequence()) {
-    json arr = json::array();
-    for (auto it : n) arr.push_back(yaml_to_json(it));
-    return arr;
-  }
-  if (n.IsMap()) {
-    json obj = json::object();
-    for (auto it : n) obj[it.first.as<std::string>()] = yaml_to_json(it.second);
-    return obj;
-  }
-  return json();
-}
-
-DrillSpec DrillSpec::from_yaml(const YAML::Node& n) {
-  DrillSpec s;
-  s.id     = n["id"].as<std::string>();
-  s.family = n["family"].as<std::string>();
-  s.level  = n["level"].as<int>();
-  if (n["defaults"])       s.defaults       = yaml_to_json(n["defaults"]);
-  if (n["drill_params"])   s.drill_params   = yaml_to_json(n["drill_params"]);
-  if (n["sampler_params"]) s.sampler_params = yaml_to_json(n["sampler_params"]);
-  if (n["params"])         s.params         = yaml_to_json(n["params"]);
-  s.apply_defaults();
-  return s;
-}
-
-std::vector<DrillSpec> DrillSpec::load_yaml(const std::string& path_or_yaml) {
-  YAML::Node doc;
-  // Try file first
-  try {
-    doc = YAML::LoadFile(path_or_yaml);
-  } catch (...) {
-    // Otherwise treat as YAML content
-    doc = YAML::Load(path_or_yaml);
-  }
-  std::vector<DrillSpec> out;
-  if (doc["drills"]) {
-    for (const auto& node : doc["drills"]) out.push_back(DrillSpec::from_yaml(node));
-  } else if (doc.IsSequence()) {
-    for (const auto& node : doc) out.push_back(DrillSpec::from_yaml(node));
-  } else {
-    throw std::runtime_error("YAML must contain a 'drills' sequence or be a sequence");
-  }
-  return out;
-}
-
-#else
-
-DrillSpec DrillSpec::from_yaml(const YAML::Node&) {
-  throw std::runtime_error("yaml-cpp support not available at build time");
-}
-
-std::vector<DrillSpec> DrillSpec::load_yaml(const std::string&) {
-  throw std::runtime_error("yaml-cpp support not available at build time");
-}
-
-#endif
-
-DrillSpec DrillSpec::from_json(const nlohmann::json& spec_json) {
-  if (!spec_json.contains("id") || !spec_json.contains("family") || !spec_json.contains("level")) {
-    throw std::runtime_error("DrillSpec JSON missing required fields: 'id', 'family', 'level'");
-  }
-
-  DrillSpec spec;
-  spec.id = spec_json["id"].get<std::string>();
-  spec.family = spec_json["family"].get<std::string>();
-  spec.level = spec_json["level"].get<int>();
-
-  if (spec_json.contains("defaults")) {
-    spec.defaults = spec_json["defaults"];
-  }
-  if (spec_json.contains("drill_params")) {
-    spec.drill_params = spec_json["drill_params"];
-  }
-  if (spec_json.contains("sampler_params")) {
-    spec.sampler_params = spec_json["sampler_params"];
-  }
-  if (spec_json.contains("params")) {
-    spec.params = spec_json["params"];
-  }
-
-  spec.apply_defaults();
-  return spec;
-}
-
-std::vector<DrillSpec> DrillSpec::load_json(const nlohmann::json& document) {
-  const nlohmann::json* drills_json = &document;
-  if (document.is_object()) {
-    if (!document.contains("drills")) {
-      throw std::runtime_error("Adaptive catalog JSON must contain a 'drills' array");
-    }
-    drills_json = &document["drills"];
-  }
-
-  if (!drills_json->is_array()) {
-    throw std::runtime_error("Adaptive catalog JSON must contain a 'drills' array");
-  }
-
-  const auto& entries = drills_json->get_array();
-  std::vector<DrillSpec> specs;
-  specs.reserve(entries.size());
-  for (const auto& entry : entries) {
-    specs.push_back(DrillSpec::from_json(entry));
-  }
-  return specs;
-}
-
-std::vector<DrillSpec> DrillSpec::filter_by_level(const std::vector<DrillSpec>& all, int level) {
-  std::vector<DrillSpec> out;
-  for (const auto& s : all) if (s.level == level) out.push_back(s);
-  return out;
 }
 
 DrillSpec DrillSpec::from_session(const ear::SessionSpec& spec) {
@@ -258,7 +121,12 @@ DrillAssignment DrillFactory::create(const DrillSpec& spec) const {
 }
 
 std::vector<DrillAssignment> DrillFactory::create_for_level(const std::vector<DrillSpec>& all, int level) const {
-  auto specs = DrillSpec::filter_by_level(all, level);
+  std::vector<DrillSpec> specs;
+  for (const auto& spec : all) {
+    if (spec.level == level) {
+      specs.push_back(spec);
+    }
+  }
   std::vector<DrillAssignment> out;
   out.reserve(specs.size());
   for (const auto& s : specs) out.push_back(create(s));
