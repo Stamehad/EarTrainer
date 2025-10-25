@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "../resources/drill_params.hpp"
 #include "../nlohmann/json.hpp"
 
 // SessionSpec is defined in ear/types.hpp; needed for conversion helpers.
@@ -17,20 +18,17 @@
 struct DrillSpec {
   std::string id;
   std::string family;
-  int level = 0;
+  std::optional<int> level;
+  std::optional<int> tier;
 
   // Resolved configuration (available to drills without extra parsing).
   std::string key = "C";
-  int range_min = 60;
-  int range_max = 72;
-  std::optional<int> tempo_bpm;
   std::unordered_map<std::string, int> assistance_policy;
-  nlohmann::json params = nlohmann::json::object();
+  ear::DrillParams params{};
+  nlohmann::json j_params = nlohmann::json::object();
 
   // Raw authoring data (kept for serialization/backward compatibility).
   nlohmann::json defaults;        // core defaults (tempo, key, range, assistance...)
-  nlohmann::json drill_params;    // family-specific knobs (legacy)
-  nlohmann::json sampler_params;  // legacy generator knobs
 
   // Convenience helpers on raw defaults
   bool has_default(const char* k) const { return defaults.contains(k); }

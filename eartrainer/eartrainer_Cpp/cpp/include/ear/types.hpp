@@ -9,6 +9,7 @@
 #include <stdexcept>
 
 #include "../nlohmann/json.hpp"
+#include "../include/resources/drill_params.hpp"
 
 namespace ear {
 
@@ -25,6 +26,8 @@ enum class SessionMode {
   Adaptive,
   LevelInspector
 };
+
+enum class KeyType {Major, Minor};
 
 inline std::string to_string(SessionMode mode) {
   switch (mode) {
@@ -56,6 +59,7 @@ struct SessionSpec {
   int n_questions;
   std::string generation;
   std::unordered_map<std::string, int> assistance_policy;
+  ear::DrillParams params;
   nlohmann::json sampler_params;
   std::uint64_t seed;
   SessionMode mode = SessionMode::Manual;
@@ -82,7 +86,7 @@ struct Note {
 struct PromptPlan {
   std::string modality;
   std::vector<Note> notes;
-  std::optional<int> tempo_bpm;
+  std::optional<int> tempo_bpm{};
   std::optional<bool> count_in;
   std::optional<nlohmann::json> midi_clip;
 };

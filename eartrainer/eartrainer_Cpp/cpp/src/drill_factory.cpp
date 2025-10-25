@@ -17,17 +17,13 @@ using nlohmann::json;
 
 void DrillSpec::apply_defaults() {
   key = "C";
-  tempo_bpm.reset();
   assistance_policy.clear();
-  nlohmann::json merged_params = params.is_object() ? params : nlohmann::json::object();
+  nlohmann::json merged_params = j_params.is_object() ? j_params : nlohmann::json::object();
 
   if (defaults.is_object()) {
     const auto& obj = defaults.get_object();
     if (auto it = obj.find("key"); it != obj.end() && it->second.is_string()) {
       key = it->second.get<std::string>();
-    }
-    if (auto it = obj.find("tempo_bpm"); it != obj.end()) {
-      tempo_bpm = std::max(1, it->second.get<int>());
     }
     if (auto it = obj.find("assistance_policy"); it != obj.end() && it->second.is_object()) {
       for (const auto& kv : it->second.get_object()) {
@@ -36,16 +32,6 @@ void DrillSpec::apply_defaults() {
     }
   }
 
-  if (drill_params.is_object()) {
-    for (const auto& kv : drill_params.get_object()) {
-      merged_params[kv.first] = kv.second;
-    }
-  }
-  if (sampler_params.is_object()) {
-    for (const auto& kv : sampler_params.get_object()) {
-      merged_params[kv.first] = kv.second;
-    }
-  }
   if (merged_params.is_object()) {
     if (!merged_params.contains("range_below_semitones") && merged_params.contains("note_range_semitones")) {
       merged_params["range_below_semitones"] = merged_params["note_range_semitones"];
@@ -54,27 +40,20 @@ void DrillSpec::apply_defaults() {
       merged_params["range_above_semitones"] = merged_params["note_range_semitones"];
     }
   }
-  params = merged_params;
+  j_params = merged_params;
 }
 
 DrillSpec DrillSpec::from_session(const ear::SessionSpec& spec) {
   DrillSpec out;
   out.id = spec.drill_kind;
   out.family = spec.drill_kind;
-  out.level = 0;
+  out.level = spec.inspect_level;
+  out.tier = spec.inspect_tier;
   out.key = spec.key;
-  if (spec.tempo_bpm.has_value()) {
-    out.tempo_bpm = spec.tempo_bpm;
-  }
+  out.params = spec.params;
   out.assistance_policy = spec.assistance_policy;
-  out.params = spec.sampler_params.is_object() ? spec.sampler_params : nlohmann::json::object();
-  out.sampler_params = out.params;
-  out.drill_params = nlohmann::json::object();
-  out.defaults = nlohmann::json::object();
+  out.j_params = spec.sampler_params.is_object() ? spec.sampler_params : nlohmann::json::object();
   out.defaults["key"] = out.key;
-  if (out.tempo_bpm.has_value()) {
-    out.defaults["tempo_bpm"] = *out.tempo_bpm;
-  }
   if (!out.assistance_policy.empty()) {
     nlohmann::json assists = nlohmann::json::object();
     for (const auto& kv : out.assistance_policy) {
@@ -184,8 +163,6 @@ void apply_prompt_rendering(const DrillSpec& spec, QuestionBundle& bundle) {
   int tempo_default = 90;
   if (plan.tempo_bpm.has_value() && plan.tempo_bpm.value() > 0) {
     tempo_default = plan.tempo_bpm.value();
-  } else if (spec.tempo_bpm.has_value() && spec.tempo_bpm.value() > 0) {
-    tempo_default = spec.tempo_bpm.value();
   }
 
   int tempo = tempo_default;
@@ -307,7 +284,6 @@ void register_builtin_drills(DrillFactory& factory) {
 
   factory.register_family("chord", []() { return std::make_unique<ChordDrill>(); });
   factory.register_family("chord_melody", []() { return std::make_unique<ChordDrill>(); });
-  factory.register_family("chord_sustain", []() { return std::make_unique<SustainChordDrill>(); });
 }
 
 } // namespace ear

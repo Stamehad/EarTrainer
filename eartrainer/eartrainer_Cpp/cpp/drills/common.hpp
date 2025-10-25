@@ -75,40 +75,39 @@ inline int clamp_to_range(int midi, int min, int max) {
   return std::max(min, std::min(max, midi));
 }
 
-inline std::pair<int, int> semitone_window(const DrillSpec& spec, int default_span) {
-  int below = default_span;
-  int above = default_span;
-  if (spec.params.is_object()) {
-    if (spec.params.contains("range_below_semitones")) {
-      below = std::max(0, spec.params["range_below_semitones"].get<int>());
-    }
-    if (spec.params.contains("range_above_semitones")) {
-      above = std::max(0, spec.params["range_above_semitones"].get<int>());
-    }
-  }
-  return {below, above};
-}
+// inline std::pair<int, int> semitone_window(const DrillSpec& spec, int default_span) {
+//   int below = default_span;
+//   int above = default_span;
+//   if (spec.params.is_object()) {
+//     if (spec.params.contains("range_below_semitones")) {
+//       below = std::max(0, spec.params["range_below_semitones"].get<int>());
+//     }
+//     if (spec.params.contains("range_above_semitones")) {
+//       above = std::max(0, spec.params["range_above_semitones"].get<int>());
+//     }
+//   }
+//   return {below, above};
+// }
 
-inline std::pair<int, int> relative_bounds(const DrillSpec& spec, int default_span) {
-  int tonic = central_tonic_midi(spec.key);
-  auto window = semitone_window(spec, default_span);
-  const int below = window.first;
-  const int above = window.second;
-  int lower = std::max(0, tonic - below);
-  int upper = std::min(127, tonic + above);
-  if (lower > upper) {
-    std::swap(lower, upper);
-  }
-  return {lower, upper};
-}
+// inline std::pair<int, int> relative_bounds(const DrillSpec& spec, int default_span) {
+//   int tonic = central_tonic_midi(spec.key);
+//   auto window = semitone_window(spec, default_span);
+//   const int below = window.first;
+//   const int above = window.second;
+//   int lower = std::max(0, tonic - below);
+//   int upper = std::min(127, tonic + above);
+//   if (lower > upper) {
+//     std::swap(lower, upper);
+//   }
+//   return {lower, upper};
+// }
 
-inline std::vector<int> midi_candidates_for_degree(const DrillSpec& spec, int degree,
-                                                   int semitone_span) {
-  auto bounds = relative_bounds(spec, semitone_span);
-  const int lower = bounds.first;
-  const int upper = bounds.second;
+inline std::vector<int> midi_candidates_for_degree(std::string key, int degree,
+                                                   std::pair<int, int> midi_range) {
+  const int lower = midi_range.first;
+  const int upper = midi_range.second;
 
-  int tonic = central_tonic_midi(spec.key);
+  int tonic = central_tonic_midi(key);
   int midi = tonic + degree_to_offset(degree);
   while (midi > upper) {
     midi -= 12;
@@ -130,21 +129,8 @@ inline std::vector<int> midi_candidates_for_degree(const DrillSpec& spec, int de
   return candidates;
 }
 
-inline int degree_to_midi(const DrillSpec& spec, int degree) {
-  int span = 12;
-  if (spec.params.is_object()) {
-    if (spec.params.contains("range_below_semitones") || spec.params.contains("range_above_semitones")) {
-      int below = spec.params.contains("range_below_semitones") ? spec.params["range_below_semitones"].get<int>() : 12;
-      int above = spec.params.contains("range_above_semitones") ? spec.params["range_above_semitones"].get<int>() : 12;
-      span = std::max({1, below, above});
-    } else if (spec.params.contains("note_range_semitones")) {
-      span = std::max(1, spec.params["note_range_semitones"].get<int>());
-    } else if (spec.params.contains("chord_range_semitones")) {
-      span = std::max(1, spec.params["chord_range_semitones"].get<int>());
-    }
-  }
-
-  auto candidates = midi_candidates_for_degree(spec, degree, span);
+inline int degree_to_midi(const DrillSpec& spec, int degree, std::pair<int, int> midi_range) {
+  auto candidates = midi_candidates_for_degree(spec.key, degree, midi_range);
   if (!candidates.empty()) {
     int base = central_tonic_midi(spec.key) + degree_to_offset(degree);
     auto it = std::min_element(candidates.begin(), candidates.end(),

@@ -96,11 +96,9 @@ LevelInspector::LevelInspector(std::filesystem::path resources_dir,
 void LevelInspector::set_base_spec(const SessionSpec& spec) {
   for (auto& entry : entries_) {
     entry.spec.key = spec.key;
-    entry.spec.tempo_bpm = spec.tempo_bpm;
   }
   for (auto& slot : slots_) {
     slot.spec.key = spec.key;
-    slot.spec.tempo_bpm = spec.tempo_bpm;
   }
 }
 

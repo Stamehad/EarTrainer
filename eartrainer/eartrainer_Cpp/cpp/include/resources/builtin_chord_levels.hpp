@@ -1,11 +1,13 @@
 #pragma once
 
-#include "resources/builtin_make.hpp"
+#include "ear/drill_spec.hpp"
+#include "resources/drill_params.hpp"
 #include "resources/catalog_base.hpp"
 
-#include <nlohmann/json.hpp>
 #include <map>
+#include <optional>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace ear::builtin::ChordLevels {
@@ -16,184 +18,238 @@ namespace detail {
 
 struct Impl;
 
+inline DrillSpec make_chord_drill(std::string id,
+                                  std::string family,
+                                  int level,
+                                  int tier,
+                                  ear::ChordParams params) {
+  DrillSpec spec;
+  spec.id = std::move(id);
+  spec.family = std::move(family);
+  spec.level = level;
+  spec.tier = tier;
+  spec.params = std::move(params);
+  spec.apply_defaults();
+  return spec;
+}
+
 inline const std::vector<DrillSpec>& level_220() {
-  static const std::vector<DrillSpec> drills = {
-      make_drill("CHORD_TRIADS_PIANO",
-                 "chord",
-                 220,
-                 90,
-                 nlohmann::json{
-                     {"chord_prompt_split_tracks", true},
-                     {"chord_prompt_right_channel", 0},
-                     {"chord_prompt_bass_channel", 1},
-                     {"chord_prompt_program", 0},
-                     {"chord_prompt_velocity", 90}}),
-      make_drill("CHORD_TRIADS_STRINGS",
-                 "chord_sustain",
-                 220,
-                 60,
-                 nlohmann::json{
-                     {"chord_voicing_profile", "strings_ensemble"},
-                     {"chord_prompt_program", 48},
-                     {"chord_prompt_duration_ms", 8000},
-                     {"chord_prompt_velocity", 96}}),
-      make_drill("CHORD_TRIADS_PIANO_ROOT_HELPER",
-                 "chord",
-                 220,
-                 80,
-                 nlohmann::json{
-                     {"training_root_enabled", true},
-                     {"training_root_delay_beats", 1.0},
-                     {"training_root_channel", 2},
-                     {"chord_prompt_split_tracks", true},
-                     {"chord_prompt_right_channel", 0},
-                     {"chord_prompt_bass_channel", 1},
-                     {"chord_prompt_program", 0},
-                     {"chord_prompt_velocity", 85}})};
+  static const std::vector<DrillSpec> drills = [] {
+    std::vector<DrillSpec> out;
+
+    {
+      ear::ChordParams params;
+      params.prompt_split_tracks = true;
+      params.prompt_right_channel = 0;
+      params.prompt_bass_channel = 1;
+      params.prompt_program = 0;
+      params.prompt_velocity = 90;
+      out.push_back(make_chord_drill("CHORD_TRIADS_PIANO", "chord", 220, 0, std::move(params)));
+    }
+
+    {
+      ear::ChordParams params;
+      params.voicing_profile = "strings_ensemble";
+      params.prompt_program = 48;
+      params.prompt_velocity = 96;
+      params.prompt_duration_ms = 8000;
+      out.push_back(make_chord_drill("CHORD_TRIADS_STRINGS", "chord_sustain", 220, 1,
+                                      std::move(params)));
+    }
+
+    {
+      ear::ChordParams params;
+      params.prompt_split_tracks = true;
+      params.prompt_right_channel = 0;
+      params.prompt_bass_channel = 1;
+      params.prompt_program = 0;
+      params.prompt_velocity = 85;
+      params.training_root = ear::ChordParams::TrainingRootConfig{};
+      auto& root = params.training_root;
+      root.enabled = true;
+      root.delay_beats = 1.0;
+      root.channel = 2;
+      out.push_back(make_chord_drill("CHORD_TRIADS_PIANO_ROOT_HELPER", "chord", 220, 2,
+                                      std::move(params)));
+    }
+
+    return out;
+  }();
   return drills;
 }
 
 inline const std::vector<DrillSpec>& level_221() {
-  static const std::vector<DrillSpec> drills = {
-      make_drill("CHORD_INVERSIONS_PIANO",
-                 "chord",
-                 221,
-                 90,
-                 nlohmann::json{
-                     {"chord_prompt_split_tracks", true},
-                     {"chord_prompt_program", 0},
-                     {"chord_prompt_velocity", 88}}),
-      make_drill("CHORD_INVERSIONS_STRINGS",
-                 "chord_sustain",
-                 221,
-                 60,
-                 nlohmann::json{
-                     {"chord_voicing_profile", "strings_ensemble"},
-                     {"chord_prompt_program", 49},
-                     {"chord_prompt_velocity", 92},
-                     {"chord_prompt_duration_ms", 10000}}),
-      make_drill("CHORD_INVERSIONS_STRINGS_ROOT_HELPER",
-                 "chord_sustain",
-                 221,
-                 60,
-                 nlohmann::json{
-                     {"training_root_enabled", true},
-                     {"training_root_delay_beats", 0.75},
-                     {"training_root_channel", 3},
-                     {"chord_voicing_profile", "strings_ensemble"},
-                     {"chord_prompt_program", 48},
-                     {"chord_prompt_velocity", 92},
-                     {"chord_prompt_duration_ms", 10000}})};
+  static const std::vector<DrillSpec> drills = [] {
+    std::vector<DrillSpec> out;
+
+    {
+      ear::ChordParams params;
+      params.prompt_split_tracks = true;
+      params.prompt_program = 0;
+      params.prompt_velocity = 88;
+      out.push_back(make_chord_drill("CHORD_INVERSIONS_PIANO", "chord", 221, 0,
+                                      std::move(params)));
+    }
+
+    {
+      ear::ChordParams params;
+      params.voicing_profile = "strings_ensemble";
+      params.prompt_program = 49;
+      params.prompt_velocity = 92;
+      params.prompt_duration_ms = 10000;
+      out.push_back(make_chord_drill("CHORD_INVERSIONS_STRINGS", "chord_sustain", 221, 1,
+                                      std::move(params)));
+    }
+
+    {
+      ear::ChordParams params;
+      params.voicing_profile = "strings_ensemble";
+      params.prompt_program = 48;
+      params.prompt_velocity = 92;
+      params.prompt_duration_ms = 10000;
+      params.training_root = ear::ChordParams::TrainingRootConfig{};
+      auto& root = params.training_root;
+      root.enabled = true;
+      root.delay_beats = 0.75;
+      root.channel = 3;
+      out.push_back(make_chord_drill("CHORD_INVERSIONS_STRINGS_ROOT_HELPER", "chord_sustain",
+                                      221, 2, std::move(params)));
+    }
+
+    return out;
+  }();
   return drills;
 }
 
 inline const std::vector<DrillSpec>& level_222() {
-  static const std::vector<DrillSpec> drills = {
-      make_drill("CHORD_EXTENDED_TRIADS",
-                 "chord",
-                 222,
-                 80,
-                 nlohmann::json{
-                     {"add_seventh", true},
-                     {"chord_prompt_split_tracks", true},
-                     {"chord_prompt_program", 0},
-                     {"chord_prompt_velocity", 88}}),
-      make_drill("CHORD_EXTENDED_STRINGS",
-                 "chord_sustain",
-                 222,
-                 60,
-                 nlohmann::json{
-                     {"add_seventh", true},
-                     {"chord_voicing_profile", "strings_ensemble"},
-                     {"chord_prompt_program", 48},
-                     {"chord_prompt_velocity", 94},
-                     {"chord_prompt_duration_ms", 12000}}),
-      make_drill("CHORD_EXTENDED_PIANO_FAST",
-                 "chord",
-                 222,
-                 110,
-                 nlohmann::json{
-                     {"add_seventh", true},
-                     {"chord_prompt_split_tracks", true},
-                     {"chord_prompt_program", 0},
-                     {"chord_prompt_velocity", 90},
-                     {"chord_prompt_duration_ms", 600}}),
-      make_drill("CHORD_EXTENDED_STRINGS_ROOT_HELPER",
-                 "chord_sustain",
-                 222,
-                 60,
-                 nlohmann::json{
-                     {"add_seventh", true},
-                     {"training_root_enabled", true},
-                     {"training_root_delay_beats", 1},
-                     {"training_root_channel", 2},
-                     {"chord_voice_leading_continuity", true},
-                     {"chord_voicing_profile", "strings_ensemble"},
-                     {"chord_prompt_program", 51},
-                     {"chord_prompt_velocity", 94},
-                     {"chord_prompt_duration_ms", 3000}})};
+  static const std::vector<DrillSpec> drills = [] {
+    std::vector<DrillSpec> out;
+
+    {
+      ear::ChordParams params;
+      params.add_seventh = true;
+      params.prompt_split_tracks = true;
+      params.prompt_program = 0;
+      params.prompt_velocity = 88;
+      out.push_back(make_chord_drill("CHORD_EXTENDED_TRIADS", "chord", 222, 0,
+                                      std::move(params)));
+    }
+
+    {
+      ear::ChordParams params;
+      params.add_seventh = true;
+      params.voicing_profile = "strings_ensemble";
+      params.prompt_program = 48;
+      params.prompt_velocity = 94;
+      params.prompt_duration_ms = 12000;
+      out.push_back(make_chord_drill("CHORD_EXTENDED_STRINGS", "chord_sustain", 222, 1,
+                                      std::move(params)));
+    }
+
+    {
+      ear::ChordParams params;
+      params.add_seventh = true;
+      params.prompt_split_tracks = true;
+      params.prompt_program = 0;
+      params.prompt_velocity = 90;
+      params.prompt_duration_ms = 600;
+      out.push_back(make_chord_drill("CHORD_EXTENDED_PIANO_FAST", "chord", 222, 2,
+                                      std::move(params)));
+    }
+
+    {
+      ear::ChordParams params;
+      params.add_seventh = true;
+      params.voicing_profile = "strings_ensemble";
+      params.prompt_program = 51;
+      params.prompt_velocity = 94;
+      params.prompt_duration_ms = 3000;
+      params.voice_leading_continuity = true;
+      params.training_root = ear::ChordParams::TrainingRootConfig{};
+      auto& root = params.training_root;
+      root.enabled = true;
+      root.delay_beats = 1.0;
+      root.channel = 2;
+      out.push_back(make_chord_drill("CHORD_EXTENDED_STRINGS_ROOT_HELPER", "chord_sustain",
+                                      222, 3, std::move(params)));
+    }
+
+    return out;
+  }();
   return drills;
 }
 
 inline const std::vector<DrillSpec>& level_223() {
-  static const std::vector<DrillSpec> drills = {
-      make_drill("CHORD_STRINGS_LONG_SUSTAIN",
-                 "chord_sustain",
-                 223,
-                 48,
-                 nlohmann::json{
-                     {"chord_voicing_profile", "strings_ensemble"},
-                     {"chord_prompt_program", 52},
-                     {"chord_prompt_velocity", 96},
-                     {"chord_prompt_duration_ms", 15000},
-                     {"training_root_enabled", false}}),
-      make_drill("CHORD_STRINGS_FADING",
-                 "chord_sustain",
-                 223,
-                 48,
-                 nlohmann::json{
-                     {"chord_voicing_profile", "strings_ensemble"},
-                     {"chord_prompt_program", 48},
-                     {"chord_prompt_velocity", 90},
-                     {"chord_prompt_duration_ms", 9000},
-                     {"training_root_enabled", true},
-                     {"training_root_delay_beats", 1.5},
-                     {"training_root_channel", 4}}),
-      make_drill("CHORD_STRINGS_SMOOTH_TOP",
-                 "chord_sustain",
-                 223,
-                 55,
-                 nlohmann::json{
-                     {"chord_voicing_profile", "strings_ensemble"},
-                     {"chord_voice_leading_continuity", true},
-                     {"chord_allowed_top_degrees", jarray({2, 4})},
-                     {"chord_prompt_program", 48},
-                     {"chord_prompt_velocity", 92},
-                     {"chord_prompt_duration_ms", 12000}}),
-      make_drill("CHORD_PIANO_WITH_ROOT_HINT",
-                 "chord",
-                 223,
-                 72,
-                 nlohmann::json{
-                     {"training_root_enabled", true},
-                     {"training_root_delay_beats", 1.0},
-                     {"training_root_channel", 5},
-                     {"chord_prompt_split_tracks", true},
-                     {"chord_prompt_program", 0},
-                     {"chord_prompt_velocity", 88},
-                     {"chord_prompt_duration_ms", 900}}),
-      make_drill("CHORD_PIANO_SMOOTH_TOP",
-                 "chord",
-                 223,
-                 80,
-                 nlohmann::json{
-                     {"chord_voicing_profile", "simple_triads"},
-                     {"chord_voice_leading_continuity", true},
-                     {"chord_allowed_top_degrees", jarray({0, 2, 4})},
-                     {"chord_prompt_split_tracks", true},
-                     {"chord_prompt_program", 0},
-                     {"chord_prompt_velocity", 85},
-                     {"chord_prompt_duration_ms", 800}})};
+  static const std::vector<DrillSpec> drills = [] {
+    std::vector<DrillSpec> out;
+
+    {
+      ear::ChordParams params;
+      params.voicing_profile = "strings_ensemble";
+      params.prompt_program = 52;
+      params.prompt_velocity = 96;
+      params.prompt_duration_ms = 15000;
+      out.push_back(make_chord_drill("CHORD_STRINGS_LONG_SUSTAIN", "chord_sustain", 223, 0,
+                                      std::move(params)));
+    }
+
+    {
+      ear::ChordParams params;
+      params.voicing_profile = "strings_ensemble";
+      params.prompt_program = 48;
+      params.prompt_velocity = 90;
+      params.prompt_duration_ms = 9000;
+      params.training_root = ear::ChordParams::TrainingRootConfig{};
+      auto& root = params.training_root;
+      root.enabled = true;
+      root.delay_beats = 1.5;
+      root.channel = 4;
+      out.push_back(make_chord_drill("CHORD_STRINGS_FADING", "chord_sustain", 223, 1,
+                                      std::move(params)));
+    }
+
+    {
+      ear::ChordParams params;
+      params.voicing_profile = "strings_ensemble";
+      params.voice_leading_continuity = true;
+      params.allowed_top_degrees = {2, 4};
+      params.prompt_program = 48;
+      params.prompt_velocity = 92;
+      params.prompt_duration_ms = 12000;
+      out.push_back(make_chord_drill("CHORD_STRINGS_SMOOTH_TOP", "chord_sustain", 223, 2,
+                                      std::move(params)));
+    }
+
+    {
+      ear::ChordParams params;
+      params.prompt_split_tracks = true;
+      params.prompt_program = 0;
+      params.prompt_velocity = 88;
+      params.prompt_duration_ms = 900;
+      params.training_root = ear::ChordParams::TrainingRootConfig{};
+      auto& root = params.training_root;
+      root.enabled = true;
+      root.delay_beats = 1.0;
+      root.channel = 5;
+      out.push_back(make_chord_drill("CHORD_PIANO_WITH_ROOT_HINT", "chord", 223, 3,
+                                      std::move(params)));
+    }
+
+    {
+      ear::ChordParams params;
+      params.voicing_profile = "simple_triads";
+      params.voice_leading_continuity = true;
+      params.allowed_top_degrees = {0, 2, 4};
+      params.prompt_split_tracks = true;
+      params.prompt_program = 0;
+      params.prompt_velocity = 85;
+      params.prompt_duration_ms = 800;
+      out.push_back(make_chord_drill("CHORD_PIANO_SMOOTH_TOP", "chord", 223, 4,
+                                      std::move(params)));
+    }
+
+    return out;
+  }();
   return drills;
 }
 
@@ -218,3 +274,4 @@ inline const std::map<int, std::vector<int>>& phases()           { return detail
 inline const std::vector<DrillSpec>& drills_for_level(int level) { return detail::Impl::drills_for_level(level); }
 
 } // namespace ear::builtin::ChordLevels
+

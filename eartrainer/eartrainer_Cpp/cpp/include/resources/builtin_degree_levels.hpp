@@ -1,11 +1,13 @@
 #pragma once
 
-#include "resources/builtin_make.hpp"
+#include "ear/drill_spec.hpp"
+#include "resources/drill_params.hpp"
 #include "resources/catalog_base.hpp"
 
-#include <nlohmann/json.hpp>
 #include <map>
+#include <optional>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace ear::builtin::DegreeLevels {
@@ -16,109 +18,156 @@ namespace detail {
 
 struct Impl;
 
+inline DrillSpec make_note_drill(std::string id,
+                                 int level,
+                                 int tier,
+                                 ear::NoteParams params) {
+  DrillSpec spec;
+  spec.id = std::move(id);
+  spec.family = "note";
+  spec.level = level;
+  spec.tier = tier;
+  spec.params = std::move(params);
+  spec.apply_defaults();
+  return spec;
+}
+
 inline const std::vector<DrillSpec>& level_1() {
-  static const std::vector<DrillSpec> drills = {
-      make_drill("PATHWAYS_1_4",
-                 "note",
-                 1,
-                 80,
-                 nlohmann::json{{"avoid_repeat", true},
-                                {"allowed_degrees", jarray({0, 1, 2, 3})},
-                                {"range_below_semitones", 0},
-                                {"range_above_semitones", 12},
-                                {"use_pathway", true},
-                                {"pathway_repeat_lead", false},
-                                {"pathway_step_beats", 1.0},
-                                {"pathway_rest_beats", 0.5}}),
-      make_drill("PATHWAYS_5_7",
-                 "note",
-                 1,
-                 80,
-                 nlohmann::json{{"avoid_repeat", true},
-                                {"allowed_degrees", jarray({4, 5, 6})},
-                                {"range_below_semitones", 0},
-                                {"range_above_semitones", 12},
-                                {"use_pathway", true},
-                                {"pathway_repeat_lead", false},
-                                {"pathway_step_beats", 1.0},
-                                {"pathway_rest_beats", 0.5}})};
+  static const std::vector<DrillSpec> drills = [] {
+    std::vector<DrillSpec> out;
+
+    {
+      ear::NoteParams params;
+      params.allowed_degrees = {0, 1, 2, 3};
+      params.avoid_repeat = true;
+      params.range_below_semitones = 0;
+      params.range_above_semitones = 12;
+      params.use_pathway = true;
+      params.pathway_repeat_lead = false;
+      params.pathway_tempo_bpm = 60;
+      params.pathway_step_beats = 1.0;
+      params.pathway_rest_beats = 0.5;
+      out.push_back(make_note_drill("PATHWAYS_1_4", 1, 0, std::move(params)));
+    }
+
+    {
+      ear::NoteParams params;
+      params.allowed_degrees = {4, 5, 6};
+      params.avoid_repeat = true;
+      params.range_below_semitones = 0;
+      params.range_above_semitones = 12;
+      params.use_pathway = true;
+      params.pathway_repeat_lead = false;
+      params.pathway_tempo_bpm = 60;
+      params.pathway_step_beats = 1.0;
+      params.pathway_rest_beats = 0.5;
+      out.push_back(make_note_drill("PATHWAYS_5_7", 1, 1, std::move(params)));
+    }
+
+    return out;
+  }();
   return drills;
 }
 
 inline const std::vector<DrillSpec>& level_2() {
-  static const std::vector<DrillSpec> drills = {
-      make_drill("NOTE_1_4",
-                 "note",
-                 2,
-                 72,
-                 nlohmann::json{{"avoid_repeat", true},
-                                {"allowed_degrees", jarray({0, 1, 2, 3})},
-                                {"range_below_semitones", 0},
-                                {"range_above_semitones", 12}}),
-      make_drill("NOTE_5_7",
-                 "note",
-                 2,
-                 72,
-                 nlohmann::json{{"avoid_repeat", true},
-                                {"allowed_degrees", jarray({4, 5, 6})},
-                                {"range_below_semitones", 0},
-                                {"range_above_semitones", 11}})};
+  static const std::vector<DrillSpec> drills = [] {
+    std::vector<DrillSpec> out;
+
+    {
+      ear::NoteParams params;
+      params.allowed_degrees = {0, 1, 2, 3};
+      params.avoid_repeat = true;
+      params.range_below_semitones = 0;
+      params.range_above_semitones = 12;
+      out.push_back(make_note_drill("NOTE_1_4", 2, 0, std::move(params)));
+    }
+
+    {
+      ear::NoteParams params;
+      params.allowed_degrees = {4, 5, 6};
+      params.avoid_repeat = true;
+      params.range_below_semitones = 0;
+      params.range_above_semitones = 11;
+      out.push_back(make_note_drill("NOTE_5_7", 2, 1, std::move(params)));
+    }
+
+    return out;
+  }();
   return drills;
 }
 
 inline const std::vector<DrillSpec>& level_3() {
-  static const std::vector<DrillSpec> drills = {
-      make_drill("NOTE_TO_TONIC",
-                 "note",
-                 3,
-                 72,
-                 nlohmann::json{{"avoid_repeat", true},
-                                {"allowed_degrees", jarray({1, 2, 3, 4, 5, 6})},
-                                {"tonic_anchor", "after"},
-                                {"range_below_semitones", 0},
-                                {"range_above_semitones", 12}}),
-      make_drill("NOTE_AFTER_TONIC",
-                 "note",
-                 3,
-                 72,
-                 nlohmann::json{{"avoid_repeat", true},
-                                {"allowed_degrees", jarray({1, 2, 3, 4, 5, 6})},
-                                {"tonic_anchor", "before"},
-                                {"range_below_semitones", 0},
-                                {"range_above_semitones", 12}})};
+  static const std::vector<DrillSpec> drills = [] {
+    std::vector<DrillSpec> out;
+
+    {
+      ear::NoteParams params;
+      params.allowed_degrees = {1, 2, 3, 4, 5, 6};
+      params.avoid_repeat = true;
+      params.range_below_semitones = 0;
+      params.range_above_semitones = 12;
+      params.tonic_anchor = NoteParams::TonicAnchor::After;
+      params.tonic_anchor_include_octave = false;
+      params.note_tempo_bpm = 60;
+      out.push_back(make_note_drill("NOTE_TO_TONIC", 3, 0, std::move(params)));
+    }
+
+    {
+      ear::NoteParams params;
+      params.allowed_degrees = {1, 2, 3, 4, 5, 6};
+      params.avoid_repeat = true;
+      params.range_below_semitones = 0;
+      params.range_above_semitones = 12;
+      params.tonic_anchor = NoteParams::TonicAnchor::Before;
+      params.tonic_anchor_include_octave = false;
+      params.note_tempo_bpm = 60;
+      out.push_back(make_note_drill("NOTE_AFTER_TONIC", 3, 1, std::move(params)));
+    }
+
+    return out;
+  }();
   return drills;
 }
 
 inline const std::vector<DrillSpec>& level_11() {
-  static const std::vector<DrillSpec> drills = {
-      make_drill("PATHWAYS_2OCT",
-                 "note",
-                 11,
-                 120,
-                 nlohmann::json{{"avoid_repeat", true},
-                                {"range_below_semitones", 12},
-                                {"range_above_semitones", 12},
-                                {"use_pathway", true},
-                                {"pathway_repeat_lead", false},
-                                {"pathway_step_beats", 1.0},
-                                {"pathway_rest_beats", 0.5}}),
-      make_drill("NOTE_WITH_TONIC_2OCT",
-                 "note",
-                 11,
-                 120,
-                 nlohmann::json{{"avoid_repeat", true},
-                                {"allowed_degrees", jarray({1, 2, 3, 4, 5, 6})},
-                                {"tonic_anchor", "both"},
-                                {"tonic_anchor_include_octave", true},
-                                {"range_below_semitones", 12},
-                                {"range_above_semitones", 12}}),
-      make_drill("NOTE_2OCT",
-                 "note",
-                 11,
-                 72,
-                 nlohmann::json{{"avoid_repeat", true},
-                                {"range_below_semitones", 12},
-                                {"range_above_semitones", 12}})};
+  static const std::vector<DrillSpec> drills = [] {
+    std::vector<DrillSpec> out;
+
+    {
+      ear::NoteParams params;
+      params.avoid_repeat = true;
+      params.range_below_semitones = 12;
+      params.range_above_semitones = 12;
+      params.use_pathway = true;
+      params.pathway_repeat_lead = false;
+      params.pathway_tempo_bpm = 80;
+      params.pathway_step_beats = 1.0;
+      params.pathway_rest_beats = 0.5;
+      out.push_back(make_note_drill("PATHWAYS_2OCT", 11, 0, std::move(params)));
+    }
+
+    {
+      ear::NoteParams params;
+      params.allowed_degrees = {1, 2, 3, 4, 5, 6};
+      params.avoid_repeat = true;
+      params.range_below_semitones = 12;
+      params.range_above_semitones = 12;
+      params.tonic_anchor = NoteParams::TonicAnchor::Before;
+      params.tonic_anchor_include_octave = true;
+      params.note_tempo_bpm = 80;
+      out.push_back(make_note_drill("NOTE_WITH_TONIC_2OCT", 11, 1, std::move(params)));
+    }
+
+    {
+      ear::NoteParams params;
+      params.avoid_repeat = true;
+      params.range_below_semitones = 12;
+      params.range_above_semitones = 12;
+      out.push_back(make_note_drill("NOTE_2OCT", 11, 2, std::move(params)));
+    }
+
+    return out;
+  }();
   return drills;
 }
 

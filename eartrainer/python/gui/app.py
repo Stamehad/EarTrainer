@@ -661,11 +661,11 @@ def build_spec(
 
 
 def _step_params_for_sampler(raw: Dict[str, Any]) -> Dict[str, Any]:
-    params = dict(raw)
-    params.pop("drill", None)
-    params.pop("questions", None)
-    params.pop("preset", None)
-    return params
+    j_params = dict(raw)
+    j_params.pop("drill", None)
+    j_params.pop("questions", None)
+    j_params.pop("preset", None)
+    return j_params
 
 
 def _coerce_answer(answer: str, expected: Any) -> Any:

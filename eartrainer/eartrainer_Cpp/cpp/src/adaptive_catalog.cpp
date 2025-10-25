@@ -23,17 +23,8 @@ DrillSpec spec_from_json(const nlohmann::json& spec_json) {
   spec.family = spec_json["family"].get<std::string>();
   spec.level = spec_json["level"].get<int>();
 
-  if (spec_json.contains("defaults")) {
-    spec.defaults = spec_json["defaults"];
-  }
-  if (spec_json.contains("drill_params")) {
-    spec.drill_params = spec_json["drill_params"];
-  }
-  if (spec_json.contains("sampler_params")) {
-    spec.sampler_params = spec_json["sampler_params"];
-  }
-  if (spec_json.contains("params")) {
-    spec.params = spec_json["params"];
+  if (spec_json.contains("j_params")) {
+    spec.j_params = spec_json["j_params"];
   }
 
   spec.apply_defaults();

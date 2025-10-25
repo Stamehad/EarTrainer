@@ -58,8 +58,8 @@ double center_of_mass(const std::vector<int>& values) {
   return sum / static_cast<double>(values.size());
 }
 
-std::vector<int> normalized_top_allowance(const DrillSpec& spec) {
-  auto raw = param_int_list(spec, "chord_allowed_top_degrees");
+std::vector<int> normalized_top_allowance(const ChordParams& params) {
+  auto raw = params.allowed_top_degrees;
   for (int& value : raw) {
     value = drills::normalize_degree_index(value);
   }
@@ -70,7 +70,8 @@ std::vector<int> normalized_top_allowance(const DrillSpec& spec) {
 
 } // namespace
 
-ChordQuestionCore prepare_chord_question(const DrillSpec& spec,
+ChordQuestionCore prepare_chord_question(const ChordParams& params,
+                                          const std::string key,
                                          int root_degree,
                                          std::uint64_t& rng_state,
                                          ChordSelectionState& selection_state,
@@ -80,10 +81,8 @@ ChordQuestionCore prepare_chord_question(const DrillSpec& spec,
   ChordQuestionCore core;
   core.root_degree = root_degree;
   selection_state.last_degree = core.root_degree;
-
-  if (spec.params.contains("add_seventh")) {
-    core.add_seventh = spec.params["add_seventh"].get<bool>();
-  }
+  
+  core.add_seventh = params.add_seventh;
 
   core.quality = chord_quality_for_degree(core.root_degree);
   core.quality_enum = triad_quality_from_string(core.quality);
@@ -120,13 +119,12 @@ ChordQuestionCore prepare_chord_question(const DrillSpec& spec,
       }
     };
 
-    auto allowed_top = normalized_top_allowance(spec);
+    auto allowed_top = normalized_top_allowance(params);
     if (!allowed_top.empty()) {
       apply_filter(allowed_top);
     }
 
-    bool smooth = param_flag(spec, "chord_voice_leading_continuity", false);
-    if (smooth && selection_state.last_top_degree.has_value()) {
+    if (params.voice_leading_continuity && selection_state.last_top_degree.has_value()) {
       auto snapshot = candidates;
       apply_filter(continuity_degrees(selection_state.last_top_degree.value()));
       if (candidates.empty()) {
@@ -176,7 +174,7 @@ ChordQuestionCore prepare_chord_question(const DrillSpec& spec,
   core.bass_voicing_id = selection.bass->id;
   core.bass_offset = selection.bass->degree_offset;
   core.bass_degree = core.root_degree + core.bass_offset;
-  core.tonic_midi = drills::central_tonic_midi(spec.key);
+  core.tonic_midi = drills::central_tonic_midi(key);
   core.top_degree = pattern_top_degree(*core.right_pattern, core.root_degree);
 
   core.right_degrees.reserve(core.right_pattern->degree_offsets.size());
@@ -208,7 +206,7 @@ int select_bass_midi(const ChordQuestionCore& core) {
   return drills::clamp_to_range(best_bass, 0, 127);
 }
 
-std::vector<int> voice_right_hand_midi(const DrillSpec& spec,
+std::vector<int> voice_right_hand_midi(const ChordParams& params,
                                        const ChordQuestionCore& core,
                                        int bass_midi,
                                        const std::optional<int>& previous_top_midi) {
@@ -219,7 +217,7 @@ std::vector<int> voice_right_hand_midi(const DrillSpec& spec,
   }
 
   constexpr int kRightTarget = 60; // C4
-  const bool continuity = drills::param_flag(spec, "chord_voice_leading_continuity", false);
+  const bool continuity = params.voice_leading_continuity;
 
   std::vector<int> best_voicing = base_right_midi;
   auto evaluate_candidate = [&](const std::vector<int>& candidate) {
@@ -300,25 +298,26 @@ int find_voicing_index(const std::vector<ear::ChordVoicingEngine::RightHandPatte
   return 0;
 }
 
-TrainingRootConfig resolve_training_root_config(const DrillSpec& spec,
-                                                bool split_tracks,
-                                                int chord_duration_ms,
-                                                int default_velocity,
-                                                int right_channel_fallback,
-                                                int merged_channel_fallback) {
-  TrainingRootConfig config;
-  config.enabled = param_flag(spec, "training_root_enabled", false);
-  config.delay_beats = param_double(spec, "training_root_delay_beats", 0.0);
-  config.duration_ms = param_int(spec, "training_root_duration_ms", chord_duration_ms);
-  if (config.duration_ms <= 0) {
-    config.duration_ms = chord_duration_ms;
-  }
-  config.channel = param_int(spec, "training_root_channel",
-                             split_tracks ? right_channel_fallback : merged_channel_fallback);
-  config.program = param_int(spec, "training_root_program", 0);
-  config.velocity = param_int(spec, "training_root_velocity", default_velocity);
-  return config;
-}
+// ChordParams::TrainingRootConfig resolve_training_root_config(const ChordParams& params, DrillSpec& spec,
+//                                                 bool split_tracks,
+//                                                 int chord_duration_ms,
+//                                                 int default_velocity,
+//                                                 int right_channel_fallback,
+//                                                 int merged_channel_fallback) {
+//   ChordParams::TrainingRootConfig config;
+//   config.enabled = param_flag(spec, "training_root_enabled", false);
+//   config.delay_beats = param_double(spec, "training_root_delay_beats", 0.0);
+//   config.duration_ms = param_int(spec, "training_root_duration_ms", chord_duration_ms);
+//   config.enabled = params.training_root.value().enabled;
+//   if (config.duration_ms <= 0) {
+//     config.duration_ms = chord_duration_ms;
+//   }
+//   config.channel = param_int(spec, "training_root_channel",
+//                              split_tracks ? right_channel_fallback : merged_channel_fallback);
+//   config.program = param_int(spec, "training_root_program", 0);
+//   config.velocity = param_int(spec, "training_root_velocity", default_velocity);
+//   return config;
+// }
 
 int adjust_helper_midi(int helper_midi, int bass_midi, const std::vector<int>& right_midi) {
   if (right_midi.empty()) {

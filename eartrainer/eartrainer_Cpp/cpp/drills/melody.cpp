@@ -110,37 +110,13 @@ int choose_step(std::uint64_t& rng_state, const std::vector<double>& probs) {
   return kSteps[probs.size() - 1];
 }
 
-std::vector<int> generate_degrees(const DrillSpec& spec, std::uint64_t& rng_state) {
-  int length = kDefaultLength;
-  auto sample_lengths = [&](const nlohmann::json& arr) -> bool {
-    if (!arr.is_array()) return false;
-    std::vector<int> candidates;
-    for (const auto& entry : arr.get_array()) {
-      if (entry.is_number_integer()) {
-        candidates.push_back(std::max(1, entry.get<int>()));
-      }
-    }
-    if (candidates.empty()) {
-      return false;
-    }
-    int idx = rand_int(rng_state, 0, static_cast<int>(candidates.size()) - 1);
-    length = candidates[static_cast<std::size_t>(idx)];
-    return true;
-  };
+std::vector<int> generate_degrees(const MelodyParams& params, std::uint64_t& rng_state) {
+  int idx = rand_int(rng_state, 0, params.melody_lengths.size()-1);
+  int length = params.melody_lengths[static_cast<std::size_t>(idx)];
 
-  if (spec.params.contains("melody_lengths") && sample_lengths(spec.params["melody_lengths"])) {
-    // length set via melody_lengths array
-  } else if (spec.params.contains("melody_length")) {
-    const auto& value = spec.params["melody_length"];
-    if (!sample_lengths(value)) {
-      length = std::max(1, value.get<int>());
-    }
-  }
-
-  int max_step = 7;
-  if (spec.params.contains("melody_max_step")) {
-    max_step = std::clamp(spec.params["melody_max_step"].get<int>(), 0, 7);
-  }
+  int max_step = params.melody_max_step;
+  max_step = std::clamp(max_step, 0, 7);
+  
 
   std::vector<int> all_degrees = base_degrees();
   int start_index = rand_int(rng_state, 0, static_cast<int>(all_degrees.size()) - 1);
@@ -185,11 +161,15 @@ std::vector<int> generate_degrees(const DrillSpec& spec, std::uint64_t& rng_stat
   return sequence;
 }
 
-std::vector<int> degrees_to_midi(const DrillSpec& spec, const std::vector<int>& degrees) {
+std::vector<int> degrees_to_midi(
+  const DrillSpec& spec, 
+  const std::vector<int>& degrees, 
+  const std::pair<int,int> midi_range
+) {
   int tonic = drills::central_tonic_midi(spec.key);
-  auto bounds = drills::relative_bounds(spec, 12);
-  const int midi_min = bounds.first;
-  const int midi_max = bounds.second;
+  
+  const int midi_min = midi_range.first;
+  const int midi_max = midi_range.second;
   std::vector<int> base_midis;
   base_midis.reserve(degrees.size());
   for (int degree : degrees) {
@@ -250,34 +230,30 @@ std::vector<int> degrees_to_midi(const DrillSpec& spec, const std::vector<int>& 
 
 } // namespace
 
+//====================================================================
+// INITIALIZE MELODYDRILL
+//====================================================================
 void MelodyDrill::configure(const DrillSpec& spec) {
   spec_ = spec;
+  params = std::get<MelodyParams>(spec_.params);
+  tonic_midi = drills::central_tonic_midi(spec_.key);
+  midi_range = {
+    tonic_midi - params.range_below_semitones, 
+    tonic_midi + params.range_above_semitones
+  };
+
   recent_sequences_.clear();
-  if (!spec_.params.is_object()) {
-    spec_.params = nlohmann::json::object();
-  }
-  int below = 12;
-  int above = 12;
-  if (spec_.params.contains("range_below_semitones")) {
-    below = std::max(0, spec_.params["range_below_semitones"].get<int>());
-  }
-  if (spec_.params.contains("range_above_semitones")) {
-    above = std::max(0, spec_.params["range_above_semitones"].get<int>());
-  }
-  if (!spec_.params.contains("range_below_semitones")) {
-    spec_.params["range_below_semitones"] = below;
-  }
-  if (!spec_.params.contains("range_above_semitones")) {
-    spec_.params["range_above_semitones"] = above;
-  }
 }
 
+//====================================================================
+// NEXT QUESTION -> QUESTION BUNDLE
+//====================================================================
 QuestionBundle MelodyDrill::next_question(std::uint64_t& rng_state) {
   std::vector<int> degrees;
   std::vector<int> midis;
 
   for (int attempt = 0; attempt < kMaxTries; ++attempt) {
-    degrees = generate_degrees(spec_, rng_state);
+    degrees = generate_degrees(params, rng_state);
     if (kRecentCapacity == 0) {
       break;
     }
@@ -293,7 +269,7 @@ QuestionBundle MelodyDrill::next_question(std::uint64_t& rng_state) {
     }
   }
 
-  midis = degrees_to_midi(spec_, degrees);
+  midis = degrees_to_midi(spec_, degrees, midi_range);
 
   nlohmann::json data = nlohmann::json::object();
   nlohmann::json degree_array = nlohmann::json::array();
@@ -312,7 +288,7 @@ QuestionBundle MelodyDrill::next_question(std::uint64_t& rng_state) {
 
   PromptPlan plan;
   plan.modality = "midi";
-  plan.tempo_bpm = spec_.tempo_bpm;
+  plan.tempo_bpm = params.tempo_bpm;
   plan.count_in = true;
 
   auto step_duration_ms = [](int bpm) {
@@ -320,7 +296,7 @@ QuestionBundle MelodyDrill::next_question(std::uint64_t& rng_state) {
     double quarter_ms = 60000.0 / static_cast<double>(tempo);
     return static_cast<int>(std::lround(quarter_ms));
   };
-  int tempo_bpm = spec_.tempo_bpm.has_value() ? spec_.tempo_bpm.value() : 60;
+  int tempo_bpm = params.tempo_bpm;
   int duration_ms = step_duration_ms(tempo_bpm);
 
   nlohmann::json note_payload = nlohmann::json::array();

@@ -44,17 +44,18 @@ struct ChordQuestionCore {
   int top_degree = 0;
 };
 
-ChordQuestionCore prepare_chord_question(const DrillSpec& spec,
-                                         int root_degree,
-                                         std::uint64_t& rng_state,
-                                         ChordSelectionState& selection_state,
-                                         const std::optional<std::string>& preferred_right,
-                                         const std::optional<std::string>& preferred_bass,
-                                         std::string_view profile_id);
+ChordQuestionCore prepare_chord_question(const ChordParams& params,
+                                        const std::string key,
+                                        int root_degree,
+                                        std::uint64_t& rng_state,
+                                        ChordSelectionState& selection_state,
+                                        const std::optional<std::string>& preferred_right,
+                                        const std::optional<std::string>& preferred_bass,
+                                        std::string_view profile_id);
 
 int select_bass_midi(const ChordQuestionCore& core);
 
-std::vector<int> voice_right_hand_midi(const DrillSpec& spec,
+std::vector<int> voice_right_hand_midi(const ChordParams& params,
                                        const ChordQuestionCore& core,
                                        int bass_midi,
                                        const std::optional<int>& previous_top_midi);
@@ -62,7 +63,7 @@ std::vector<int> voice_right_hand_midi(const DrillSpec& spec,
 int find_voicing_index(const std::vector<ear::ChordVoicingEngine::RightHandPattern>& options,
                        const std::string& id);
 
-TrainingRootConfig resolve_training_root_config(const DrillSpec& spec,
+ChordParams::TrainingRootConfig resolve_training_root_config(const DrillSpec& spec,
                                                 bool split_tracks,
                                                 int chord_duration_ms,
                                                 int default_velocity,

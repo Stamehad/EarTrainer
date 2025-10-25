@@ -16,15 +16,15 @@ public:
 
 private:
   DrillSpec spec_{};
+  ChordParams params{};
+  DrillInstrument inst{};
+  int tonic_midi;
+  ear::ChordVoicingEngine& v_engine = ear::ChordVoicingEngine::instance();
+  // ear::ChordVoicingEngine v_engine;
   drills::chord::ChordSelectionState selection_state_{};
   std::optional<std::string> preferred_right_voicing_;
   std::optional<std::string> preferred_bass_voicing_;
   std::string voicing_source_id_ = "builtin_diatonic_triads";
-};
-
-class SustainChordDrill : public ChordDrill {
-public:
-  void configure(const DrillSpec& spec) override;
 };
 
 } // namespace ear

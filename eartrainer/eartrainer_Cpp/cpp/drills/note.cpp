@@ -10,6 +10,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 namespace ear {
 namespace {
@@ -41,38 +42,29 @@ std::vector<int> pathway_resolution_degrees(const pathways::PathwayPattern& patt
   return result;
 }
 
-std::vector<int> extract_allowed(const DrillSpec& spec, const std::string& key) {
-  std::vector<int> values;
-  if (spec.params.is_object() && spec.params.contains(key)) {
-    const auto& node = spec.params[key];
-    if (node.is_array()) {
-      for (const auto& entry : node.get_array()) {
-        values.push_back(entry.get<int>());
-      }
-    }
-  }
-  return values;
-}
+
+// std::vector<int> extract_allowed(const DrillSpec& spec, const std::string& key) {
+//   std::vector<int> values;
+//   if (spec.j_params.is_object() && spec.j_params.contains(key)) {
+//     const auto& node = spec.j_params[key];
+//     if (node.is_array()) {
+//       for (const auto& entry : node.get_array()) {
+//         values.push_back(entry.get<int>());
+//       }
+//     }
+//   }
+//   return values;
+// }
 
 std::vector<int> base_degrees() {
   return {0, 1, 2, 3, 4, 5, 6};
 }
 
-bool avoid_repetition(const DrillSpec& spec) {
-  if (!spec.params.is_object() || !spec.params.contains("avoid_repeat")) {
-    return true;
-  }
-  return spec.params["avoid_repeat"].get<bool>();
-}
-
-int pick_degree(const DrillSpec& spec, std::uint64_t& rng_state,
+int pick_degree(const NoteParams& params, std::uint64_t& rng_state,
                 const std::optional<int>& previous) {
-  auto allowed = extract_allowed(spec, "allowed_degrees");
-  if (allowed.empty()) {
-    allowed = base_degrees();
-  }
+  auto allowed = params.allowed_degrees; 
 
-  if (avoid_repetition(spec) && previous.has_value() && allowed.size() > 1) {
+  if (params.avoid_repeat && previous.has_value() && allowed.size() > 1) {
     allowed.erase(std::remove(allowed.begin(), allowed.end(), previous.value()), allowed.end());
     if (allowed.empty()) {
       allowed = base_degrees();
@@ -85,52 +77,44 @@ int pick_degree(const DrillSpec& spec, std::uint64_t& rng_state,
 
 } // namespace
 
+//====================================================================
+// INITIALIZE NOTEDRILL
+//====================================================================
 void NoteDrill::configure(const DrillSpec& spec) {
   spec_ = spec;
+  params = std::get<NoteParams>(spec_.params);
   last_degree_.reset();
   last_midi_.reset();
-  if (!spec_.params.is_object()) {
-    spec_.params = nlohmann::json::object();
-  }
-  int below = 12;
-  int above = 12;
-  if (spec_.params.contains("range_below_semitones")) {
-    below = std::max(0, spec_.params["range_below_semitones"].get<int>());
-  }
-  if (spec_.params.contains("range_above_semitones")) {
-    above = std::max(0, spec_.params["range_above_semitones"].get<int>());
-  }
-  if (!spec_.params.contains("range_below_semitones")) {
-    spec_.params["range_below_semitones"] = below;
-  }
-  if (!spec_.params.contains("range_above_semitones")) {
-    spec_.params["range_above_semitones"] = above;
-  }
-}
+  tonic_midi = drills::central_tonic_midi(spec_.key);
+  midi_range = {
+    tonic_midi - params.range_below_semitones, 
+    tonic_midi + params.range_above_semitones
+  };
 
+}
+//====================================================================
+// NEXT QUESTION -> QUESTION BUNDLE
+//====================================================================
 QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
-  int degree = pick_degree(spec_, rng_state, last_degree_);
+  // PICK DEGREE IN 0...6 (OPTIONALLY AVOID REPETITIONS)
+  int degree = pick_degree(params, rng_state, last_degree_);
   last_degree_ = degree;
 
-  auto candidates = drills::midi_candidates_for_degree(spec_, degree, 12);
-  int tonic_midi = drills::central_tonic_midi(spec_.key);
+  // ASSIGN MIDI VALUE IN RANGE
+  auto candidates = drills::midi_candidates_for_degree(spec_.key, degree, midi_range);
   int midi = tonic_midi + drills::degree_to_offset(degree);
   if (!candidates.empty()) {
-    if (avoid_repetition(spec_) && last_midi_.has_value() && candidates.size() > 1) {
+    if (params.avoid_repeat && last_midi_.has_value() && candidates.size() > 1) {
       candidates.erase(std::remove(candidates.begin(), candidates.end(), last_midi_.value()),
                        candidates.end());
       if (candidates.empty()) {
-        candidates = drills::midi_candidates_for_degree(spec_, degree, 12);
+        candidates = drills::midi_candidates_for_degree(spec_.key, degree, midi_range);
       }
     }
     int choice = rand_int(rng_state, 0, static_cast<int>(candidates.size()) - 1);
     midi = candidates[static_cast<std::size_t>(choice)];
   }
   last_midi_ = midi;
-
-  auto bounds = drills::relative_bounds(spec_, 12);
-  const int midi_min = bounds.first;
-  const int midi_max = bounds.second;
 
   nlohmann::json q_payload = nlohmann::json::object();
   q_payload["degree"] = degree;
@@ -140,108 +124,79 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
   nlohmann::json answer_payload = nlohmann::json::object();
   answer_payload["degree"] = degree;
 
-  bool pathways_requested = drills::param_flag(spec_, "use_pathway", false);
-  const pathways::PathwayOptions* pathway =
-      pathways_requested ? resolve_pathway(spec_, degree) : nullptr;
-  bool pathways_active = pathways_requested && pathway != nullptr;
-  bool repeat_lead =
-      pathways_active && drills::param_flag(spec_, "pathway_repeat_lead", false);
-
-  std::string tempo_key = pathways_active ? "pathway_tempo_bpm" : "note_tempo_bpm";
-  int tempo_bpm = drills::param_tempo(spec_, tempo_key, kDefaultTempoBpm);
-  double note_beats =
-      pathways_active ? drills::param_double(spec_, "pathway_step_beats", kDefaultStepBeats)
-                      : drills::param_double(spec_, "note_step_beats", kDefaultStepBeats);
-  int note_duration_ms = drills::beats_to_ms(note_beats, tempo_bpm);
-  if (note_duration_ms <= 0) {
-    note_duration_ms = drills::beats_to_ms(kDefaultStepBeats, tempo_bpm);
-  }
-
   PromptPlan plan;
   plan.modality = "midi";
-  plan.tempo_bpm = tempo_bpm;
-  plan.count_in = false;
+  plan.count_in = false; 
 
-  std::string tonic_anchor = "none";
-  if (spec_.params.contains("tonic_anchor") && spec_.params["tonic_anchor"].is_string()) {
-    tonic_anchor = spec_.params["tonic_anchor"].get<std::string>();
-    std::transform(tonic_anchor.begin(), tonic_anchor.end(), tonic_anchor.begin(), [](unsigned char c) {
-      return static_cast<char>(std::tolower(c));
-    });
-  }
-
-  bool anchor_before = false;
-  bool anchor_after = false;
-  bool anchor_include_octave = false;
-
-  if (!pathways_active) {
-    if (tonic_anchor == "before") {
-      anchor_before = true;
-    } else if (tonic_anchor == "after") {
-      anchor_after = true;
-    } else if (tonic_anchor == "both") {
-      anchor_before = rand_int(rng_state, 0, 1) == 0;
-      anchor_after = !anchor_before;
-    }
-    anchor_include_octave = drills::param_flag(spec_, "tonic_anchor_include_octave", false);
-  }
-
-  auto choose_anchor_pitch = [&](int base_pitch) -> int {
-    int tonic_pitch = base_pitch;
-    if (anchor_include_octave && rand_int(rng_state, 0, 1) == 1) {
-      int octave_pitch = drills::clamp_to_range(tonic_pitch + 12, midi_min, midi_max);
-      if (octave_pitch > tonic_pitch) {
-        tonic_pitch = octave_pitch;
-      }
-    }
-    return tonic_pitch;
+  //-------------------------------------------------------------------
+  // USE PATHWAYS: PLAYS NOTE WITH RESOLUTION TO TONIC
+  //-------------------------------------------------------------------
+  auto pathway_to_midi = [&](int pw_degree) {
+    int pw_offset = drills::degree_to_offset(pw_degree);
+    int tonic_below_midi = midi - (midi - tonic_midi) % 12; 
+    return tonic_below_midi + pw_offset;
   };
-
-  if (anchor_before) {
-    drills::append_note(plan, choose_anchor_pitch(tonic_midi), note_duration_ms);
-  }
-
-  drills::append_note(plan, midi, note_duration_ms);
-
-  if (anchor_after) {
-    drills::append_note(plan, choose_anchor_pitch(tonic_midi), note_duration_ms);
-  }
-
-  if (pathways_active) {
-    double rest_beats = drills::param_double(spec_, "pathway_rest_beats", kDefaultRestBeats);
-    int rest_ms = drills::beats_to_ms(rest_beats, tempo_bpm);
-    if (rest_ms > 0) {
+  
+  if (params.use_pathway){
+    const pathways::PathwayOptions* pathway = resolve_pathway(spec_, degree);
+    
+    int note_duration_ms = drills::beats_to_ms(params.pathway_step_beats, params.pathway_tempo_bpm);
+    int rest_ms = drills::beats_to_ms(params.pathway_rest_beats, params.pathway_tempo_bpm);
+    if (rest_ms > 0 && (degree != 0)) {
       drills::append_rest(plan, rest_ms);
     }
+    plan.tempo_bpm = params.pathway_tempo_bpm;
 
-    auto pick_resolution_pitch = [&](int resolution_degree, int reference_pitch) {
-      int span = std::max(12, midi_max - midi_min);
-      auto candidates = drills::midi_candidates_for_degree(spec_, resolution_degree, span);
-      if (!candidates.empty()) {
-        auto it = std::min_element(
-            candidates.begin(), candidates.end(),
-            [&](int lhs, int rhs) {
-              int lhs_diff = std::abs(lhs - reference_pitch);
-              int rhs_diff = std::abs(rhs - reference_pitch);
-              if (lhs_diff == rhs_diff) {
-                return lhs < rhs;
-              }
-              return lhs_diff < rhs_diff;
-            });
-        return *it;
-      }
-      return drills::degree_to_midi(spec_, resolution_degree);
-    };
+    std::vector<int> p = (pathway->primary).degrees;                          // {3,2,1,0}, {5,6,7} etc
+    std::transform(p.begin(), p.end(), p.begin(), pathway_to_midi);           // CONVERT TO MIDIS  
+    if (!params.pathway_repeat_lead) {
+      p = std::vector<int>(p.begin() + 1, p.end());
+    }
 
-    auto resolution_degrees = pathway_resolution_degrees(pathway->primary, degree, repeat_lead);
-    int reference_pitch = midi;
-    for (int resolution_degree : resolution_degrees) {
-      int resolution_midi = pick_resolution_pitch(resolution_degree, reference_pitch);
-      reference_pitch = resolution_midi;
-      drills::append_note(plan, resolution_midi, note_duration_ms);
+    for (int note : p){
+      drills::append_note(plan, note, note_duration_ms);
+    }
+    
+  }
+  
+  //-------------------------------------------------------------------
+  // TONIC ANCHOR: PLAYS NOTE IN REFERENCE TO TONIC (BEFORE OR AFTER)
+  //-------------------------------------------------------------------
+  if (params.use_anchor){ 
+
+    plan.tempo_bpm = params.note_tempo_bpm;
+    int note_duration_ms = drills::beats_to_ms(params.note_step_beats, params.note_tempo_bpm);
+    
+    // FIND ANCHOR TONIC JUST BELOW TO MIDI
+    int shift = (midi - tonic_midi) % 12;
+    int anchor_pitch = midi - shift; 
+    if (params.tonic_anchor_include_octave){
+      anchor_pitch += 12 * rand_int(rng_state, 0, 1); // ALLOW EITHER ABOVE OR BELOW
+    }
+
+    // IF VA HAS NO VALUE CHOOSE RANDOMLY
+    using TA = NoteParams::TonicAnchor;
+    auto ta = params.tonic_anchor.value_or(
+      rand_int(rng_state, 0, 1) == 0
+          ? TA::Before
+          : TA::After);
+
+    // TONIC COMES BEFORE OR AFTER NOTE
+    switch (ta){
+      case TA::Before:
+        drills::append_note(plan, anchor_pitch, note_duration_ms);
+        drills::append_note(plan, midi, note_duration_ms);
+
+      case TA::After:
+        drills::append_note(plan, midi, note_duration_ms);
+        drills::append_note(plan, anchor_pitch, note_duration_ms);
+        
     }
   }
 
+  //-------------------------------------------------------------------
+  // QUESTION BUNDLE
+  //-------------------------------------------------------------------
   nlohmann::json hints = nlohmann::json::object();
   hints["answer_kind"] = "degree";
   nlohmann::json allowed = nlohmann::json::array();

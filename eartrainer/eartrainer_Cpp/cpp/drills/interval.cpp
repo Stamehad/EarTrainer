@@ -13,8 +13,8 @@ namespace {
 
 std::vector<int> extract_allowed(const DrillSpec& spec, const std::string& key) {
   std::vector<int> values;
-  if (spec.params.is_object() && spec.params.contains(key)) {
-    const auto& node = spec.params[key];
+  if (spec.j_params.is_object() && spec.j_params.contains(key)) {
+    const auto& node = spec.j_params[key];
     if (node.is_array()) {
       for (const auto& entry : node.get_array()) {
         values.push_back(entry.get<int>());
@@ -29,13 +29,13 @@ std::vector<int> base_bottom_degrees() {
 }
 
 bool avoid_repetition(const DrillSpec& spec) {
-  if (!spec.params.is_object() || !spec.params.contains("interval_avoid_repeat")) {
-    if (!spec.params.is_object() || !spec.params.contains("avoid_repeat")) {
+  if (!spec.j_params.is_object() || !spec.j_params.contains("interval_avoid_repeat")) {
+    if (!spec.j_params.is_object() || !spec.j_params.contains("avoid_repeat")) {
       return true;
     }
-    return spec.params["avoid_repeat"].get<bool>();
+    return spec.j_params["avoid_repeat"].get<bool>();
   }
-  return spec.params["interval_avoid_repeat"].get<bool>();
+  return spec.j_params["interval_avoid_repeat"].get<bool>();
 }
 
 int pick_bottom_degree(const DrillSpec& spec, std::uint64_t& rng_state,
@@ -96,21 +96,18 @@ void IntervalDrill::configure(const DrillSpec& spec) {
 QuestionBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
   int bottom_degree = pick_bottom_degree(spec_, rng_state, last_bottom_degree_);
   int size = pick_interval_size(spec_, rng_state);
+  int tonic_midi = drills::central_tonic_midi(spec_.key);
   int top_degree = bottom_degree + size;
+  std::pair<int, int> midi_range = {tonic_midi, tonic_midi + 12};
 
-  int span = 12;
-  if (spec_.params.contains("interval_range_semitones")) {
-    span = std::max(1, spec_.params["interval_range_semitones"].get<int>());
-  }
-
-  auto candidates = drills::midi_candidates_for_degree(spec_, bottom_degree, span);
-  int bottom_midi = drills::degree_to_midi(spec_, bottom_degree);
+  auto candidates = drills::midi_candidates_for_degree(spec_.key, bottom_degree, midi_range);
+  int bottom_midi = drills::degree_to_midi(spec_, bottom_degree, midi_range);
   if (!candidates.empty()) {
     if (avoid_repetition(spec_) && last_bottom_midi_.has_value() && candidates.size() > 1) {
       candidates.erase(std::remove(candidates.begin(), candidates.end(), last_bottom_midi_.value()),
                        candidates.end());
       if (candidates.empty()) {
-        candidates = drills::midi_candidates_for_degree(spec_, bottom_degree, span);
+        candidates = drills::midi_candidates_for_degree(spec_.key, bottom_degree, midi_range);
       }
     }
     int idx = rand_int(rng_state, 0, static_cast<int>(candidates.size()) - 1);
@@ -140,7 +137,6 @@ QuestionBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
 
   PromptPlan plan;
   plan.modality = "midi";
-  plan.tempo_bpm = spec_.tempo_bpm;
   plan.count_in = false;
   // Ensure the prompt sequence reflects conceptual orientation so a simple player
   // produces the intended direction without additional UI logic.

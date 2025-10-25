@@ -160,7 +160,7 @@ TrackPhaseCatalog load_track_phase_catalog(const TrackCatalogDescriptor& descrip
   auto specs = load_catalog_specs(summary.resolved_path);
   std::map<int, std::set<int>> phase_sets;
   for (const auto& spec : specs) {
-    phase_sets[tens_digit(spec.level)].insert(spec.level);
+    phase_sets[tens_digit(spec.level.value())].insert(spec.level.value());
   }
 
   for (auto& [phase, values] : phase_sets) {

@@ -14,7 +14,10 @@ public:
 
 private:
   DrillSpec spec_{};
+  MelodyParams params{};
   std::deque<std::vector<int>> recent_sequences_;
+  int tonic_midi;
+  std::pair<int,int> midi_range;
   static constexpr std::size_t kRecentCapacity = 16;
 };
 

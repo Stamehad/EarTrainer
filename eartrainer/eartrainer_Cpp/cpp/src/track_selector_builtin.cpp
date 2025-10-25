@@ -1,4 +1,3 @@
-// src/track_selector_builtin.cpp
 #include "resources/track_selector_builtin.hpp"
 #include "resources/builtin_degree_levels.hpp"
 #include "resources/builtin_melody_levels.hpp"

@@ -13,6 +13,9 @@ public:
 
 private:
   DrillSpec spec_{};
+  NoteParams params{};
+  std::pair <int, int> midi_range{};
+  int tonic_midi;
   std::optional<int> last_degree_;
   std::optional<int> last_midi_;
 };
