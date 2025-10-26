@@ -303,7 +303,7 @@ void AdaptiveDrills::initialize_bout(int level, const std::vector<DrillSpec>& sp
   drill_scores_.assign(slots_.size(), std::nullopt);
 }
 
-QuestionBundle AdaptiveDrills::next() {
+QuestionsBundle AdaptiveDrills::next() {
   if (slots_.empty()) {
     throw std::runtime_error("AdaptiveDrills::next called before set_bout or with empty bout");
   }
@@ -314,7 +314,7 @@ QuestionBundle AdaptiveDrills::next() {
   pick_counts_[static_cast<std::size_t>(pick)] += 1;
   last_pick_ = static_cast<std::size_t>(pick);
   auto bundle = slot.module->next_question(slot.rng_state);
-  apply_prompt_rendering(slot.spec, bundle);
+  // apply_prompt_rendering(slot.spec, bundle);
 
   std::string question_id = make_question_id();
   question_slot_index_[question_id] = static_cast<std::size_t>(pick);

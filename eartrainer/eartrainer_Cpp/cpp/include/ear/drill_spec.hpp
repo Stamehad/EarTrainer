@@ -7,6 +7,7 @@
 
 #include "../resources/drill_params.hpp"
 #include "../nlohmann/json.hpp"
+#include "types.hpp"
 
 // SessionSpec is defined in ear/types.hpp; needed for conversion helpers.
 #include "types.hpp"
@@ -23,6 +24,7 @@ struct DrillSpec {
 
   // Resolved configuration (available to drills without extra parsing).
   std::string key = "C";
+  ear::KeyQuality quality = ear::KeyQuality::Major;
   std::unordered_map<std::string, int> assistance_policy;
   ear::DrillParams params{};
   nlohmann::json j_params = nlohmann::json::object();

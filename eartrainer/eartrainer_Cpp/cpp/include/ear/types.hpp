@@ -10,6 +10,7 @@
 
 #include "../nlohmann/json.hpp"
 #include "../include/resources/drill_params.hpp"
+#include "question_bundle_v2.hpp"
 
 namespace ear {
 
@@ -27,7 +28,7 @@ enum class SessionMode {
   LevelInspector
 };
 
-enum class KeyType {Major, Minor};
+enum class KeyQuality {Major, Minor};
 
 inline std::string to_string(SessionMode mode) {
   switch (mode) {
@@ -113,7 +114,7 @@ struct AssistBundle {
 
 struct ResultReport {
   std::string question_id;
-  TypedPayload final_answer;
+  AnswerPayloadV2 final_answer;
   bool correct;
   struct Metrics {
     int rt_ms;

@@ -9,7 +9,8 @@
 #include <numeric> // Required for std::accumulate
 #include <iomanip> // Required for std::setprecision
 
-#include "../include/ear/types.hpp"
+#include "types.hpp"
+#include "chord_types.hpp"
 #include "../resources/drill_params.hpp"
 #include "../src/rng.hpp"
 
@@ -17,7 +18,6 @@ namespace ear {
 
 class ChordVoicingEngine {
 public:
-  enum class TriadQuality { Major = 0, Minor = 1, Diminished = 2 };
 
   struct RightVoicing {
     std::string id;                 // stable voicing id (for UI/answer manifest)
@@ -45,11 +45,11 @@ public:
   static constexpr int MAJOR_SCALE[7] = {0, 2, 4, 5, 7, 9, 11};
   static constexpr int MINOR_SCALE[7] = {0, 2, 3, 5, 7, 8, 10};
 
-  static constexpr const int* get_scale_steps(KeyType keytype) {
-      switch (keytype) {
-          case KeyType::Major:
+  static constexpr const int* get_scale_steps(KeyQuality quality) {
+      switch (quality) {
+          case KeyQuality::Major:
               return MAJOR_SCALE;
-          case KeyType::Minor:
+          case KeyQuality::Minor:
               return MINOR_SCALE;
           default:
               return MAJOR_SCALE;
@@ -72,8 +72,8 @@ public:
     }
 
     // METHOD: RELATIVE TO TONIC -> MIDI NOTE NUMBERS
-    RightHandPattern to_midi(KeyType keytype, int tonic_midi, int midi_center=60) const {
-      const int* scale_steps_ptr = get_scale_steps(keytype);
+    RightHandPattern to_midi(KeyQuality quality, int tonic_midi, int midi_center=60) const {
+      const int* scale_steps_ptr = get_scale_steps(quality);
       std::vector<int> midis;
       midis.reserve(degree_offsets.size()); 
       
@@ -134,13 +134,13 @@ public:
       }
       
       // METHOD: RELATIVE TO TONIC -> MIDI NOTE NUMBERS
-      RightHandPatterns to_midi(KeyType keytype, int tonic_midi) const {
+      RightHandPatterns to_midi(KeyQuality quality, int tonic_midi) const {
         std::vector<RightHandPattern> rh_midis;
         rh_midis.reserve(rh_patterns.size());
 
         std::transform(rh_patterns.begin(), rh_patterns.end(),
             std::back_inserter(rh_midis),
-            [keytype, tonic_midi](const RightHandPattern& p) {return p.to_midi(keytype, tonic_midi);}
+            [quality, tonic_midi](const RightHandPattern& p) {return p.to_midi(quality, tonic_midi);}
         );
         return RightHandPatterns{std::move(rh_midis)};
       }
@@ -177,7 +177,7 @@ public:
 
   static ChordVoicingEngine& instance();
 
-  void configure(const KeyType& keytype, const DrillInstrument& inst, int tonic_midi, bool voice_leading_continuity); 
+  void configure(const KeyQuality& quality, const DrillInstrument& inst, int tonic_midi, bool voice_leading_continuity); 
 
   RightVoicing get_voicing(int deg, std::uint64_t& rng_state);
 
@@ -202,33 +202,20 @@ public:
                        std::uint64_t& rng_state,
                        std::optional<std::string> preferred_right = std::nullopt,
                        std::optional<std::string> preferred_bass = std::nullopt,
-                       std::optional<std::string> avoid_right = std::nullopt,
+                        std::optional<std::string> avoid_right = std::nullopt,
                        std::string_view profile_id = default_profile_id()) const;
 
 private:
   ChordVoicingEngine();
 
-  KeyType keytype_{};
+  KeyQuality keytype_{};
   DrillInstrument inst_{};
   int tonic_midi_{};
   bool continuity_{};
   std::optional<int> top_degree_{};
   std::optional<int> top_midi_{};
 
-  TriadQuality degree_to_quality(int degree){
-    size_t d = degree%7;
-    using T = TriadQuality;
-    std::vector<T> major_qaulities = {T::Major, T::Minor, T::Minor, T::Major, T::Major, T::Minor, T::Diminished};
-    std::vector<T> minor_qaulities = {T::Minor, T::Diminished, T::Major, T::Minor, T::Minor, T::Major, T::Major};
-    switch (keytype_){
-      case KeyType::Major:
-        return major_qaulities[d];
-      case KeyType::Minor:
-        return minor_qaulities[d];
-      default:
-        return major_qaulities[d];
-    }
-  };
+  TriadQuality degree_to_quality(int degree);
 
   struct QualitySet {
     std::vector<BassPattern> bass;
@@ -246,8 +233,8 @@ private:
   std::unordered_map<std::string, Profile> profiles_;
 };
 
-ChordVoicingEngine::TriadQuality triad_quality_from_string(const std::string& quality);
+TriadQuality triad_quality_from_string(const std::string& quality);
 
-std::string to_string(ChordVoicingEngine::TriadQuality quality);
+std::string to_string(TriadQuality quality);
 
 } // namespace ear

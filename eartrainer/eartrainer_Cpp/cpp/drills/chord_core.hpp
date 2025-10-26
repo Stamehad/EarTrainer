@@ -31,7 +31,7 @@ struct ChordQuestionCore {
   int root_degree = 0;
   bool add_seventh = false;
   std::string quality;
-  ear::ChordVoicingEngine::TriadQuality quality_enum = ear::ChordVoicingEngine::TriadQuality::Major;
+  ear::TriadQuality quality_enum = ear::TriadQuality::Major;
   const ear::ChordVoicingEngine::RightHandPattern* right_pattern = nullptr;
   const ear::ChordVoicingEngine::BassPattern* bass_pattern = nullptr;
   std::string right_voicing_id;

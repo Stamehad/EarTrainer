@@ -32,6 +32,13 @@ struct MidiClip {
   std::string format = "midi-clip/v1";
 };
 
+struct Beats {
+    double value = 0.0;
+    void advance_by(double step){
+      this->value += step;
+    }
+};
+
 class MidiClipBuilder {
 public:
   explicit MidiClipBuilder(int tempo_bpm, int ppq = 480);
@@ -40,11 +47,16 @@ public:
   int ppq() const { return clip_.ppq; }
 
   int ms_to_ticks(int dur_ms) const;
+  int beats_to_ticks(Beats beats) const;
 
   int add_track(const std::string& name, int channel, int program);
   void add_event(int track_index, const MidiEvent& event);
-  void add_note(int track_index, int start_ticks, int dur_ticks, int note,
+  void add_note_ticks(int track_index, int start_ticks, int dur_ticks, int note,
                 std::optional<int> velocity = std::optional<int>(90));
+  void add_note(int track_index, Beats start, Beats dur, int note, 
+                std::optional<int> velocity = std::optional<int>(90));
+  void add_chord(int track_index, Beats start, Beats dur, 
+    const std::vector<int>& notes, std::optional<int> velocity = std::optional<int>(90));
 
   void set_length_ticks(int ticks);
 

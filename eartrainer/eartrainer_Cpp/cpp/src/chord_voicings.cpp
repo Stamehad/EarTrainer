@@ -9,20 +9,20 @@
 #include <cctype>
 #include <stdexcept>
 
+using TriadQuality = ear::TriadQuality;
 namespace ear {
 namespace {
 
-using Quality = ChordVoicingEngine::TriadQuality;
 using BassPattern = ChordVoicingEngine::BassPattern;
 using RHChord = ChordVoicingEngine::RightHandPattern;
 using RHChords = ChordVoicingEngine::RightHandPatterns;
 using RightVoicing = ChordVoicingEngine::RightVoicing;
 using BassChoice = ChordVoicingEngine::BassChoice;
 
-constexpr std::array<Quality, 3> kAllQualities = {
-    Quality::Major,
-    Quality::Minor,
-    Quality::Diminished,
+constexpr std::array<TriadQuality, 3> kAllQualities = {
+    TriadQuality::Major,
+    TriadQuality::Minor,
+    TriadQuality::Diminished,
 };
 
 std::vector<BassPattern> make_default_triad_bass_patterns() {
@@ -96,17 +96,17 @@ std::vector<BassPattern> get_bass_options(const DrillInstrument& inst){
   }
 }
 
-std::size_t index_for(Quality quality) {
+std::size_t index_for(TriadQuality quality) {
   return static_cast<std::size_t>(quality);
 }
 
-const char* quality_name(Quality quality) {
+const char* quality_name(TriadQuality quality) {
   switch (quality) {
-  case Quality::Major:
+  case TriadQuality::Major:
     return "major";
-  case Quality::Minor:
+  case TriadQuality::Minor:
     return "minor";
-  case Quality::Diminished:
+  case TriadQuality::Diminished:
     return "diminished";
   }
   return "major";
@@ -124,7 +124,7 @@ ChordVoicingEngine::ChordVoicingEngine() {
   piano.id = default_profile_id();
   const auto default_bass = make_default_triad_bass_patterns();
   const auto default_right = make_default_triad_right_patterns();
-  for (Quality quality : kAllQualities) {
+  for (TriadQuality quality : kAllQualities) {
     auto& set = piano.triads[index_for(quality)];
     set.bass = default_bass;
     set.right = default_right;
@@ -135,7 +135,7 @@ ChordVoicingEngine::ChordVoicingEngine() {
   strings.id = "strings_ensemble";
   const auto strings_bass = make_strings_triad_bass_patterns();
   const auto strings_right = make_strings_triad_right_patterns();
-  for (Quality quality : kAllQualities) {
+  for (TriadQuality quality : kAllQualities) {
     auto& set = strings.triads[index_for(quality)];
     set.bass = strings_bass;
     set.right = strings_right;
@@ -146,7 +146,7 @@ ChordVoicingEngine::ChordVoicingEngine() {
   simple.id = "simple_triads";
   const auto simple_bass = make_simple_triad_bass_patterns();
   const auto simple_right = make_simple_triad_right_patterns();
-  for (Quality quality : kAllQualities) {
+  for (TriadQuality quality : kAllQualities) {
     auto& set = simple.triads[index_for(quality)];
     set.bass = simple_bass;
     set.right = simple_right;
@@ -160,12 +160,12 @@ ChordVoicingEngine& ChordVoicingEngine::instance() {
 }
 
 void ChordVoicingEngine::configure(
-  const KeyType& keytype, 
+  const KeyQuality& quality, 
   const DrillInstrument& inst, 
   int tonic_midi, 
   bool voice_leading_continuity
 ){
-  keytype_ = keytype;                           // Major, Minor
+  keytype_ = quality;                           // Major, Minor
   inst_ = inst;                                 // Piano, String
   tonic_midi_ = tonic_midi;
   continuity_ = voice_leading_continuity;
@@ -337,21 +337,37 @@ ChordVoicingEngine::profile_for(std::string_view profile_id) const {
   throw std::runtime_error("ChordVoicingEngine: default profile is not registered");
 }
 
-ChordVoicingEngine::TriadQuality triad_quality_from_string(const std::string& quality) {
+TriadQuality triad_quality_from_string(const std::string& quality) {
   std::string lower = quality;
   std::transform(lower.begin(), lower.end(), lower.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (lower == "minor") {
-    return Quality::Minor;
+    return TriadQuality::Minor;
   }
   if (lower == "diminished" || lower == "dim") {
-    return Quality::Diminished;
+    return TriadQuality::Diminished;
   }
-  return Quality::Major;
+  return TriadQuality::Major;
 }
 
-std::string to_string(ChordVoicingEngine::TriadQuality quality) {
+std::string to_string(TriadQuality quality) {
   return std::string(quality_name(quality));
 }
+
+TriadQuality ChordVoicingEngine::degree_to_quality(int degree){
+    size_t d = degree%7;
+    using T = TriadQuality;
+    std::vector<T> major_qaulities = {T::Major, T::Minor, T::Minor, T::Major, T::Major, T::Minor, T::Diminished};
+    std::vector<T> minor_qaulities = {T::Minor, T::Diminished, T::Major, T::Minor, T::Minor, T::Major, T::Major};
+    switch (keytype_){
+      case KeyQuality::Major:
+        return major_qaulities[d];
+      case KeyQuality::Minor:
+        return minor_qaulities[d];
+      default:
+        return major_qaulities[d];
+    }
+  };
+
 
 } // namespace ear

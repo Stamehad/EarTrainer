@@ -32,6 +32,11 @@ int MidiClipBuilder::ms_to_ticks(int dur_ms) const {
   return static_cast<int>(std::lround(dur_ms * ticks_per_ms));
 }
 
+int MidiClipBuilder::beats_to_ticks(Beats beats) const {
+  double dur_ticks = beats.value * static_cast<double>(clip_.ppq);
+  return static_cast<int>(std::lround(dur_ticks));
+}
+
 int MidiClipBuilder::add_track(const std::string& name, int channel, int program) {
   MidiTrack track;
   track.name = name;
@@ -57,7 +62,7 @@ void MidiClipBuilder::add_event(int track_index, const MidiEvent& event) {
   update_length(event.t);
 }
 
-void MidiClipBuilder::add_note(int track_index, int start_ticks, int dur_ticks, int note,
+void MidiClipBuilder::add_note_ticks(int track_index, int start_ticks, int dur_ticks, int note,
                                std::optional<int> velocity) {
   ensure_track_index(track_index);
   const int clamped_start = std::max(0, start_ticks);
@@ -80,6 +85,19 @@ void MidiClipBuilder::add_note(int track_index, int start_ticks, int dur_ticks, 
 
   update_length(off.t);
 }
+
+void MidiClipBuilder::add_note(int track_index, Beats start, Beats dur, int note, std::optional<int> velocity){
+  int start_ticks = beats_to_ticks(start);
+  int dur_ticks = beats_to_ticks(dur);
+  add_note_ticks(track_index, start_ticks, dur_ticks, note, velocity);
+}
+
+void MidiClipBuilder::add_chord(int track_index, Beats start, Beats dur, 
+  const std::vector<int>& notes, std::optional<int> velocity){
+    for (int note : notes) { 
+      add_note(track_index, start, dur, note, velocity);
+    }
+  }
 
 void MidiClipBuilder::set_length_ticks(int ticks) {
   clip_.length_ticks = std::max(clip_.length_ticks, std::max(0, ticks));

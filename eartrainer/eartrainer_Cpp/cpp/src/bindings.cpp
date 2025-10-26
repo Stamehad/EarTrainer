@@ -89,7 +89,7 @@ public:
 
   py::object next_question(const std::string& session_id) {
     auto next = engine_->next_question(session_id);
-    if (auto bundle = std::get_if<ear::QuestionBundle>(&next)) {
+    if (auto bundle = std::get_if<ear::QuestionsBundle>(&next)) {
       return json_to_py(ear::bridge::to_json(*bundle));
     }
     return json_to_py(ear::bridge::to_json(std::get<ear::SessionSummary>(next)));
@@ -133,7 +133,7 @@ public:
     auto report_json = py_to_json(report_obj);
     auto report = ear::bridge::result_report_from_json(report_json);
     auto next = engine_->submit_result(session_id, report);
-    if (auto bundle = std::get_if<ear::QuestionBundle>(&next)) {
+    if (auto bundle = std::get_if<ear::QuestionsBundle>(&next)) {
       return json_to_py(ear::bridge::to_json(*bundle));
     }
     return json_to_py(ear::bridge::to_json(std::get<ear::SessionSummary>(next)));

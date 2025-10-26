@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "../src/rng.hpp"
+#include "../include/ear/question_bundle_v2.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -71,7 +72,7 @@ int pick_interval_size(const DrillSpec& spec, std::uint64_t& rng_state) {
   return allowed[static_cast<std::size_t>(idx)];
 }
 
-std::string interval_name(int semitones) {
+std::string get_interval_name(int semitones) {
   static const std::map<int, std::string> names = {
       {0, "P1"},  {1, "m2"}, {2, "M2"}, {3, "m3"}, {4, "M3"}, {5, "P4"},
       {6, "TT"},  {7, "P5"}, {8, "m6"}, {9, "M6"}, {10, "m7"}, {11, "M7"},
@@ -89,11 +90,12 @@ std::string interval_name(int semitones) {
 
 void IntervalDrill::configure(const DrillSpec& spec) {
   spec_ = spec;
+  params = std::get<IntervalParams>(spec.params);
   last_bottom_degree_.reset();
   last_bottom_midi_.reset();
 }
 
-QuestionBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
+QuestionsBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
   int bottom_degree = pick_bottom_degree(spec_, rng_state, last_bottom_degree_);
   int size = pick_interval_size(spec_, rng_state);
   int tonic_midi = drills::central_tonic_midi(spec_.key);
@@ -123,49 +125,40 @@ QuestionBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
   last_bottom_degree_ = bottom_degree;
   last_bottom_midi_ = bottom_midi;
 
-  nlohmann::json question_payload = nlohmann::json::object();
-  question_payload["bottom_midi"] = bottom_midi;
-  question_payload["top_midi"] = top_midi;
-  question_payload["bottom_degree"] = bottom_degree;
-  question_payload["top_degree"] = top_degree;
-  question_payload["orientation"] = orientation;
+  //-----------------------------------------------------
+  // PREPARE QUESTION AND ANSWER
+  //-----------------------------------------------------
+  int num_notes = 2;
+  std::vector<int> notes = std::vector<int>(bottom_degree, top_degree);
+  std::string interval_name = get_interval_name(top_midi - bottom_midi);
+  
+  HarmonyAnswerV2 interval_answer = HarmonyAnswerV2{notes};
+  HarmonyQuestionV2 interval_question = HarmonyQuestionV2{
+   tonic_midi, spec_.key, spec_.quality, num_notes, notes, interval_name
+  };
 
-  nlohmann::json answer_payload = nlohmann::json::object();
-  answer_payload["name"] = interval_name(std::abs(semitone_diff));
-  answer_payload["semitones"] = std::abs(semitone_diff);
-  answer_payload["size"] = size;
+  //-----------------------------------------------------------------
+  // GENERATE MIDI-CLIP
+  //-----------------------------------------------------------------
+  MidiClipBuilder b(params.tempo_bpm, 480);
+  auto melody_track = b.add_track("melody", 0, params.program);
 
-  PromptPlan plan;
-  plan.modality = "midi";
-  plan.count_in = false;
-  // Ensure the prompt sequence reflects conceptual orientation so a simple player
-  // produces the intended direction without additional UI logic.
-  if (orientation == "descending") {
-    plan.notes.push_back({top_midi, 600, std::nullopt, std::nullopt});
-    plan.notes.push_back({bottom_midi, 600, std::nullopt, std::nullopt});
-  } else {
-    plan.notes.push_back({bottom_midi, 600, std::nullopt, std::nullopt});
-    plan.notes.push_back({top_midi, 600, std::nullopt, std::nullopt});
+  Beats beat = Beats{0}; // CURRENT BEAT
+  std::vector<int> midis = std::vector<int>(bottom_midi, top_midi);
+  for (int midi : midis){
+    b.add_note(melody_track, beat, Beats{params.note_beat}, midi, params.velocity);
   }
 
-  nlohmann::json hints = nlohmann::json::object();
-  hints["answer_kind"] = "interval_class";
-  nlohmann::json allowed = nlohmann::json::array();
-  allowed.push_back("Replay");
-  allowed.push_back("GuideTone");
-  hints["allowed_assists"] = allowed;
-  nlohmann::json budget = nlohmann::json::object();
-  for (const auto& entry : spec_.assistance_policy) {
-    budget[entry.first] = entry.second;
-  }
-  hints["assist_budget"] = budget;
-
-  QuestionBundle bundle;
+  //-----------------------------------------------------------------
+  // GENERATE QUESTION BUNDLE
+  //-----------------------------------------------------------------
+  QuestionsBundle bundle;
+  bundle.question_id = "place-holder";
   bundle.question_id.clear();
-  bundle.question = TypedPayload{"interval", question_payload};
-  bundle.correct_answer = TypedPayload{"interval_class", answer_payload};
-  bundle.prompt = plan;
-  bundle.ui_hints = hints;
+  bundle.correct_answer = interval_answer;
+  bundle.question = interval_question;
+  bundle.prompt_clip = b.build();
+
   return bundle;
 }
 

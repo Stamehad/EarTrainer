@@ -3,6 +3,7 @@
 #include "track_selector.hpp"
 #include "drill_factory.hpp"
 #include "types.hpp"
+#include "question_bundle_v2.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -29,7 +30,7 @@ public:
     std::vector<int> weights;
   };
   TrackPick pick_track(const std::vector<int>& current_levels);
-  QuestionBundle next();
+  QuestionsBundle next();
   nlohmann::json diagnostic() const;
   struct ScoreSnapshot {
     double bout_average = 0.0;

@@ -4,6 +4,7 @@
 #include "resources/builtin_degree_levels.hpp"
 #include "resources/builtin_melody_levels.hpp"
 #include "resources/builtin_chord_levels.hpp"
+#include "ear/question_bundle_v2.hpp"
 
 #include <algorithm>
 #include <array>
@@ -280,7 +281,7 @@ std::optional<std::pair<int, int>> LevelInspector::selection() const {
   return std::make_pair(active_level_.value(), active_tier_.value());
 }
 
-QuestionBundle LevelInspector::next() {
+QuestionsBundle LevelInspector::next() {
   if (!has_selection()) {
     throw std::runtime_error("LevelInspector: select a level/tier before requesting questions");
   }
@@ -289,7 +290,7 @@ QuestionBundle LevelInspector::next() {
   }
   auto& slot = slots_[next_slot_index_];
   auto bundle = slot.module->next_question(slot.rng_state);
-  apply_prompt_rendering(slot.spec, bundle);
+  // apply_prompt_rendering(slot.spec, bundle);
   bundle.question_id = make_question_id();
   next_slot_index_ = (next_slot_index_ + 1) % slots_.size();
   return bundle;

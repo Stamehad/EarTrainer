@@ -4,6 +4,8 @@ project(EarTrainerCore LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# Emit compile_commands.json for IDEs (VS Code IntelliSense)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_library(ear_core STATIC
     src/adaptive_catalog.cpp
@@ -79,7 +81,13 @@ target_include_directories(ear_core_tests PRIVATE
 enable_testing()
 add_test(NAME ear_core_tests COMMAND ear_core_tests)
 
-find_package(pybind11 QUIET)
+# Try to locate pybind11 via CMake config first; add common Homebrew hint
+list(APPEND CMAKE_PREFIX_PATH 
+    /opt/homebrew 
+    /usr/local 
+    $ENV{HOME}/.local
+)
+find_package(pybind11 QUIET CONFIG)
 if(pybind11_FOUND)
     pybind11_add_module(_earcore src/bindings.cpp)
     target_link_libraries(_earcore PRIVATE ear_core)

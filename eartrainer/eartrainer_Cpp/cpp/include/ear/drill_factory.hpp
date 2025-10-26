@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "drill_spec.hpp"
+#include "question_bundle_v2.hpp"
 #include "../../drills/drill.hpp"
 
 namespace ear {
@@ -37,6 +38,6 @@ private:
 
 void register_builtin_drills(DrillFactory& factory);
 
-void apply_prompt_rendering(const DrillSpec& spec, QuestionBundle& bundle);
+// void apply_prompt_rendering(const DrillSpec& spec, QuestionsBundle& bundle);
 
 } // namespace ear

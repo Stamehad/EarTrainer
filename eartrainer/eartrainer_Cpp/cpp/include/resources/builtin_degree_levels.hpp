@@ -44,9 +44,9 @@ inline const std::vector<DrillSpec>& level_1() {
       params.range_above_semitones = 12;
       params.use_pathway = true;
       params.pathway_repeat_lead = false;
-      params.pathway_tempo_bpm = 60;
-      params.pathway_step_beats = 1.0;
-      params.pathway_rest_beats = 0.5;
+      params.tempo_bpm = 60;
+      params.pathway_beats = 1.0;
+      params.pathway_rest = 0.5;
       out.push_back(make_note_drill("PATHWAYS_1_4", 1, 0, std::move(params)));
     }
 
@@ -58,9 +58,9 @@ inline const std::vector<DrillSpec>& level_1() {
       params.range_above_semitones = 12;
       params.use_pathway = true;
       params.pathway_repeat_lead = false;
-      params.pathway_tempo_bpm = 60;
-      params.pathway_step_beats = 1.0;
-      params.pathway_rest_beats = 0.5;
+      params.tempo_bpm = 60;
+      params.pathway_beats = 1.0;
+      params.pathway_rest = 0.5;
       out.push_back(make_note_drill("PATHWAYS_5_7", 1, 1, std::move(params)));
     }
 
@@ -140,9 +140,9 @@ inline const std::vector<DrillSpec>& level_11() {
       params.range_above_semitones = 12;
       params.use_pathway = true;
       params.pathway_repeat_lead = false;
-      params.pathway_tempo_bpm = 80;
-      params.pathway_step_beats = 1.0;
-      params.pathway_rest_beats = 0.5;
+      params.tempo_bpm = 80;
+      params.pathway_beats = 1.0;
+      params.pathway_rest = 0.5;
       out.push_back(make_note_drill("PATHWAYS_2OCT", 11, 0, std::move(params)));
     }
 

@@ -147,6 +147,67 @@ TypedPayload typed_from_json(const nlohmann::json& json_payload) {
   return payload;
 }
 
+// ----------------------------------------------------------------------------
+// V2 Answer payload (variant) JSON helpers
+// ----------------------------------------------------------------------------
+static nlohmann::json answer_payload_v2_to_json(const AnswerPayloadV2& payload) {
+  return std::visit(
+      [](const auto& a) -> nlohmann::json {
+        using T = std::decay_t<decltype(a)>;
+        nlohmann::json j = nlohmann::json::object();
+        if constexpr (std::is_same_v<T, ChordAnswerV2>) {
+          j["type"] = "chord";
+          j["root_degree"] = a.root_degree;
+          j["bass_deg"] = a.bass_deg.has_value() ? nlohmann::json(a.bass_deg.value()) : nlohmann::json(nullptr);
+          j["top_deg"] = a.top_deg.has_value() ? nlohmann::json(a.top_deg.value()) : nlohmann::json(nullptr);
+        } else if constexpr (std::is_same_v<T, MelodyAnswerV2>) {
+          j["type"] = "melody";
+          nlohmann::json arr = nlohmann::json::array();
+          for (int v : a.melody) { arr.push_back(v); }
+          j["melody"] = std::move(arr);
+        } else if constexpr (std::is_same_v<T, HarmonyAnswerV2>) {
+          j["type"] = "harmony";
+          nlohmann::json arr = nlohmann::json::array();
+          for (int v : a.notes) { arr.push_back(v); }
+          j["notes"] = std::move(arr);
+        }
+        return j;
+      },
+      payload);
+}
+
+static AnswerPayloadV2 answer_payload_v2_from_json(const nlohmann::json& json) {
+  const std::string type = json["type"].get<std::string>();
+  if (type == "chord") {
+    ChordAnswerV2 a{};
+    a.root_degree = json["root_degree"].get<int>();
+    if (!json["bass_deg"].is_null()) a.bass_deg = json["bass_deg"].get<int>();
+    if (!json["top_deg"].is_null()) a.top_deg = json["top_deg"].get<int>();
+    return a;
+  }
+  if (type == "melody") {
+    MelodyAnswerV2 a{};
+    a.melody.clear();
+    if (json.contains("melody") && json["melody"].is_array()) {
+      for (const auto& el : json["melody"].get_array()) {
+        a.melody.push_back(el.get<int>());
+      }
+    }
+    return a;
+  }
+  if (type == "harmony") {
+    HarmonyAnswerV2 a{};
+    a.notes.clear();
+    if (json.contains("notes") && json["notes"].is_array()) {
+      for (const auto& el : json["notes"].get_array()) {
+        a.notes.push_back(el.get<int>());
+      }
+    }
+    return a;
+  }
+  throw std::runtime_error("Unknown AnswerPayloadV2 type: " + type);
+}
+
 } // namespace
 
 nlohmann::json to_json(const SessionSpec& spec) {
@@ -288,29 +349,39 @@ SessionSpec session_spec_from_json(const nlohmann::json& json_spec) {
   return spec;
 }
 
-nlohmann::json to_json(const QuestionBundle& bundle) {
+nlohmann::json to_json(const QuestionsBundle& bundle) {
   nlohmann::json json_bundle = nlohmann::json::object();
   json_bundle["question_id"] = bundle.question_id;
-  json_bundle["question"] = typed_to_json(bundle.question);
-  json_bundle["correct_answer"] = typed_to_json(bundle.correct_answer);
-  if (bundle.prompt.has_value()) {
-    json_bundle["prompt"] = prompt_plan_to_json_impl(bundle.prompt.value());
+  // Question payload V2 (variant) -> emit type + fields
+  json_bundle["question"] = nullptr; // TODO: provide full V2 question serialization if needed
+  json_bundle["correct_answer"] = answer_payload_v2_to_json(bundle.correct_answer);
+  if (bundle.prompt_clip.has_value()) {
+    json_bundle["prompt_clip"] = to_json(bundle.prompt_clip.value());
   } else {
-    json_bundle["prompt"] = nullptr;
+    json_bundle["prompt_clip"] = nullptr;
   }
-  json_bundle["ui_hints"] = bundle.ui_hints;
+  if (bundle.ui_hints.has_value()) {
+    nlohmann::json hints = nlohmann::json::object();
+    nlohmann::json assists = nlohmann::json::array();
+    for (const auto& s : bundle.ui_hints->allowed_assists) { assists.push_back(s); }
+    hints["allowed_assists"] = std::move(assists);
+    json_bundle["ui_hints"] = std::move(hints);
+  } else {
+    json_bundle["ui_hints"] = nullptr;
+  }
   return json_bundle;
 }
 
-QuestionBundle question_bundle_from_json(const nlohmann::json& json_bundle) {
-  QuestionBundle bundle;
+QuestionsBundle question_bundle_from_json(const nlohmann::json& json_bundle) {
+  QuestionsBundle bundle;
   bundle.question_id = json_bundle["question_id"].get<std::string>();
-  bundle.question = typed_from_json(json_bundle["question"]);
-  bundle.correct_answer = typed_from_json(json_bundle["correct_answer"]);
-  if (!json_bundle["prompt"].is_null()) {
-    bundle.prompt = prompt_from_json_impl(json_bundle["prompt"]);
+  // For now, omit question payload reconstruction (not used by Python UI clients currently)
+  bundle.correct_answer = answer_payload_v2_from_json(json_bundle["correct_answer"]);
+  if (json_bundle.contains("prompt_clip") && !json_bundle["prompt_clip"].is_null()) {
+    // minimal: pass through as-is; deserialize to MidiClip if needed by clients
+    // bundle.prompt_clip = midi_clip_from_json(json_bundle["prompt_clip"]);
   }
-  bundle.ui_hints = json_bundle["ui_hints"];
+  // ui_hints optional
   return bundle;
 }
 
@@ -341,7 +412,7 @@ AssistBundle assist_bundle_from_json(const nlohmann::json& json_bundle) {
 nlohmann::json to_json(const ResultReport& report) {
   nlohmann::json json_report = nlohmann::json::object();
   json_report["question_id"] = report.question_id;
-  json_report["final_answer"] = typed_to_json(report.final_answer);
+  json_report["final_answer"] = answer_payload_v2_to_json(report.final_answer);
   json_report["correct"] = report.correct;
   nlohmann::json metrics = nlohmann::json::object();
   metrics["rt_ms"] = report.metrics.rt_ms;
@@ -383,7 +454,7 @@ nlohmann::json to_json(const ResultReport& report) {
 ResultReport result_report_from_json(const nlohmann::json& json_report) {
   ResultReport report;
   report.question_id = json_report["question_id"].get<std::string>();
-  report.final_answer = typed_from_json(json_report["final_answer"]);
+  report.final_answer = answer_payload_v2_from_json(json_report["final_answer"]);
   report.correct = json_report["correct"].get<bool>();
   const auto& metrics = json_report["metrics"];
   report.metrics.rt_ms = metrics["rt_ms"].get<int>();

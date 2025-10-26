@@ -40,10 +40,10 @@ inline const std::vector<DrillSpec>& level_220() {
     {
       ear::ChordParams params;
       params.prompt_split_tracks = true;
-      params.prompt_right_channel = 0;
-      params.prompt_bass_channel = 1;
+      params.right_channel = 0;
+      params.bass_channel = 1;
       params.prompt_program = 0;
-      params.prompt_velocity = 90;
+      params.velocity = 90;
       out.push_back(make_chord_drill("CHORD_TRIADS_PIANO", "chord", 220, 0, std::move(params)));
     }
 
@@ -51,8 +51,8 @@ inline const std::vector<DrillSpec>& level_220() {
       ear::ChordParams params;
       params.voicing_profile = "strings_ensemble";
       params.prompt_program = 48;
-      params.prompt_velocity = 96;
-      params.prompt_duration_ms = 8000;
+      params.velocity = 96;
+      params.duration_ms = 8000;
       out.push_back(make_chord_drill("CHORD_TRIADS_STRINGS", "chord_sustain", 220, 1,
                                       std::move(params)));
     }
@@ -60,10 +60,10 @@ inline const std::vector<DrillSpec>& level_220() {
     {
       ear::ChordParams params;
       params.prompt_split_tracks = true;
-      params.prompt_right_channel = 0;
-      params.prompt_bass_channel = 1;
+      params.right_channel = 0;
+      params.bass_channel = 1;
       params.prompt_program = 0;
-      params.prompt_velocity = 85;
+      params.velocity = 85;
       params.training_root = ear::ChordParams::TrainingRootConfig{};
       auto& root = params.training_root;
       root.enabled = true;
@@ -86,7 +86,7 @@ inline const std::vector<DrillSpec>& level_221() {
       ear::ChordParams params;
       params.prompt_split_tracks = true;
       params.prompt_program = 0;
-      params.prompt_velocity = 88;
+      params.velocity = 88;
       out.push_back(make_chord_drill("CHORD_INVERSIONS_PIANO", "chord", 221, 0,
                                       std::move(params)));
     }
@@ -95,8 +95,8 @@ inline const std::vector<DrillSpec>& level_221() {
       ear::ChordParams params;
       params.voicing_profile = "strings_ensemble";
       params.prompt_program = 49;
-      params.prompt_velocity = 92;
-      params.prompt_duration_ms = 10000;
+      params.velocity = 92;
+      params.duration_ms = 10000;
       out.push_back(make_chord_drill("CHORD_INVERSIONS_STRINGS", "chord_sustain", 221, 1,
                                       std::move(params)));
     }
@@ -105,8 +105,8 @@ inline const std::vector<DrillSpec>& level_221() {
       ear::ChordParams params;
       params.voicing_profile = "strings_ensemble";
       params.prompt_program = 48;
-      params.prompt_velocity = 92;
-      params.prompt_duration_ms = 10000;
+      params.velocity = 92;
+      params.duration_ms = 10000;
       params.training_root = ear::ChordParams::TrainingRootConfig{};
       auto& root = params.training_root;
       root.enabled = true;
@@ -130,7 +130,7 @@ inline const std::vector<DrillSpec>& level_222() {
       params.add_seventh = true;
       params.prompt_split_tracks = true;
       params.prompt_program = 0;
-      params.prompt_velocity = 88;
+      params.velocity = 88;
       out.push_back(make_chord_drill("CHORD_EXTENDED_TRIADS", "chord", 222, 0,
                                       std::move(params)));
     }
@@ -140,8 +140,8 @@ inline const std::vector<DrillSpec>& level_222() {
       params.add_seventh = true;
       params.voicing_profile = "strings_ensemble";
       params.prompt_program = 48;
-      params.prompt_velocity = 94;
-      params.prompt_duration_ms = 12000;
+      params.velocity = 94;
+      params.duration_ms = 12000;
       out.push_back(make_chord_drill("CHORD_EXTENDED_STRINGS", "chord_sustain", 222, 1,
                                       std::move(params)));
     }
@@ -151,8 +151,8 @@ inline const std::vector<DrillSpec>& level_222() {
       params.add_seventh = true;
       params.prompt_split_tracks = true;
       params.prompt_program = 0;
-      params.prompt_velocity = 90;
-      params.prompt_duration_ms = 600;
+      params.velocity = 90;
+      params.duration_ms = 600;
       out.push_back(make_chord_drill("CHORD_EXTENDED_PIANO_FAST", "chord", 222, 2,
                                       std::move(params)));
     }
@@ -162,8 +162,8 @@ inline const std::vector<DrillSpec>& level_222() {
       params.add_seventh = true;
       params.voicing_profile = "strings_ensemble";
       params.prompt_program = 51;
-      params.prompt_velocity = 94;
-      params.prompt_duration_ms = 3000;
+      params.velocity = 94;
+      params.duration_ms = 3000;
       params.voice_leading_continuity = true;
       params.training_root = ear::ChordParams::TrainingRootConfig{};
       auto& root = params.training_root;
@@ -187,8 +187,8 @@ inline const std::vector<DrillSpec>& level_223() {
       ear::ChordParams params;
       params.voicing_profile = "strings_ensemble";
       params.prompt_program = 52;
-      params.prompt_velocity = 96;
-      params.prompt_duration_ms = 15000;
+      params.velocity = 96;
+      params.duration_ms = 15000;
       out.push_back(make_chord_drill("CHORD_STRINGS_LONG_SUSTAIN", "chord_sustain", 223, 0,
                                       std::move(params)));
     }
@@ -197,8 +197,8 @@ inline const std::vector<DrillSpec>& level_223() {
       ear::ChordParams params;
       params.voicing_profile = "strings_ensemble";
       params.prompt_program = 48;
-      params.prompt_velocity = 90;
-      params.prompt_duration_ms = 9000;
+      params.velocity = 90;
+      params.duration_ms = 9000;
       params.training_root = ear::ChordParams::TrainingRootConfig{};
       auto& root = params.training_root;
       root.enabled = true;
@@ -214,8 +214,8 @@ inline const std::vector<DrillSpec>& level_223() {
       params.voice_leading_continuity = true;
       params.allowed_top_degrees = {2, 4};
       params.prompt_program = 48;
-      params.prompt_velocity = 92;
-      params.prompt_duration_ms = 12000;
+      params.velocity = 92;
+      params.duration_ms = 12000;
       out.push_back(make_chord_drill("CHORD_STRINGS_SMOOTH_TOP", "chord_sustain", 223, 2,
                                       std::move(params)));
     }
@@ -224,8 +224,8 @@ inline const std::vector<DrillSpec>& level_223() {
       ear::ChordParams params;
       params.prompt_split_tracks = true;
       params.prompt_program = 0;
-      params.prompt_velocity = 88;
-      params.prompt_duration_ms = 900;
+      params.velocity = 88;
+      params.duration_ms = 900;
       params.training_root = ear::ChordParams::TrainingRootConfig{};
       auto& root = params.training_root;
       root.enabled = true;
@@ -242,8 +242,8 @@ inline const std::vector<DrillSpec>& level_223() {
       params.allowed_top_degrees = {0, 2, 4};
       params.prompt_split_tracks = true;
       params.prompt_program = 0;
-      params.prompt_velocity = 85;
-      params.prompt_duration_ms = 800;
+      params.velocity = 85;
+      params.duration_ms = 800;
       out.push_back(make_chord_drill("CHORD_PIANO_SMOOTH_TOP", "chord", 223, 4,
                                       std::move(params)));
     }

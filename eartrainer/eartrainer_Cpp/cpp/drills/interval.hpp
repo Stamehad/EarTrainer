@@ -7,10 +7,11 @@ namespace ear {
 class IntervalDrill : public DrillModule {
 public:
   void configure(const DrillSpec& spec) override;
-  QuestionBundle next_question(std::uint64_t& rng_state) override;
+  QuestionsBundle next_question(std::uint64_t& rng_state) override;
 
 private:
   DrillSpec spec_{};
+  IntervalParams params{};
   std::optional<int> last_bottom_degree_;
   std::optional<int> last_bottom_midi_;
 };

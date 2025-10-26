@@ -8,6 +8,7 @@
 #include "../include/ear/drill_factory.hpp"
 #include "../include/ear/adaptive_drills.hpp"
 #include "../include/ear/level_inspector.hpp"
+#include "../include/ear/question_bundle_v2.hpp"
 #include "rng.hpp"
 
 #include <algorithm>
@@ -104,7 +105,7 @@ DrillFactory& ensure_factory() {
 
 struct QuestionState {
   std::string id;
-  std::optional<QuestionBundle> bundle;
+  std::optional<QuestionsBundle> bundle;
   bool served = false;
   bool answered = false;
   std::optional<std::string> adaptive_question_id;
@@ -113,7 +114,7 @@ struct QuestionState {
 struct SubmitCache {
   ResultReport report;
   bool is_summary = false;
-  std::optional<QuestionBundle> question;
+  std::optional<QuestionsBundle> question;
   std::optional<SessionSummary> summary;
 };
 
@@ -151,7 +152,7 @@ struct SessionData {
   std::optional<int> inspector_tier;
 };
 
-QuestionBundle make_bundle(SessionData& session, QuestionState& state) {
+QuestionsBundle make_bundle(SessionData& session, QuestionState& state) {
   if (!state.bundle.has_value()) {
     throw std::runtime_error("Question output missing");
   }
@@ -165,7 +166,7 @@ void ensure_question(SessionData& session, std::size_t index) {
   auto& state = session.questions[index];
   if (!state.bundle.has_value()) {
     auto bundle = session.module->next_question(session.rng_state);
-    apply_prompt_rendering(session.drill_spec, bundle);
+    // apply_prompt_rendering(session.drill_spec, bundle);
     bundle.question_id = state.id;
     state.bundle = std::move(bundle);
   }
@@ -1020,7 +1021,7 @@ SessionEngine::Next SessionEngineImpl::next_question_level_inspector(const std::
         "Level inspector mode requires selecting a level and tier before requesting questions");
   }
 
-  QuestionBundle bundle = session.level_inspector->next();
+  QuestionsBundle bundle = session.level_inspector->next();
   QuestionState state;
   state.id = bundle.question_id;
   state.bundle = bundle;
@@ -1145,7 +1146,7 @@ SessionEngine::Next SessionEngineImpl::submit_result_level_inspector(
       throw std::runtime_error(
           "Level inspector selection missing while preparing next question");
     }
-    QuestionBundle next_bundle = session.level_inspector->next();
+    QuestionsBundle next_bundle = session.level_inspector->next();
     QuestionState next_state;
     next_state.id = next_bundle.question_id;
     next_state.bundle = next_bundle;

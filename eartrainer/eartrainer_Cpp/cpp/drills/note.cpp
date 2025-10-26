@@ -5,12 +5,16 @@
 #include "params.hpp"
 #include "pathways.hpp"
 #include "prompt_utils.hpp"
+#include "../include/ear/question_bundle_v2.hpp"
+#include "../include/ear/midi_clip.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
 #include <algorithm>
+
+using Beats = ear::Beats;
 
 namespace ear {
 namespace {
@@ -75,6 +79,27 @@ int pick_degree(const NoteParams& params, std::uint64_t& rng_state,
   return allowed[static_cast<std::size_t>(idx)];
 }
 
+std::vector<int> get_pathway(int d) {
+  if (d == 0) {return {0}; } 
+  if (d == 1) {return {1, 0}; } 
+  if (d == 2) {return {2, 1, 0}; } 
+  if (d == 3) {return {3, 2, 1, 0}; } 
+  if (d == 4) {return {4, 5, 6, 7}; } 
+  if (d == 5) {return {5, 6, 7}; } 
+  if (d == 6) {return {6, 7}; } 
+  return {7}; 
+}
+
+std::vector<int> get_pathway_midi (int degree, int midi, int tonic_midi){
+  int tonic_below_midi = midi - (midi - tonic_midi) % 12; 
+  std::vector<int> pw = get_pathway(degree);
+  for (int& p : pw) {
+    p = drills::degree_to_offset(p);
+    p+= tonic_below_midi; 
+  }
+  return pw;
+}
+
 } // namespace
 
 //====================================================================
@@ -95,7 +120,7 @@ void NoteDrill::configure(const DrillSpec& spec) {
 //====================================================================
 // NEXT QUESTION -> QUESTION BUNDLE
 //====================================================================
-QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
+QuestionsBundle NoteDrill::next_question(std::uint64_t& rng_state) {
   // PICK DEGREE IN 0...6 (OPTIONALLY AVOID REPETITIONS)
   int degree = pick_degree(params, rng_state, last_degree_);
   last_degree_ = degree;
@@ -116,57 +141,46 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
   }
   last_midi_ = midi;
 
-  nlohmann::json q_payload = nlohmann::json::object();
-  q_payload["degree"] = degree;
-  q_payload["midi"] = midi;
-  q_payload["tonic_midi"] = tonic_midi;
-
-  nlohmann::json answer_payload = nlohmann::json::object();
-  answer_payload["degree"] = degree;
-
-  PromptPlan plan;
-  plan.modality = "midi";
-  plan.count_in = false; 
-
-  //-------------------------------------------------------------------
-  // USE PATHWAYS: PLAYS NOTE WITH RESOLUTION TO TONIC
-  //-------------------------------------------------------------------
-  auto pathway_to_midi = [&](int pw_degree) {
-    int pw_offset = drills::degree_to_offset(pw_degree);
-    int tonic_below_midi = midi - (midi - tonic_midi) % 12; 
-    return tonic_below_midi + pw_offset;
+  //-----------------------------------------------------
+  // PREPARE QUESTION AND ANSWER
+  //-----------------------------------------------------
+  ear::MelodyAnswerV2 note_answer = ear::MelodyAnswerV2{std::vector<int>(degree)};
+  ear::MelodyQuestionV2 note_question = ear::MelodyQuestionV2{
+   tonic_midi, spec_.key, spec_.quality, std::vector<int>(degree)
   };
-  
-  if (params.use_pathway){
-    const pathways::PathwayOptions* pathway = resolve_pathway(spec_, degree);
-    
-    int note_duration_ms = drills::beats_to_ms(params.pathway_step_beats, params.pathway_tempo_bpm);
-    int rest_ms = drills::beats_to_ms(params.pathway_rest_beats, params.pathway_tempo_bpm);
-    if (rest_ms > 0 && (degree != 0)) {
-      drills::append_rest(plan, rest_ms);
-    }
-    plan.tempo_bpm = params.pathway_tempo_bpm;
 
-    std::vector<int> p = (pathway->primary).degrees;                          // {3,2,1,0}, {5,6,7} etc
-    std::transform(p.begin(), p.end(), p.begin(), pathway_to_midi);           // CONVERT TO MIDIS  
-    if (!params.pathway_repeat_lead) {
-      p = std::vector<int>(p.begin() + 1, p.end());
-    }
+  //-----------------------------------------------------------------
+  // GENERATE MIDI-CLIP
+  //-----------------------------------------------------------------
+  MidiClipBuilder b(params.tempo_bpm, 480);
+  auto melody_track = b.add_track("melody", 0, params.program);
 
-    for (int note : p){
-      drills::append_note(plan, note, note_duration_ms);
-    }
-    
+  Beats beat = Beats{0}; // CURRENT BEAT
+  if (!params.tonic_anchor){
+    b.add_note(melody_track, beat, Beats{params.note_beats}, midi, params.velocity);
   }
   
   //-------------------------------------------------------------------
+  // USE PATHWAYS: PLAYS NOTE WITH RESOLUTION TO TONIC
+  //-------------------------------------------------------------------
+  if (params.use_pathway && !params.tonic_anchor){
+    std::vector<int> pathway = get_pathway_midi(degree, midi, tonic_midi);
+    // REMOVE ROOT: E.G. 2 -> 1,0 INSTEAD OF 2 -> 2,1,0
+    if (!params.pathway_repeat_lead){ pathway.erase(pathway.begin()); }
+
+    if (!pathway.empty()) {
+      beat.advance_by(params.note_beats + params.pathway_rest); 
+      for (int p : pathway) { 
+        b.add_note(melody_track, beat, Beats{params.pathway_beats}, p, params.velocity);
+        beat.advance_by(params.pathway_beats);
+      } 
+    }
+  }
+
+  //-------------------------------------------------------------------
   // TONIC ANCHOR: PLAYS NOTE IN REFERENCE TO TONIC (BEFORE OR AFTER)
   //-------------------------------------------------------------------
-  if (params.use_anchor){ 
-
-    plan.tempo_bpm = params.note_tempo_bpm;
-    int note_duration_ms = drills::beats_to_ms(params.note_step_beats, params.note_tempo_bpm);
-    
+  if (params.use_anchor){
     // FIND ANCHOR TONIC JUST BELOW TO MIDI
     int shift = (midi - tonic_midi) % 12;
     int anchor_pitch = midi - shift; 
@@ -176,44 +190,37 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
 
     // IF VA HAS NO VALUE CHOOSE RANDOMLY
     using TA = NoteParams::TonicAnchor;
-    auto ta = params.tonic_anchor.value_or(
-      rand_int(rng_state, 0, 1) == 0
-          ? TA::Before
-          : TA::After);
+    auto ta = params.tonic_anchor.value_or(rand_int(rng_state, 0, 1) == 0 ? TA::Before : TA::After);
 
     // TONIC COMES BEFORE OR AFTER NOTE
     switch (ta){
       case TA::Before:
-        drills::append_note(plan, anchor_pitch, note_duration_ms);
-        drills::append_note(plan, midi, note_duration_ms);
+        b.add_note(melody_track, beat, Beats{params.note_beats}, anchor_pitch, params.velocity);
+        beat.advance_by(params.note_beats);
+        b.add_note(melody_track, beat, Beats{params.note_beats}, midi, params.velocity);
+        break;
 
       case TA::After:
-        drills::append_note(plan, midi, note_duration_ms);
-        drills::append_note(plan, anchor_pitch, note_duration_ms);
-        
+        b.add_note(melody_track, beat, Beats{params.note_beats}, midi, params.velocity);
+        beat.advance_by(params.note_beats);
+        b.add_note(melody_track, beat, Beats{params.note_beats}, anchor_pitch, params.velocity);
+        break;
+      
+      default:
+        break;
     }
   }
 
-  //-------------------------------------------------------------------
-  // QUESTION BUNDLE
-  //-------------------------------------------------------------------
-  nlohmann::json hints = nlohmann::json::object();
-  hints["answer_kind"] = "degree";
-  nlohmann::json allowed = nlohmann::json::array();
-  allowed.push_back("Replay");
-  hints["allowed_assists"] = allowed;
-  nlohmann::json budget = nlohmann::json::object();
-  for (const auto& entry : spec_.assistance_policy) {
-    budget[entry.first] = entry.second;
-  }
-  hints["assist_budget"] = budget;
-
-  QuestionBundle bundle;
+  //-----------------------------------------------------------------
+  // GENERATE QUESTION BUNDLE
+  //-----------------------------------------------------------------
+  ear::QuestionsBundle bundle;
+  bundle.question_id = "place-holder";
   bundle.question_id.clear();
-  bundle.question = TypedPayload{"note", q_payload};
-  bundle.correct_answer = TypedPayload{"degree", answer_payload};
-  bundle.prompt = plan;
-  bundle.ui_hints = hints;
+  bundle.correct_answer = note_answer;
+  bundle.question = note_question;
+  bundle.prompt_clip = b.build();
+
   return bundle;
 }
 

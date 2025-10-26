@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "../src/rng.hpp"
+#include "../include/ear/question_bundle_v2.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -248,7 +249,7 @@ void MelodyDrill::configure(const DrillSpec& spec) {
 //====================================================================
 // NEXT QUESTION -> QUESTION BUNDLE
 //====================================================================
-QuestionBundle MelodyDrill::next_question(std::uint64_t& rng_state) {
+QuestionsBundle MelodyDrill::next_question(std::uint64_t& rng_state) {
   std::vector<int> degrees;
   std::vector<int> midis;
 
@@ -271,67 +272,37 @@ QuestionBundle MelodyDrill::next_question(std::uint64_t& rng_state) {
 
   midis = degrees_to_midi(spec_, degrees, midi_range);
 
-  nlohmann::json data = nlohmann::json::object();
-  nlohmann::json degree_array = nlohmann::json::array();
-  for (int degree : degrees) {
-    degree_array.push_back(degree);
-  }
-  nlohmann::json midi_array = nlohmann::json::array();
-  for (int midi : midis) {
-    midi_array.push_back(midi);
-  }
-  data["degrees"] = degree_array;
-  data["midi"] = midi_array;
-
-  const auto& degrees_json = data.value("degrees", nlohmann::json::array());
-  const auto& midi_json = data.value("midi", nlohmann::json::array());
-
-  PromptPlan plan;
-  plan.modality = "midi";
-  plan.tempo_bpm = params.tempo_bpm;
-  plan.count_in = true;
-
-  auto step_duration_ms = [](int bpm) {
-    int tempo = std::max(1, bpm);
-    double quarter_ms = 60000.0 / static_cast<double>(tempo);
-    return static_cast<int>(std::lround(quarter_ms));
+  //-----------------------------------------------------
+  // PREPARE QUESTION AND ANSWER
+  //-----------------------------------------------------
+  MelodyAnswerV2 melody_answer = MelodyAnswerV2{degrees};
+  MelodyQuestionV2 melody_question = MelodyQuestionV2{
+   tonic_midi, spec_.key, spec_.quality, degrees
   };
-  int tempo_bpm = params.tempo_bpm;
-  int duration_ms = step_duration_ms(tempo_bpm);
 
-  nlohmann::json note_payload = nlohmann::json::array();
-  for (const auto& entry : midi_json.get_array()) {
-    int pitch = entry.get<int>();
-    plan.notes.push_back({pitch, duration_ms, std::nullopt, std::nullopt});
-    note_payload.push_back(pitch);
+  //-----------------------------------------------------------------
+  // GENERATE MIDI-CLIP
+  //-----------------------------------------------------------------
+  MidiClipBuilder b(params.tempo_bpm, 480);
+  auto melody_track = b.add_track("melody", 0, params.program);
+
+  Beats beat = Beats{0}; // CURRENT BEAT
+  for (int midi : midis){
+    b.add_note(melody_track, beat, Beats{params.note_beat}, midi, params.velocity);
+    beat.advance_by(params.note_beat);
   }
 
-  nlohmann::json question_payload = nlohmann::json::object();
-  question_payload["midi"] = note_payload;
-  question_payload["degrees"] = degrees_json;
-
-  nlohmann::json answer_payload = nlohmann::json::object();
-  answer_payload["degrees"] = degrees_json;
-
-  nlohmann::json hints = nlohmann::json::object();
-  hints["answer_kind"] = "melody_notes";
-  nlohmann::json allowed = nlohmann::json::array();
-  allowed.push_back("Replay");
-  allowed.push_back("TempoDown");
-  hints["allowed_assists"] = allowed;
-  nlohmann::json budget = nlohmann::json::object();
-  for (const auto& entry : spec_.assistance_policy) {
-    budget[entry.first] = entry.second;
-  }
-  hints["assist_budget"] = budget;
-
-  QuestionBundle bundle;
+  //-----------------------------------------------------------------
+  // GENERATE QUESTION BUNDLE
+  //-----------------------------------------------------------------
+  ear::QuestionsBundle bundle;
+  bundle.question_id = "place-holder";
   bundle.question_id.clear();
-  bundle.question = TypedPayload{"melody", question_payload};
-  bundle.correct_answer = TypedPayload{"melody_notes", answer_payload};
-  bundle.prompt = plan;
-  bundle.ui_hints = hints;
+  bundle.correct_answer = melody_answer;
+  bundle.question = melody_question;
+  bundle.prompt_clip = b.build();
+  
   return bundle;
-}
+  }
 
 } // namespace ear

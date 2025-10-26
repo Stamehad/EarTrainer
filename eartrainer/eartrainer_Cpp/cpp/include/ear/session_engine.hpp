@@ -14,7 +14,7 @@ public:
 
   virtual std::string create_session(const SessionSpec& spec) = 0;
 
-  using Next = std::variant<QuestionBundle, SessionSummary>;
+  using Next = std::variant<QuestionsBundle, SessionSummary>;
 
   virtual Next next_question(const std::string& session_id) = 0;
 
