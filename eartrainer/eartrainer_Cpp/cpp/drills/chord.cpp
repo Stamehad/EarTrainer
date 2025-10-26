@@ -147,7 +147,7 @@ void ChordDrill::configure(const DrillSpec& spec) {
 //====================================================================
 // NEXT QUESTION -> QUESTION BUNDLE
 //====================================================================
-QuestionsBundle ChordDrill::next_question(std::uint64_t& rng_state) {
+QuestionBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   // SAMPLE DEGREE -> VOICING + BASS
   int degree = pick_degree(params, rng_state, selection_state_.last_degree);
   ChordVoicingEngine::RightVoicing rv = v_engine.get_voicing(degree, rng_state);
@@ -185,7 +185,7 @@ QuestionsBundle ChordDrill::next_question(std::uint64_t& rng_state) {
   //-----------------------------------------------------------------
   // GENERATE QUESTION BUNDLE
   //-----------------------------------------------------------------
-  ear::QuestionsBundle bundle;
+  ear::QuestionBundle bundle;
   bundle.question_id = "place-holder";
   bundle.question_id.clear();
   bundle.correct_answer = chord_answer;

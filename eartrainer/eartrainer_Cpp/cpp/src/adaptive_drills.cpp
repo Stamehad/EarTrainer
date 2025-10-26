@@ -303,7 +303,7 @@ void AdaptiveDrills::initialize_bout(int level, const std::vector<DrillSpec>& sp
   drill_scores_.assign(slots_.size(), std::nullopt);
 }
 
-QuestionsBundle AdaptiveDrills::next() {
+QuestionBundle AdaptiveDrills::next() {
   if (slots_.empty()) {
     throw std::runtime_error("AdaptiveDrills::next called before set_bout or with empty bout");
   }

@@ -349,7 +349,7 @@ SessionSpec session_spec_from_json(const nlohmann::json& json_spec) {
   return spec;
 }
 
-nlohmann::json to_json(const QuestionsBundle& bundle) {
+nlohmann::json to_json(const QuestionBundle& bundle) {
   nlohmann::json json_bundle = nlohmann::json::object();
   json_bundle["question_id"] = bundle.question_id;
   // Question payload V2 (variant) -> emit type + fields
@@ -372,8 +372,8 @@ nlohmann::json to_json(const QuestionsBundle& bundle) {
   return json_bundle;
 }
 
-QuestionsBundle question_bundle_from_json(const nlohmann::json& json_bundle) {
-  QuestionsBundle bundle;
+QuestionBundle question_bundle_from_json(const nlohmann::json& json_bundle) {
+  QuestionBundle bundle;
   bundle.question_id = json_bundle["question_id"].get<std::string>();
   // For now, omit question payload reconstruction (not used by Python UI clients currently)
   bundle.correct_answer = answer_payload_v2_from_json(json_bundle["correct_answer"]);

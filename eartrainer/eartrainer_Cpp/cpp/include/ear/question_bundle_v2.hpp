@@ -74,7 +74,7 @@ struct UiHintsV2 {
 };
 
 // --- The bundle built by drills (typed, JSON-free) ---
-struct QuestionsBundle {
+struct QuestionBundle {
   std::string       question_id;
   QuestionPayloadV2 question;
   AnswerPayloadV2   correct_answer;

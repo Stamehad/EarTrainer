@@ -39,7 +39,7 @@ MelodyScorer::MelodyScorer(MelodyScoringConfig config) : config_(std::move(confi
   config_.validate();
 }
 
-double MelodyScorer::score_question(const QuestionBundle& question, const ResultReport& report,
+double MelodyScorer::score_question(const QuestionBundleV0& question, const ResultReport& report,
                                     bool include_response_score) const {
   const int note_count = extract_note_count(question);
   const auto tempo = extract_tempo(question);
@@ -176,7 +176,7 @@ double MelodyScorer::expected_score(int note_count, double response_time,
   return p_star * (w2 * sr + (1.0 - w2) * qd);
 }
 
-int MelodyScorer::extract_note_count(const QuestionBundle& question) const {
+int MelodyScorer::extract_note_count(const QuestionBundleV0& question) const {
   if (question.prompt.has_value()) {
     const auto& prompt = question.prompt.value();
     if (!prompt.notes.empty()) {
@@ -203,7 +203,7 @@ int MelodyScorer::extract_note_count(const QuestionBundle& question) const {
   return 1;
 }
 
-std::optional<double> MelodyScorer::extract_tempo(const QuestionBundle& question) const {
+std::optional<double> MelodyScorer::extract_tempo(const QuestionBundleV0& question) const {
   if (question.prompt.has_value()) {
     const auto& prompt = question.prompt.value();
     if (prompt.tempo_bpm.has_value()) {

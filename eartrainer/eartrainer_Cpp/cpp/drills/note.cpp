@@ -120,7 +120,7 @@ void NoteDrill::configure(const DrillSpec& spec) {
 //====================================================================
 // NEXT QUESTION -> QUESTION BUNDLE
 //====================================================================
-QuestionsBundle NoteDrill::next_question(std::uint64_t& rng_state) {
+QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
   // PICK DEGREE IN 0...6 (OPTIONALLY AVOID REPETITIONS)
   int degree = pick_degree(params, rng_state, last_degree_);
   last_degree_ = degree;
@@ -214,7 +214,7 @@ QuestionsBundle NoteDrill::next_question(std::uint64_t& rng_state) {
   //-----------------------------------------------------------------
   // GENERATE QUESTION BUNDLE
   //-----------------------------------------------------------------
-  ear::QuestionsBundle bundle;
+  ear::QuestionBundle bundle;
   bundle.question_id = "place-holder";
   bundle.question_id.clear();
   bundle.correct_answer = note_answer;

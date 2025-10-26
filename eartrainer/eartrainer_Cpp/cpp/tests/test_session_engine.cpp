@@ -384,7 +384,7 @@ ear::SessionSpec make_spec(const std::string& drill_kind, const std::string& gen
   return spec;
 }
 
-  ear::ResultReport make_report(const ear::QuestionsBundle& bundle, bool correct = true) {
+  ear::ResultReport make_report(const ear::QuestionBundle& bundle, bool correct = true) {
   ear::ResultReport report;
   report.question_id = bundle.question_id;
   report.final_answer = bundle.correct_answer;
@@ -396,7 +396,7 @@ ear::SessionSpec make_spec(const std::string& drill_kind, const std::string& gen
   return report;
 }
 
-  nlohmann::json question_bundle_json(const ear::QuestionsBundle& bundle) {
+  nlohmann::json question_bundle_json(const ear::QuestionBundle& bundle) {
   nlohmann::json json_bundle = nlohmann::json::object();
   json_bundle["question_id"] = bundle.question_id;
   json_bundle["question"] = question_payload_json(bundle.question);
@@ -410,8 +410,8 @@ ear::SessionSpec make_spec(const std::string& drill_kind, const std::string& gen
   return json_bundle;
 }
 
-  ear::QuestionsBundle question_bundle_from_json(const nlohmann::json& json_bundle) {
-  ear::QuestionsBundle bundle;
+  ear::QuestionBundle question_bundle_from_json(const nlohmann::json& json_bundle) {
+  ear::QuestionBundle bundle;
   bundle.question_id = json_bundle["question_id"].get<std::string>();
   bundle.question = question_payload_from_json(json_bundle["question"]);
   bundle.correct_answer = answer_payload_from_json(json_bundle["correct_answer"]);
@@ -422,7 +422,7 @@ ear::SessionSpec make_spec(const std::string& drill_kind, const std::string& gen
   return bundle;
 }
 
-  std::string digest(const ear::QuestionsBundle& bundle) {
+  std::string digest(const ear::QuestionBundle& bundle) {
   return question_bundle_json(bundle).dump();
 }
 
@@ -501,7 +501,7 @@ int main() {
     std::vector<std::string> seq1;
     for (int i = 0; i < spec.n_questions; ++i) {
       auto next = engine1->next_question(session1);
-      const auto* bundle = std::get_if<ear::QuestionsBundle>(&next);
+      const auto* bundle = std::get_if<ear::QuestionBundle>(&next);
       suite.require(bundle != nullptr, "next_question should return QuestionsBundle");
       seq1.push_back(digest(*bundle));
       engine1->submit_result(session1, make_report(*bundle));
@@ -512,7 +512,7 @@ int main() {
     std::vector<std::string> seq2;
     for (int i = 0; i < spec.n_questions; ++i) {
       auto next = engine2->next_question(session2);
-      const auto* bundle = std::get_if<ear::QuestionsBundle>(&next);
+      const auto* bundle = std::get_if<ear::QuestionBundle>(&next);
       suite.require(bundle != nullptr, "next_question should return QuestionsBundle (run 2)");
       seq2.push_back(digest(*bundle));
       engine2->submit_result(session2, make_report(*bundle));
@@ -528,7 +528,7 @@ int main() {
     std::vector<std::string> seq1;
     for (int i = 0; i < spec.n_questions; ++i) {
       auto next = engine1->next_question(session1);
-      const auto* bundle = std::get_if<ear::QuestionsBundle>(&next);
+      const auto* bundle = std::get_if<ear::QuestionBundle>(&next);
       suite.require(bundle != nullptr, "interval next_question should return QuestionsBundle");
       seq1.push_back(digest(*bundle));
       engine1->submit_result(session1, make_report(*bundle));
@@ -539,7 +539,7 @@ int main() {
     std::vector<std::string> seq2;
     for (int i = 0; i < spec.n_questions; ++i) {
       auto next = engine2->next_question(session2);
-      const auto* bundle = std::get_if<ear::QuestionsBundle>(&next);
+      const auto* bundle = std::get_if<ear::QuestionBundle>(&next);
       suite.require(bundle != nullptr,
                     "interval next_question should return QuestionsBundle (run 2)");
       seq2.push_back(digest(*bundle));
@@ -556,7 +556,7 @@ int main() {
     std::vector<std::string> seq1;
     for (int i = 0; i < spec.n_questions; ++i) {
       auto next = engine1->next_question(session1);
-      const auto* bundle = std::get_if<ear::QuestionsBundle>(&next);
+      const auto* bundle = std::get_if<ear::QuestionBundle>(&next);
       suite.require(bundle != nullptr, "melody next_question should return QuestionsBundle");
       seq1.push_back(digest(*bundle));
       engine1->submit_result(session1, make_report(*bundle));
@@ -567,7 +567,7 @@ int main() {
     std::vector<std::string> seq2;
     for (int i = 0; i < spec.n_questions; ++i) {
       auto next = engine2->next_question(session2);
-      const auto* bundle = std::get_if<ear::QuestionsBundle>(&next);
+      const auto* bundle = std::get_if<ear::QuestionBundle>(&next);
       suite.require(bundle != nullptr,
                     "melody next_question should return QuestionsBundle (run 2)");
       seq2.push_back(digest(*bundle));
@@ -583,7 +583,7 @@ int main() {
     auto session = engine->create_session(spec);
 
     auto first_next = engine->next_question(session);
-    auto* bundle = std::get_if<ear::QuestionsBundle>(&first_next);
+    auto* bundle = std::get_if<ear::QuestionBundle>(&first_next);
     suite.require(bundle != nullptr, "Expected QuestionsBundle for melody test");
     auto original_digest = digest(*bundle);
 
@@ -592,17 +592,17 @@ int main() {
                   "Assist bundle mismatch question id");
 
     auto repeat_next = engine->next_question(session);
-    auto* repeat_bundle = std::get_if<ear::QuestionsBundle>(&repeat_next);
+    auto* repeat_bundle = std::get_if<ear::QuestionBundle>(&repeat_next);
     suite.require(repeat_bundle != nullptr, "Expected QuestionsBundle after assist");
     suite.require(digest(*repeat_bundle) == original_digest,
                   "Assist modified active question");
 
     auto first_submit = engine->submit_result(session, make_report(*repeat_bundle));
-    auto* submit_bundle = std::get_if<ear::QuestionsBundle>(&first_submit);
+    auto* submit_bundle = std::get_if<ear::QuestionBundle>(&first_submit);
     suite.require(submit_bundle != nullptr, "Expected QuestionsBundle response on submit");
 
     auto second_submit = engine->submit_result(session, make_report(*repeat_bundle));
-    auto* submit_bundle_repeat = std::get_if<ear::QuestionsBundle>(&second_submit);
+    auto* submit_bundle_repeat = std::get_if<ear::QuestionBundle>(&second_submit);
     suite.require(submit_bundle_repeat != nullptr,
                   "Expected idempotent submit to return QuestionsBundle");
     suite.require(digest(*submit_bundle) == digest(*submit_bundle_repeat),
@@ -613,16 +613,16 @@ int main() {
     auto spec = make_spec("note", "adaptive", 555, 2);
     auto engine_a = ear::make_engine();
     auto session_a = engine_a->create_session(spec);
-    auto first_a = std::get<ear::QuestionsBundle>(engine_a->next_question(session_a));
+    auto first_a = std::get<ear::QuestionBundle>(engine_a->next_question(session_a));
     engine_a->assist(session_a, first_a.question_id, "GuideTone");
     engine_a->submit_result(session_a, make_report(first_a));
-    auto second_a = std::get<ear::QuestionsBundle>(engine_a->next_question(session_a));
+    auto second_a = std::get<ear::QuestionBundle>(engine_a->next_question(session_a));
 
     auto engine_b = ear::make_engine();
     auto session_b = engine_b->create_session(spec);
-    auto first_b = std::get<ear::QuestionsBundle>(engine_b->next_question(session_b));
+    auto first_b = std::get<ear::QuestionBundle>(engine_b->next_question(session_b));
     engine_b->submit_result(session_b, make_report(first_b));
-    auto second_b = std::get<ear::QuestionsBundle>(engine_b->next_question(session_b));
+    auto second_b = std::get<ear::QuestionBundle>(engine_b->next_question(session_b));
 
     suite.require(digest(second_a) == digest(second_b),
                   "RNG advanced outside next_question (assist/submit side effects)");
@@ -632,7 +632,7 @@ int main() {
     auto engine = ear::make_engine();
    auto spec = make_spec("chord", "eager", 999, 1);
    auto session = engine->create_session(spec);
-    auto bundle = std::get<ear::QuestionsBundle>(engine->next_question(session));
+    auto bundle = std::get<ear::QuestionBundle>(engine->next_question(session));
     auto json_bundle = ear::bridge::to_json(bundle);
     auto round_trip_bundle = ear::bridge::question_bundle_from_json(json_bundle);
     auto json_bundle_repeat = ear::bridge::to_json(round_trip_bundle);
@@ -668,17 +668,17 @@ int main() {
     suite.require(overview.find("Level 1") != std::string::npos,
                   "Level inspector overview should mention level 1");
     auto initial_variant = engine->next_question(session);
-    auto* initial_bundle = std::get_if<ear::QuestionsBundle>(&initial_variant);
+    auto* initial_bundle = std::get_if<ear::QuestionBundle>(&initial_variant);
     suite.require(initial_bundle != nullptr, "Level inspector should return question bundle");
     suite.require(initial_bundle->question_id.rfind("li-", 0) == 0,
                   "Level inspector question id must start with li-");
     auto follow_variant = engine->submit_result(session, make_report(*initial_bundle));
-    suite.require(std::holds_alternative<ear::QuestionsBundle>(follow_variant) ||
+    suite.require(std::holds_alternative<ear::QuestionBundle>(follow_variant) ||
                       std::holds_alternative<ear::SessionSummary>(follow_variant),
                   "Level inspector submit should produce bundle or summary");
     engine->set_level(session, 1, 0);
     auto after_reset = engine->next_question(session);
-    suite.require(std::holds_alternative<ear::QuestionsBundle>(after_reset),
+    suite.require(std::holds_alternative<ear::QuestionBundle>(after_reset),
                   "Level inspector should provide question after reset");
   }
 
@@ -688,7 +688,7 @@ int main() {
     cfg.tempo_max = 180.0;
     ear::scoring::MelodyScorer scorer{cfg};
 
-    ear::QuestionBundle question;
+    ear::QuestionBundleV0 question;
     question.question_id = "q-test";
     nlohmann::json payload = nlohmann::json::object();
     nlohmann::json midi = nlohmann::json::array();
@@ -778,16 +778,16 @@ int main() {
     auto session = engine->create_session(spec);
 
     auto first_variant = engine->next_question(session);
-    auto* first_bundle = std::get_if<ear::QuestionsBundle>(&first_variant);
+    auto* first_bundle = std::get_if<ear::QuestionBundle>(&first_variant);
     suite.require(first_bundle != nullptr, "Adaptive session should yield first question");
 
     auto first_report = make_report(*first_bundle);
     auto first_response = engine->submit_result(session, first_report);
-    suite.require(std::holds_alternative<ear::QuestionsBundle>(first_response),
+    suite.require(std::holds_alternative<ear::QuestionBundle>(first_response),
                   "Adaptive submit should return bundle until session ends");
 
     auto second_variant = engine->next_question(session);
-    auto* second_bundle = std::get_if<ear::QuestionsBundle>(&second_variant);
+    auto* second_bundle = std::get_if<ear::QuestionBundle>(&second_variant);
     suite.require(second_bundle != nullptr, "Adaptive session should yield second question");
 
     auto second_report = make_report(*second_bundle);
@@ -819,7 +819,7 @@ int main() {
 
     for (int i = 0; i < spec.n_questions; ++i) {
       auto next = engine->next_question(session);
-      auto* bundle = std::get_if<ear::QuestionsBundle>(&next);
+      auto* bundle = std::get_if<ear::QuestionBundle>(&next);
       suite.require(bundle != nullptr, "Unbiased adaptive session should deliver bundle");
       auto report = make_report(*bundle);
       engine->submit_result(session, report);
@@ -866,7 +866,7 @@ int main() {
 
     for (int i = 0; i < spec.n_questions; ++i) {
       auto next = engine->next_question(session);
-      auto* bundle = std::get_if<ear::QuestionsBundle>(&next);
+      auto* bundle = std::get_if<ear::QuestionBundle>(&next);
       suite.require(bundle != nullptr, "Biased adaptive session should deliver bundle");
       auto report = make_report(*bundle);
       engine->submit_result(session, report);

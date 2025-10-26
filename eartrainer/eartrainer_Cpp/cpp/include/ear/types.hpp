@@ -97,7 +97,7 @@ struct TypedPayload {
   nlohmann::json payload;
 };
 
-struct QuestionBundle {
+struct QuestionBundleV0 {
   std::string question_id;
   TypedPayload question;
   TypedPayload correct_answer;

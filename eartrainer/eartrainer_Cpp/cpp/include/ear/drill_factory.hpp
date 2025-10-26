@@ -38,6 +38,6 @@ private:
 
 void register_builtin_drills(DrillFactory& factory);
 
-// void apply_prompt_rendering(const DrillSpec& spec, QuestionsBundle& bundle);
+// void apply_prompt_rendering(const DrillSpec& spec, QuestionBundle& bundle);
 
 } // namespace ear

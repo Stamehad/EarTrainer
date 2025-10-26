@@ -249,7 +249,7 @@ void MelodyDrill::configure(const DrillSpec& spec) {
 //====================================================================
 // NEXT QUESTION -> QUESTION BUNDLE
 //====================================================================
-QuestionsBundle MelodyDrill::next_question(std::uint64_t& rng_state) {
+QuestionBundle MelodyDrill::next_question(std::uint64_t& rng_state) {
   std::vector<int> degrees;
   std::vector<int> midis;
 
@@ -295,7 +295,7 @@ QuestionsBundle MelodyDrill::next_question(std::uint64_t& rng_state) {
   //-----------------------------------------------------------------
   // GENERATE QUESTION BUNDLE
   //-----------------------------------------------------------------
-  ear::QuestionsBundle bundle;
+  ear::QuestionBundle bundle;
   bundle.question_id = "place-holder";
   bundle.question_id.clear();
   bundle.correct_answer = melody_answer;

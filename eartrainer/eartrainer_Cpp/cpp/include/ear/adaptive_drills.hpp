@@ -30,7 +30,7 @@ public:
     std::vector<int> weights;
   };
   TrackPick pick_track(const std::vector<int>& current_levels);
-  QuestionsBundle next();
+  QuestionBundle next();
   nlohmann::json diagnostic() const;
   struct ScoreSnapshot {
     double bout_average = 0.0;

@@ -49,7 +49,7 @@ public:
 
   const MelodyScoringConfig& config() const noexcept { return config_; }
 
-  double score_question(const QuestionBundle& question, const ResultReport& report,
+  double score_question(const QuestionBundleV0& question, const ResultReport& report,
                         bool include_response_score = true) const;
 
   std::vector<MelodyMenuEntry> menu_for_fitness(double fitness, std::size_t max_entries = 5,
@@ -64,8 +64,8 @@ private:
                         std::optional<double> tempo = std::nullopt,
                         bool include_response_score = false) const;
 
-  int extract_note_count(const QuestionBundle& question) const;
-  std::optional<double> extract_tempo(const QuestionBundle& question) const;
+  int extract_note_count(const QuestionBundleV0& question) const;
+  std::optional<double> extract_tempo(const QuestionBundleV0& question) const;
   double ms_to_seconds(int milliseconds) const;
   std::vector<std::optional<double>> candidate_tempos() const;
   std::vector<double> candidate_response_times() const;

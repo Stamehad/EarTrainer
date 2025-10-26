@@ -22,7 +22,7 @@ struct EngineState {
   std::unique_ptr<ear::SessionEngine> engine;
   std::optional<std::string> session_id;
   std::optional<ear::SessionSpec> session_spec;
-  std::optional<ear::QuestionBundle> last_question;
+  std::optional<ear::QuestionBundleV0> last_question;
   std::string storage_root;
   nlohmann::json profile_json = nlohmann::json::object();
   bool profile_loaded = false;
@@ -72,7 +72,7 @@ nlohmann::json error_envelope(const std::string& message) {
   return payload;
 }
 
-nlohmann::json make_question_payload(const ear::QuestionBundle& bundle,
+nlohmann::json make_question_payload(const ear::QuestionBundleV0& bundle,
                                      const nlohmann::json& debug) {
   nlohmann::json payload = ok_envelope();
   payload["type"] = "question";
@@ -201,7 +201,7 @@ char* next_question(void) {
   try {
     auto& engine = ensure_engine();
     auto next = engine.next_question(*s.session_id);
-    if (auto bundle = std::get_if<ear::QuestionBundle>(&next)) {
+    if (auto bundle = std::get_if<ear::QuestionBundleV0>(&next)) {
       s.last_question = *bundle;
       auto debug = engine.debug_state(*s.session_id);
       return copy_json(make_question_payload(*bundle, debug));
@@ -234,7 +234,7 @@ char* feedback(const char* answer_json) {
     auto& engine = ensure_engine();
     auto next = engine.submit_result(*s.session_id, report);
     s.questions_answered += 1;
-    if (auto bundle = std::get_if<ear::QuestionBundle>(&next)) {
+    if (auto bundle = std::get_if<ear::QuestionBundleV0>(&next)) {
       s.last_question = *bundle;
       auto debug = engine.debug_state(*s.session_id);
       return copy_json(make_question_payload(*bundle, debug));

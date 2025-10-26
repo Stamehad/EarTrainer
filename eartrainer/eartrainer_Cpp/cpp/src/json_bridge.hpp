@@ -7,8 +7,8 @@ namespace ear::bridge {
 nlohmann::json to_json(const SessionSpec& spec);
 SessionSpec session_spec_from_json(const nlohmann::json& json_spec);
 
-nlohmann::json to_json(const QuestionsBundle& bundle);
-QuestionsBundle question_bundle_from_json(const nlohmann::json& json_bundle);
+nlohmann::json to_json(const QuestionBundle& bundle);
+QuestionBundle question_bundle_from_json(const nlohmann::json& json_bundle);
 
 nlohmann::json to_json(const AssistBundle& bundle);
 AssistBundle assist_bundle_from_json(const nlohmann::json& json_bundle);

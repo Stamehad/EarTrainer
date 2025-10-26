@@ -9,7 +9,7 @@ namespace ear {
 class NoteDrill : public DrillModule {
 public:
   void configure(const DrillSpec& spec) override;
-  QuestionsBundle next_question(std::uint64_t& rng_state) override;
+  QuestionBundle next_question(std::uint64_t& rng_state) override;
 
 private:
   DrillSpec spec_{};

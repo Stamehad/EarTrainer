@@ -105,7 +105,7 @@ DrillFactory& ensure_factory() {
 
 struct QuestionState {
   std::string id;
-  std::optional<QuestionsBundle> bundle;
+  std::optional<QuestionBundle> bundle;
   bool served = false;
   bool answered = false;
   std::optional<std::string> adaptive_question_id;
@@ -114,7 +114,7 @@ struct QuestionState {
 struct SubmitCache {
   ResultReport report;
   bool is_summary = false;
-  std::optional<QuestionsBundle> question;
+  std::optional<QuestionBundle> question;
   std::optional<SessionSummary> summary;
 };
 
@@ -152,7 +152,7 @@ struct SessionData {
   std::optional<int> inspector_tier;
 };
 
-QuestionsBundle make_bundle(SessionData& session, QuestionState& state) {
+QuestionBundle make_bundle(SessionData& session, QuestionState& state) {
   if (!state.bundle.has_value()) {
     throw std::runtime_error("Question output missing");
   }
@@ -1021,7 +1021,7 @@ SessionEngine::Next SessionEngineImpl::next_question_level_inspector(const std::
         "Level inspector mode requires selecting a level and tier before requesting questions");
   }
 
-  QuestionsBundle bundle = session.level_inspector->next();
+  QuestionBundle bundle = session.level_inspector->next();
   QuestionState state;
   state.id = bundle.question_id;
   state.bundle = bundle;
@@ -1146,7 +1146,7 @@ SessionEngine::Next SessionEngineImpl::submit_result_level_inspector(
       throw std::runtime_error(
           "Level inspector selection missing while preparing next question");
     }
-    QuestionsBundle next_bundle = session.level_inspector->next();
+    QuestionBundle next_bundle = session.level_inspector->next();
     QuestionState next_state;
     next_state.id = next_bundle.question_id;
     next_state.bundle = next_bundle;

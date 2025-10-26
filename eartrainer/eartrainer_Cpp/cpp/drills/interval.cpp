@@ -95,7 +95,7 @@ void IntervalDrill::configure(const DrillSpec& spec) {
   last_bottom_midi_.reset();
 }
 
-QuestionsBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
+QuestionBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
   int bottom_degree = pick_bottom_degree(spec_, rng_state, last_bottom_degree_);
   int size = pick_interval_size(spec_, rng_state);
   int tonic_midi = drills::central_tonic_midi(spec_.key);
@@ -152,7 +152,7 @@ QuestionsBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
   //-----------------------------------------------------------------
   // GENERATE QUESTION BUNDLE
   //-----------------------------------------------------------------
-  QuestionsBundle bundle;
+  QuestionBundle bundle;
   bundle.question_id = "place-holder";
   bundle.question_id.clear();
   bundle.correct_answer = interval_answer;

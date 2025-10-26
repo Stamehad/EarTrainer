@@ -29,7 +29,7 @@ public:
   bool has_selection() const;
   std::optional<std::pair<int, int>> selection() const;
 
-  QuestionsBundle next();
+  QuestionBundle next();
 
 private:
 public:

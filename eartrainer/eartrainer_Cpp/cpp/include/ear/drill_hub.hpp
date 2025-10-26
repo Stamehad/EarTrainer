@@ -25,7 +25,7 @@ public:
 
   struct Selection {
     std::string drill_kind;
-    QuestionsBundle bundle;
+    QuestionBundle bundle;
     DrillSpec spec;
   };
 

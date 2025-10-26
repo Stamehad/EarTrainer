@@ -281,7 +281,7 @@ std::optional<std::pair<int, int>> LevelInspector::selection() const {
   return std::make_pair(active_level_.value(), active_tier_.value());
 }
 
-QuestionsBundle LevelInspector::next() {
+QuestionBundle LevelInspector::next() {
   if (!has_selection()) {
     throw std::runtime_error("LevelInspector: select a level/tier before requesting questions");
   }
