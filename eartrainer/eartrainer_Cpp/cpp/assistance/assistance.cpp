@@ -9,8 +9,7 @@ AssistBundle make_assist(const QuestionBundle& question, const std::string& kind
   AssistBundle bundle;
   bundle.question_id = question.question_id;
   bundle.kind = kind;
-  bundle.prompt = std::nullopt;
-  bundle.ui_delta = nlohmann::json::object();
+  bundle.prompt_clip = std::nullopt;
 
   // if (kind == "Replay") {
   //   if (question.prompt.has_value()) {

@@ -30,6 +30,14 @@ enum class SessionMode {
 
 enum class KeyQuality {Major, Minor};
 
+inline std::string key_quality_to_string(KeyQuality quality){
+  switch (quality) {
+    case KeyQuality::Major: return "major";
+    case KeyQuality::Minor: return "minor";
+  }
+  return "major";
+}
+
 inline std::string to_string(SessionMode mode) {
   switch (mode) {
     case SessionMode::Manual: return "manual";
@@ -108,8 +116,8 @@ struct QuestionBundleV0 {
 struct AssistBundle {
   std::string question_id;
   std::string kind;
-  std::optional<PromptPlan> prompt;
-  nlohmann::json ui_delta;
+  // For playback, mirror drills: provide a ready MidiClip when available.
+  std::optional<ear::MidiClip> prompt_clip;
 };
 
 struct ResultReport {

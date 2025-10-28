@@ -10,6 +10,7 @@
 #include "../include/ear/level_inspector.hpp"
 #include "../include/ear/question_bundle_v2.hpp"
 #include "rng.hpp"
+#include "../include/ear/midi_clip.hpp"
 
 #include <algorithm>
 #include <array>
@@ -131,7 +132,7 @@ struct SessionData {
   std::optional<std::size_t> active_question;
   SessionSummary summary_cache;
   bool summary_ready = false;
-  std::unordered_map<std::string, PromptPlan> session_assists;
+  std::unordered_map<std::string, MidiClip> session_assists;
   SessionMode mode = SessionMode::Manual;
 
   bool adaptive = false;
@@ -286,48 +287,21 @@ std::string normalize_kind(const std::string& kind) {
   return normalized;
 }
 
-PromptPlan make_tonic_prompt(const SessionSpec& spec) {
-  PromptPlan plan;
-  plan.modality = "midi";
-  plan.count_in = false;
-  plan.tempo_bpm = spec.tempo_bpm.has_value() ? spec.tempo_bpm : std::optional<int>(96);
-
+MidiClip make_tonic_clip(const SessionSpec& spec) {
+  const int tempo = spec.tempo_bpm.has_value() ? spec.tempo_bpm.value() : 96;
+  MidiClipBuilder b(tempo, 480);
+  auto track = b.add_track("tonic", 0, 0); // GM Piano on channel 0
   const int tonic = drills::central_tonic_midi(spec.key);
   const auto bounds = session_pitch_bounds(spec);
   const int clamped = std::clamp(tonic, bounds.first, bounds.second);
-
-  plan.notes.push_back({clamped, 900, std::nullopt, std::nullopt});
-  return plan;
+  Beats beat{0.0};
+  b.add_note(track, beat, Beats{1.8}, clamped, std::nullopt);
+  return b.build();
 }
 
-PromptPlan make_scale_arpeggio_prompt(const SessionSpec& spec) {
-  PromptPlan plan;
-  plan.modality = "midi";
-  plan.count_in = false;
-  plan.tempo_bpm = spec.tempo_bpm.has_value() ? spec.tempo_bpm : std::optional<int>(96);
-
-  const std::vector<int> pattern = {0, 1, 2, 3, 4, 5, 6, 7, 4, 2, 0};
-  const int tonic = drills::central_tonic_midi(spec.key);
-
-  for (std::size_t i = 0; i < pattern.size(); ++i) {
-    int degree = pattern[i];
-    int midi = tonic + drills::degree_to_offset(degree);
-    while (midi < 0) {
-      midi += 12;
-    }
-    while (midi > 127) {
-      midi -= 12;
-    }
-    int dur = (i == pattern.size() - 1) ? 520 : 320;
-    plan.notes.push_back({midi, dur, std::nullopt, std::nullopt});
-  }
-  return plan;
-}
-
-std::unordered_map<std::string, PromptPlan> build_session_assists(const SessionSpec& spec) {
-  std::unordered_map<std::string, PromptPlan> assists;
-  assists.emplace(normalize_kind("ScaleArpeggio"), make_scale_arpeggio_prompt(spec));
-  assists.emplace(normalize_kind("Tonic"), make_tonic_prompt(spec));
+std::unordered_map<std::string, MidiClip> build_session_assists(const SessionSpec& spec) {
+  std::unordered_map<std::string, MidiClip> assists;
+  assists.emplace(normalize_kind("Tonic"), make_tonic_clip(spec));
   return assists;
 }
 
@@ -336,16 +310,12 @@ AssistBundle session_assist_bundle(SessionData& session, const std::string& kind
   AssistBundle bundle;
   bundle.question_id = question_id;
   bundle.kind = kind;
-  bundle.prompt = std::nullopt;
-  bundle.ui_delta = nlohmann::json::object();
+  bundle.prompt_clip = std::nullopt;
 
   std::string normalized = normalize_kind(kind);
   auto it = session.session_assists.find(normalized);
   if (it != session.session_assists.end()) {
-    bundle.prompt = it->second;
-    bundle.ui_delta["message"] = kind;
-  } else {
-    bundle.ui_delta["message"] = "Assist not available";
+    bundle.prompt_clip = it->second;
   }
   return bundle;
 }
@@ -486,7 +456,6 @@ public:
     assists.push_back("PathwayHint");
     caps["assists"] = assists;
     nlohmann::json session_assists = nlohmann::json::array();
-    session_assists.push_back("ScaleArpeggio");
     session_assists.push_back("Tonic");
     caps["session_assists"] = session_assists;
     return caps;
@@ -626,7 +595,7 @@ public:
 
   std::string session_key(const std::string& session_id) override;
 
-  PromptPlan orientation_prompt(const std::string& session_id) override;
+  MidiClip orientation_prompt(const std::string& session_id) override;
 
 private:
   std::string create_manual_session(const SessionSpec& spec);
@@ -1170,9 +1139,25 @@ std::string SessionEngineImpl::session_key(const std::string& session_id) {
   return session.spec.key;
 }
 
-PromptPlan SessionEngineImpl::orientation_prompt(const std::string& session_id) {
+MidiClip SessionEngineImpl::orientation_prompt(const std::string& session_id) {
   auto& session = get_session(session_id);
-  return make_scale_arpeggio_prompt(session.spec);
+  const int tempo = session.spec.tempo_bpm.has_value() ? session.spec.tempo_bpm.value() : 96;
+  MidiClipBuilder b(tempo, 480);
+  auto track = b.add_track("orientation", 0, 0);
+  const int tonic = drills::central_tonic_midi(session.spec.key);
+  const auto bounds = session_pitch_bounds(session.spec);
+  // Build a full scale up and back to tonic (11 notes total like before)
+  const std::vector<int> pattern = {0,1,2,3,4,5,6,7,4,2,0};
+  Beats beat{0.0};
+  for (std::size_t i = 0; i < pattern.size(); ++i) {
+    int degree = pattern[i];
+    int midi = tonic + drills::degree_to_offset(degree);
+    midi = std::clamp(midi, bounds.first, bounds.second);
+    Beats dur = Beats{i == pattern.size() - 1 ? 1.08 : 0.72};
+    b.add_note(track, beat, dur, midi, std::nullopt);
+    beat.advance_by(dur.value);
+  }
+  return b.build();
 }
 
 } // namespace ear

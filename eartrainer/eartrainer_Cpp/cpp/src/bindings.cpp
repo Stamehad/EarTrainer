@@ -2,6 +2,7 @@
 #include "../include/ear/adaptive_drills.hpp"
 
 #include "json_bridge.hpp"
+#include "../include/ear/midi_clip.hpp"
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -144,8 +145,8 @@ public:
   }
 
   py::object orientation_prompt(const std::string& session_id) {
-    auto plan = engine_->orientation_prompt(session_id);
-    return json_to_py(ear::bridge::to_json(plan));
+    auto clip = engine_->orientation_prompt(session_id);
+    return json_to_py(ear::to_json(clip));
   }
 
   py::object capabilities() const {

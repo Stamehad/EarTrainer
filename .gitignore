@@ -36,6 +36,14 @@ temp.sh
 **/__pycache__/
 *.dist-info/
 
+/eartrainer/eartrainer_Cpp/cpp/tests/degree_class.cpp
+/eartrainer/eartrainer_Cpp/cpp/tests/degree_class
+/eartrainer/eartrainer_Cpp/cpp/tests/test_chord_drill.cpp
+/eartrainer/eartrainer_Cpp/cpp/tests/test_chord_drill
+/eartrainer/eartrainer_Cpp/cpp/tests/test_chord_voicings.cpp
+/eartrainer/eartrainer_Cpp/cpp/tests/test_chord_voicings
+/eartrainer/eartrainer_Cpp/cpp/tests/build_and_run.sh
+
 # Python packaging/build artifacts for the C++ bridge
 /eartrainer/eartrainer_Cpp/python/build/
 /eartrainer/eartrainer_Cpp/python/dist/

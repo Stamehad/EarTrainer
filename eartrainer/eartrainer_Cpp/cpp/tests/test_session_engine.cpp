@@ -28,15 +28,7 @@ struct TestSuite {
   }
 };
 
-std::string key_quality_to_string(ear::KeyQuality quality) {
-  switch (quality) {
-    case ear::KeyQuality::Major:
-      return "major";
-    case ear::KeyQuality::Minor:
-      return "minor";
-  }
-  return "major";
-}
+// Use ear::key_quality_to_string from types.hpp to avoid duplicate overloads
 
 std::string triad_quality_to_string(ear::TriadQuality quality) {
   switch (quality) {
@@ -88,7 +80,7 @@ nlohmann::json question_payload_json(const ear::QuestionPayloadV2& payload) {
           json["type"] = "chord";
           json["tonic_midi"] = q.tonic_midi;
           json["tonic"] = q.tonic;
-          json["key"] = key_quality_to_string(q.key);
+          json["key"] = ear::key_quality_to_string(q.key);
           json["root_degree"] = q.root_degree;
           json["quality"] = triad_quality_to_string(q.quality);
           if (q.rh_degrees.has_value()) {
@@ -117,7 +109,7 @@ nlohmann::json question_payload_json(const ear::QuestionPayloadV2& payload) {
           json["type"] = "melody";
           json["tonic_midi"] = q.tonic_midi;
           json["tonic"] = q.tonic;
-          json["key"] = key_quality_to_string(q.key);
+          json["key"] = ear::key_quality_to_string(q.key);
           {
             nlohmann::json arr = nlohmann::json::array();
             for (int d : q.melody) arr.push_back(d);
@@ -139,7 +131,7 @@ nlohmann::json question_payload_json(const ear::QuestionPayloadV2& payload) {
           json["type"] = "harmony";
           json["tonic_midi"] = q.tonic_midi;
           json["tonic"] = q.tonic;
-          json["key"] = key_quality_to_string(q.key);
+          json["key"] = ear::key_quality_to_string(q.key);
           json["note_num"] = q.note_num;
           {
             nlohmann::json arr = nlohmann::json::array();

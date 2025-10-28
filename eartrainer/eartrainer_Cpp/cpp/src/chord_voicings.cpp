@@ -211,8 +211,8 @@ BassChoice ChordVoicingEngine::get_bass(int deg, std::uint64_t& rng_state){
   
   return BassChoice {
     bass.id, 
-    0,                
-    deg,              
+    deg,                
+    bass_deg,              
     bass_midi             
   };
 }

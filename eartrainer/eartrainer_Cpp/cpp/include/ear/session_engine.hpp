@@ -32,7 +32,7 @@ public:
 
   virtual std::string session_key(const std::string& session_id) = 0;
 
-  virtual PromptPlan orientation_prompt(const std::string& session_id) = 0;
+  virtual MidiClip orientation_prompt(const std::string& session_id) = 0;
 
   virtual nlohmann::json debug_state(const std::string& session_id) = 0;
 

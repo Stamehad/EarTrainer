@@ -62,7 +62,12 @@ cmake -S "$CPP_DIR" -B "$BUILD_DIR" \
   -DPYBIND11_FINDPYTHON=ON
 
 echo "[eartrainer] Building ..."
-cmake --build "$BUILD_DIR" -- -j
+# Use CMake's parallel flag. Respect optional JOBS env var; if unset, let CMake choose.
+if [[ -n "${JOBS:-}" ]]; then
+  cmake --build "$BUILD_DIR" --parallel "$JOBS"
+else
+  cmake --build "$BUILD_DIR" --parallel
+fi
 
 echo "[eartrainer] Installing Python bridge (editable) ..."
 if "$PYTHON_EXE" -m pip install --no-build-isolation -e "$PY_DIR"; then

@@ -22,7 +22,7 @@ enum class Instrument { Piano, Strings, Guitar };
 struct ChordQuestionV2 {
   int tonic_midi;               // e.g., 60
   std::string tonic;            // e.g., C, Eb, F#
-  KeyQuality key;                  // Major/Minor
+  KeyQuality key;               // Major/Minor
   int root_degree;              // 0..6
   TriadQuality quality;         // derived, but useful for UI/telemetry
   // Optional labeling (no MIDI): stable IDs for UI display

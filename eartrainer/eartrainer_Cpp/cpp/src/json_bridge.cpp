@@ -389,12 +389,11 @@ nlohmann::json to_json(const AssistBundle& bundle) {
   nlohmann::json json_bundle = nlohmann::json::object();
   json_bundle["question_id"] = bundle.question_id;
   json_bundle["kind"] = bundle.kind;
-  if (bundle.prompt.has_value()) {
-    json_bundle["prompt"] = prompt_plan_to_json_impl(bundle.prompt.value());
+  if (bundle.prompt_clip.has_value()) {
+    json_bundle["prompt_clip"] = to_json(bundle.prompt_clip.value());
   } else {
-    json_bundle["prompt"] = nullptr;
+    json_bundle["prompt_clip"] = nullptr;
   }
-  json_bundle["ui_delta"] = bundle.ui_delta;
   return json_bundle;
 }
 
@@ -402,10 +401,9 @@ AssistBundle assist_bundle_from_json(const nlohmann::json& json_bundle) {
   AssistBundle bundle;
   bundle.question_id = json_bundle["question_id"].get<std::string>();
   bundle.kind = json_bundle["kind"].get<std::string>();
-  if (!json_bundle["prompt"].is_null()) {
-    bundle.prompt = prompt_from_json_impl(json_bundle["prompt"]);
+  if (json_bundle.contains("prompt_clip") && !json_bundle["prompt_clip"].is_null()) {
+    // If needed, implement midi_clip_from_json; for now, keep it null or pass-through elsewhere
   }
-  bundle.ui_delta = json_bundle["ui_delta"];
   return bundle;
 }
 
