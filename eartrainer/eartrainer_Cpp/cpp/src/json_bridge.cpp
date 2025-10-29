@@ -176,6 +176,185 @@ static nlohmann::json answer_payload_v2_to_json(const AnswerPayloadV2& payload) 
       payload);
 }
 
+static std::string triad_quality_to_string(TriadQuality quality) {
+  switch (quality) {
+    case TriadQuality::Major:
+      return "major";
+    case TriadQuality::Minor:
+      return "minor";
+    case TriadQuality::Diminished:
+      return "diminished";
+  }
+  return "major";
+}
+
+static TriadQuality triad_quality_from_string(const std::string& quality) {
+  if (quality == "minor") {
+    return TriadQuality::Minor;
+  }
+  if (quality == "diminished" || quality == "dim") {
+    return TriadQuality::Diminished;
+  }
+  return TriadQuality::Major;
+}
+
+static KeyQuality key_quality_from_string(const std::string& quality) {
+  if (quality == "minor") {
+    return KeyQuality::Minor;
+  }
+  return KeyQuality::Major;
+}
+
+static nlohmann::json question_payload_v2_to_json(const QuestionPayloadV2& payload) {
+  return std::visit(
+      [](const auto& q) -> nlohmann::json {
+        using T = std::decay_t<decltype(q)>;
+        nlohmann::json j = nlohmann::json::object();
+        if constexpr (std::is_same_v<T, ChordQuestionV2>) {
+          j["type"] = "chord";
+          j["tonic_midi"] = q.tonic_midi;
+          j["tonic"] = q.tonic;
+          j["key"] = key_quality_to_string(q.key);
+          j["root_degree"] = q.root_degree;
+          j["quality"] = triad_quality_to_string(q.quality);
+          if (q.rh_degrees.has_value()) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (int value : q.rh_degrees.value()) {
+              arr.push_back(value);
+            }
+            j["rh_degrees"] = std::move(arr);
+          } else {
+            j["rh_degrees"] = nullptr;
+          }
+          j["bass_degrees"] = q.bass_degrees.has_value() ? nlohmann::json(q.bass_degrees.value())
+                                                           : nlohmann::json(nullptr);
+          j["right_voicing_id"] =
+              q.right_voicing_id.has_value() ? nlohmann::json(q.right_voicing_id.value())
+                                             : nlohmann::json(nullptr);
+          j["bass_voicing_id"] =
+              q.bass_voicing_id.has_value() ? nlohmann::json(q.bass_voicing_id.value())
+                                            : nlohmann::json(nullptr);
+        } else if constexpr (std::is_same_v<T, MelodyQuestionV2>) {
+          j["type"] = "melody";
+          j["tonic_midi"] = q.tonic_midi;
+          j["tonic"] = q.tonic;
+          j["key"] = key_quality_to_string(q.key);
+          nlohmann::json melody = nlohmann::json::array();
+          for (int value : q.melody) {
+            melody.push_back(value);
+          }
+          j["melody"] = std::move(melody);
+          if (q.octave.has_value()) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (int value : q.octave.value()) {
+              arr.push_back(value);
+            }
+            j["octave"] = std::move(arr);
+          } else {
+            j["octave"] = nullptr;
+          }
+          j["helper"] = q.helper.has_value() ? nlohmann::json(q.helper.value()) : nlohmann::json(nullptr);
+        } else if constexpr (std::is_same_v<T, HarmonyQuestionV2>) {
+          j["type"] = "harmony";
+          j["tonic_midi"] = q.tonic_midi;
+          j["tonic"] = q.tonic;
+          j["key"] = key_quality_to_string(q.key);
+          j["note_num"] = q.note_num;
+          nlohmann::json notes = nlohmann::json::array();
+          for (int value : q.notes) {
+            notes.push_back(value);
+          }
+          j["notes"] = std::move(notes);
+          j["interval"] = q.interval.has_value() ? nlohmann::json(q.interval.value()) : nlohmann::json(nullptr);
+        }
+        return j;
+      },
+      payload);
+}
+
+static QuestionPayloadV2 question_payload_v2_from_json(const nlohmann::json& json) {
+  const std::string type = json.contains("type") && json["type"].is_string() ? json["type"].get<std::string>() : std::string();
+  if (type == "chord") {
+    ChordQuestionV2 q{};
+    q.tonic_midi = json.contains("tonic_midi") ? json["tonic_midi"].get<int>() : 0;
+    q.tonic = json.contains("tonic") && json["tonic"].is_string() ? json["tonic"].get<std::string>() : std::string();
+    q.key = json.contains("key") && json["key"].is_string() ? key_quality_from_string(json["key"].get<std::string>())
+                                                              : KeyQuality::Major;
+    q.root_degree = json.contains("root_degree") ? json["root_degree"].get<int>() : 0;
+    q.quality = json.contains("quality") && json["quality"].is_string()
+                    ? triad_quality_from_string(json["quality"].get<std::string>())
+                    : TriadQuality::Major;
+    if (json.contains("rh_degrees") && json["rh_degrees"].is_array()) {
+      const auto& arr = json["rh_degrees"];
+      std::vector<int> values;
+      values.reserve(arr.size());
+      for (std::size_t i = 0; i < arr.size(); ++i) {
+        values.push_back(arr[i].get<int>());
+      }
+      q.rh_degrees = std::move(values);
+    }
+    if (json.contains("bass_degrees") && !json["bass_degrees"].is_null()) {
+      q.bass_degrees = json["bass_degrees"].get<int>();
+    }
+    if (json.contains("right_voicing_id") && !json["right_voicing_id"].is_null()) {
+      q.right_voicing_id = json["right_voicing_id"].get<std::string>();
+    }
+    if (json.contains("bass_voicing_id") && !json["bass_voicing_id"].is_null()) {
+      q.bass_voicing_id = json["bass_voicing_id"].get<std::string>();
+    }
+    return q;
+  }
+  if (type == "melody") {
+    MelodyQuestionV2 q{};
+    q.tonic_midi = json.contains("tonic_midi") ? json["tonic_midi"].get<int>() : 0;
+    q.tonic = json.contains("tonic") && json["tonic"].is_string() ? json["tonic"].get<std::string>() : std::string();
+    q.key = json.contains("key") && json["key"].is_string() ? key_quality_from_string(json["key"].get<std::string>())
+                                                              : KeyQuality::Major;
+    q.melody.clear();
+    if (json.contains("melody") && json["melody"].is_array()) {
+      const auto& arr = json["melody"];
+      q.melody.reserve(arr.size());
+      for (std::size_t i = 0; i < arr.size(); ++i) {
+        q.melody.push_back(arr[i].get<int>());
+      }
+    }
+    if (json.contains("octave") && json["octave"].is_array()) {
+      const auto& arr = json["octave"];
+      std::vector<int> values;
+      values.reserve(arr.size());
+      for (std::size_t i = 0; i < arr.size(); ++i) {
+        values.push_back(arr[i].get<int>());
+      }
+      q.octave = std::move(values);
+    }
+    if (json.contains("helper") && !json["helper"].is_null()) {
+      q.helper = json["helper"].get<std::string>();
+    }
+    return q;
+  }
+  if (type == "harmony") {
+    HarmonyQuestionV2 q{};
+    q.tonic_midi = json.contains("tonic_midi") ? json["tonic_midi"].get<int>() : 0;
+    q.tonic = json.contains("tonic") && json["tonic"].is_string() ? json["tonic"].get<std::string>() : std::string();
+    q.key = json.contains("key") && json["key"].is_string() ? key_quality_from_string(json["key"].get<std::string>())
+                                                              : KeyQuality::Major;
+    q.note_num = json.contains("note_num") ? json["note_num"].get<int>() : 0;
+    q.notes.clear();
+    if (json.contains("notes") && json["notes"].is_array()) {
+      const auto& arr = json["notes"];
+      q.notes.reserve(arr.size());
+      for (std::size_t i = 0; i < arr.size(); ++i) {
+        q.notes.push_back(arr[i].get<int>());
+      }
+    }
+    if (json.contains("interval") && !json["interval"].is_null()) {
+      q.interval = json["interval"].get<std::string>();
+    }
+    return q;
+  }
+  throw std::runtime_error("Unknown QuestionPayloadV2 type: " + type);
+}
+
 static AnswerPayloadV2 answer_payload_v2_from_json(const nlohmann::json& json) {
   const std::string type = json["type"].get<std::string>();
   if (type == "chord") {
@@ -189,8 +368,10 @@ static AnswerPayloadV2 answer_payload_v2_from_json(const nlohmann::json& json) {
     MelodyAnswerV2 a{};
     a.melody.clear();
     if (json.contains("melody") && json["melody"].is_array()) {
-      for (const auto& el : json["melody"].get_array()) {
-        a.melody.push_back(el.get<int>());
+      const auto& arr = json["melody"];
+      a.melody.reserve(arr.size());
+      for (std::size_t i = 0; i < arr.size(); ++i) {
+        a.melody.push_back(arr[i].get<int>());
       }
     }
     return a;
@@ -199,8 +380,10 @@ static AnswerPayloadV2 answer_payload_v2_from_json(const nlohmann::json& json) {
     HarmonyAnswerV2 a{};
     a.notes.clear();
     if (json.contains("notes") && json["notes"].is_array()) {
-      for (const auto& el : json["notes"].get_array()) {
-        a.notes.push_back(el.get<int>());
+      const auto& arr = json["notes"];
+      a.notes.reserve(arr.size());
+      for (std::size_t i = 0; i < arr.size(); ++i) {
+        a.notes.push_back(arr[i].get<int>());
       }
     }
     return a;
@@ -352,8 +535,7 @@ SessionSpec session_spec_from_json(const nlohmann::json& json_spec) {
 nlohmann::json to_json(const QuestionBundle& bundle) {
   nlohmann::json json_bundle = nlohmann::json::object();
   json_bundle["question_id"] = bundle.question_id;
-  // Question payload V2 (variant) -> emit type + fields
-  json_bundle["question"] = nullptr; // TODO: provide full V2 question serialization if needed
+  json_bundle["question"] = question_payload_v2_to_json(bundle.question);
   json_bundle["correct_answer"] = answer_payload_v2_to_json(bundle.correct_answer);
   if (bundle.prompt_clip.has_value()) {
     json_bundle["prompt_clip"] = to_json(bundle.prompt_clip.value());
@@ -375,7 +557,9 @@ nlohmann::json to_json(const QuestionBundle& bundle) {
 QuestionBundle question_bundle_from_json(const nlohmann::json& json_bundle) {
   QuestionBundle bundle;
   bundle.question_id = json_bundle["question_id"].get<std::string>();
-  // For now, omit question payload reconstruction (not used by Python UI clients currently)
+  if (json_bundle.contains("question") && json_bundle["question"].is_object()) {
+    bundle.question = question_payload_v2_from_json(json_bundle["question"]);
+  }
   bundle.correct_answer = answer_payload_v2_from_json(json_bundle["correct_answer"]);
   if (json_bundle.contains("prompt_clip") && !json_bundle["prompt_clip"].is_null()) {
     // minimal: pass through as-is; deserialize to MidiClip if needed by clients

@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Iterable, Optional, Sequence, Any
 
-from .models import Prompt, MidiClip, MidiTrack, MidiEvent
+from .models import MidiClip, MidiTrack, MidiEvent
 
 
 class SimpleMidiPlayer:
@@ -74,14 +74,11 @@ class SimpleMidiPlayer:
         )
 
     # Public API ----------------------------------------------------------
-    def play_prompt(self, prompt: Optional[Prompt], *, velocity: Optional[int] = None) -> None:
-        """Play the content of a Prompt. Supports modality 'midi-clip'."""
-        if prompt is None:
+    def play_prompt(self, clip: Optional[MidiClip], *, velocity: Optional[int] = None) -> None:
+        """Play a prompt clip if provided."""
+        if clip is None:
             return
-        if prompt.modality == "midi-clip" and prompt.midi_clip is not None:
-            self.play_midi_clip(prompt.midi_clip)
-            return
-        # Fallback: ignore unknown modalities silently
+        self.play_midi_clip(clip)
 
     # Back-compat helper to render simple sequential notes if ever needed.
     # def play_notes(self, notes: Iterable[Note], *, velocity: Optional[int] = None) -> None:
@@ -97,10 +94,12 @@ class SimpleMidiPlayer:
         for p in pitches:
             if p >= 0:
                 self._fs.noteon(self._channel, p, vel)
+                self._held_notes.add(p)
         time.sleep(max(0, dur_ms) / 1000.0)
         for p in pitches:
             if p >= 0:
                 self._fs.noteoff(self._channel, p)
+                self._held_notes.discard(p)
 
     def play_interval(self, bottom_midi: int, top_midi: int, *, melodic: bool = True,
                       descending: Optional[bool] = None, step_ms: int = 600, gap_ms: int = 0,
@@ -121,8 +120,10 @@ class SimpleMidiPlayer:
         order = (t, b) if descending else (b, t)
         for i, p in enumerate(order):
             self._fs.noteon(self._channel, p, max(0, min(127, int(velocity))))
+            self._held_notes.add(p)
             time.sleep(max(0, step_ms) / 1000.0)
             self._fs.noteoff(self._channel, p)
+            self._held_notes.discard(p)
             if i == 0 and gap_ms > 0:
                 time.sleep(gap_ms / 1000.0)
 
@@ -133,7 +134,12 @@ class SimpleMidiPlayer:
         - strategy="semantic": derive playback from question payload (e.g., chord voicing, interval direction).
         """
         if strategy == "prompt" or not hasattr(bundle, "question"):
-            self.play_prompt(getattr(bundle, "prompt", None))
+            clip = getattr(bundle, "prompt_clip", None)
+            if clip is None:
+                clip = getattr(bundle, "prompt", None)
+                if hasattr(clip, "midi_clip"):
+                    clip = getattr(clip, "midi_clip", None)
+            self.play_prompt(clip)
             return
 
         q = bundle.question
@@ -147,7 +153,11 @@ class SimpleMidiPlayer:
             self.play_interval(payload["bottom_midi"], payload["top_midi"], melodic=True)
             return
         # Fallback
-        self.play_prompt(getattr(bundle, "prompt", None))
+        clip = getattr(bundle, "prompt_clip", None)
+        if clip is None and hasattr(bundle, "prompt"):
+            legacy_prompt = getattr(bundle, "prompt", None)
+            clip = getattr(legacy_prompt, "midi_clip", None)
+        self.play_prompt(clip)
 
     def play_midi_sequence(
         self,
@@ -155,8 +165,17 @@ class SimpleMidiPlayer:
     ) -> None:
         """Play raw MIDI triplets (pitch, duration_ms, velocity, tie)."""
         for pitch, dur_ms, vel, tie in sequence:
-            midi_note = Note(pitch=pitch, dur_ms=dur_ms, vel=vel, tie=tie)
-            self._play_note(midi_note, velocity=None)
+            note = int(pitch)
+            if note < 0:
+                continue
+            velocity = int(vel) if vel is not None else self._default_velocity
+            velocity = max(0, min(127, velocity))
+            self._fs.noteon(self._channel, note, velocity)
+            self._held_notes.add(note)
+            time.sleep(max(0, dur_ms) / 1000.0)
+            if not tie:
+                self._fs.noteoff(self._channel, note)
+                self._held_notes.discard(note)
         self.stop_all()
 
     def play_midi_clip(self, clip: MidiClip) -> None:

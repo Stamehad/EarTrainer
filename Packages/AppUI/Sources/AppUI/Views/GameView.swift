@@ -81,7 +81,7 @@ public struct GameView: View {
                 .buttonStyle(.bordered)
                 .accessibilityLabel("Play orientation prompt")
 
-                if envelope.bundle.prompt?.midiClip != nil {
+                if envelope.bundle.promptClip != nil {
                     Button {
                         viewModel.replayPromptAudio()
                     } label: {
@@ -282,52 +282,25 @@ public struct GameView: View {
     }
 
     private func buildAnswerContext(from envelope: QuestionEnvelope) -> AnswerContext? {
-        let answer = envelope.bundle.correctAnswer
-        switch answer.type {
-        case "degree":
-            guard case let .object(values) = answer.payload,
-                  let degreeValue = values["degree"],
-                  case let .int(rawValue) = degreeValue else {
-                return nil
-            }
+        switch envelope.bundle.correctAnswer {
+        case let .chord(answer):
             return AnswerContext(
-                type: answer.type,
-                expectedDegrees: [rawValue],
-                singleValueKey: "degree",
-                instruction: "Identify the scale degree."
-            )
-        case "chord_degree":
-            guard case let .object(values) = answer.payload,
-                  let degreeValue = values["root_degree"],
-                  case let .int(rawValue) = degreeValue else {
-                return nil
-            }
-            return AnswerContext(
-                type: answer.type,
-                expectedDegrees: [rawValue],
-                singleValueKey: "root_degree",
+                kind: .chord,
+                expectedDegrees: [answer.rootDegree],
                 instruction: "Identify the chord’s scale degree."
             )
-        case "melody_notes":
-            guard case let .object(values) = answer.payload,
-                  let degreesValue = values["degrees"],
-                  case let .array(items) = degreesValue else {
-                return nil
-            }
-            let degrees = items.compactMap { item -> Int? in
-                if case let .int(value) = item {
-                    return value
-                }
-                return nil
-            }
+        case let .melody(answer):
             return AnswerContext(
-                type: answer.type,
-                expectedDegrees: degrees,
-                singleValueKey: nil,
+                kind: .melody,
+                expectedDegrees: answer.melody,
                 instruction: "Enter the degrees for each note in the melody."
             )
-        default:
-            return nil
+        case let .harmony(answer):
+            return AnswerContext(
+                kind: .harmony,
+                expectedDegrees: answer.notes,
+                instruction: "Identify the harmony."
+            )
         }
     }
 }
@@ -458,32 +431,29 @@ extension GameView {
     }
 
     fileprivate struct AnswerContext: Equatable {
-        let type: String
+        enum Kind: Equatable {
+            case chord
+            case melody
+            case harmony
+        }
+
+        let kind: Kind
         let expectedDegrees: [Int]
-        let singleValueKey: String?
         let instruction: String
 
         var expectedCount: Int {
             max(expectedDegrees.count, 1)
         }
 
-        func makePayload(from zeroIndexedDegrees: [Int]) -> TypedPayload? {
-            switch type {
-            case "degree", "chord_degree":
-                guard let key = singleValueKey,
-                      let value = zeroIndexedDegrees.first else { return nil }
-                return TypedPayload(
-                    type: type,
-                    payload: .object([key: .int(value)])
-                )
-            case "melody_notes":
-                let arrayValue = zeroIndexedDegrees.map { JSONValue.int($0) }
-                return TypedPayload(
-                    type: type,
-                    payload: .object(["degrees": .array(arrayValue)])
-                )
-            default:
-                return nil
+        func makePayload(from zeroIndexedDegrees: [Int]) -> AnswerPayload? {
+            switch kind {
+            case .chord:
+                guard let value = zeroIndexedDegrees.first else { return nil }
+                return .chord(ChordAnswer(rootDegree: value))
+            case .melody:
+                return .melody(MelodyAnswer(melody: zeroIndexedDegrees))
+            case .harmony:
+                return .harmony(HarmonyAnswer(notes: zeroIndexedDegrees))
             }
         }
     }

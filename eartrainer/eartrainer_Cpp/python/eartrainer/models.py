@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 
 @dataclass
@@ -106,6 +106,18 @@ class MidiEvent:
             value=data.get("value"),
         )
 
+    def to_json(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"t": self.t, "type": self.type}
+        if self.note is not None:
+            payload["note"] = self.note
+        if self.vel is not None:
+            payload["vel"] = self.vel
+        if self.control is not None:
+            payload["control"] = self.control
+        if self.value is not None:
+            payload["value"] = self.value
+        return payload
+
 
 @dataclass
 class MidiTrack:
@@ -122,6 +134,14 @@ class MidiTrack:
             program=int(data.get("program", 0)),
             events=[MidiEvent.from_json(ev) for ev in data.get("events", [])],
         )
+
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "channel": self.channel,
+            "program": self.program,
+            "events": [event.to_json() for event in self.events],
+        }
 
 
 @dataclass
@@ -142,48 +162,109 @@ class MidiClip:
             format=str(data.get("format", "midi-clip/v1")),
         )
 
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            "format": self.format,
+            "ppq": self.ppq,
+            "tempo_bpm": self.tempo_bpm,
+            "length_ticks": self.length_ticks,
+            "tracks": [track.to_json() for track in self.tracks],
+        }
+
 
 @dataclass
-class Prompt:
-    modality: str
-    midi_clip: Optional[MidiClip] = None
+class ChordAnswer:
+    root_degree: int
+    bass_deg: Optional[int] = None
+    top_deg: Optional[int] = None
+
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            "type": "chord",
+            "root_degree": self.root_degree,
+            "bass_deg": self.bass_deg,
+            "top_deg": self.top_deg,
+        }
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> "Prompt":
-        modality = str(data.get("modality", ""))
-        clip = None
-        if modality == "midi-clip":
-            clip = MidiClip.from_json(data.get("midi_clip", {}))
-        return cls(modality=modality, midi_clip=clip)
+    def from_json(cls, data: Dict[str, Any]) -> "ChordAnswer":
+        return cls(
+            root_degree=int(data.get("root_degree", 0)),
+            bass_deg=data.get("bass_deg"),
+            top_deg=data.get("top_deg"),
+        )
+
+
+@dataclass
+class MelodyAnswer:
+    melody: List[int]
+
+    def to_json(self) -> Dict[str, Any]:
+        return {"type": "melody", "melody": list(self.melody)}
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "MelodyAnswer":
+        return cls(melody=[int(v) for v in data.get("melody", [])])
+
+
+@dataclass
+class HarmonyAnswer:
+    notes: List[int]
+
+    def to_json(self) -> Dict[str, Any]:
+        return {"type": "harmony", "notes": list(self.notes)}
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "HarmonyAnswer":
+        return cls(notes=[int(v) for v in data.get("notes", [])])
+
+
+AnswerPayload = Union[ChordAnswer, MelodyAnswer, HarmonyAnswer]
+
+
+def answer_from_json(data: Dict[str, Any]) -> AnswerPayload:
+    answer_type = data.get("type")
+    if answer_type == "chord":
+        return ChordAnswer.from_json(data)
+    if answer_type == "melody":
+        return MelodyAnswer.from_json(data)
+    if answer_type == "harmony":
+        return HarmonyAnswer.from_json(data)
+    raise ValueError(f"Unsupported answer payload type: {answer_type}")
+
+
+def answer_to_json(answer: AnswerPayload) -> Dict[str, Any]:
+    return answer.to_json()
 
 
 @dataclass
 class QuestionBundle:
     question_id: str
-    question: TypedPayload
-    correct_answer: TypedPayload
-    prompt: Optional[Prompt]
+    question: Dict[str, Any]
+    correct_answer: AnswerPayload
+    prompt_clip: Optional[MidiClip]
     ui_hints: Dict[str, Any]
 
     def to_json(self) -> Dict[str, Any]:
         return {
             "question_id": self.question_id,
-            "question": self.question.to_json(),
-            "correct_answer": self.correct_answer.to_json(),
-            "prompt": self.prompt.to_json() if self.prompt else None,
+            "question": dict(self.question),
+            "correct_answer": answer_to_json(self.correct_answer),
+            "prompt_clip": self.prompt_clip.to_json() if self.prompt_clip else None,
             "ui_hints": dict(self.ui_hints),
         }
 
     @classmethod
     def from_json(cls, data: Dict[str, Any]) -> "QuestionBundle":
-        prompt_data = data.get("prompt")
-        prompt = Prompt.from_json(prompt_data) if isinstance(prompt_data, dict) else None
+        prompt_clip = data.get("prompt_clip")
+        raw_hints = data.get("ui_hints")
+        hints = dict(raw_hints) if isinstance(raw_hints, dict) else {}
         return cls(
             question_id=data["question_id"],
-            question=TypedPayload.from_json(data["question"]),
-            correct_answer=TypedPayload.from_json(data["correct_answer"]),
-            prompt=prompt,
-            ui_hints=dict(data.get("ui_hints", {})),
+            question=dict(data.get("question", {})) if isinstance(data.get("question"), dict) else {},
+            correct_answer=answer_from_json(dict(data.get("correct_answer", {}))),
+            prompt_clip=MidiClip.from_json(prompt_clip) if isinstance(prompt_clip, dict) else None,
+            ui_hints=hints,
         )
 
 
@@ -191,17 +272,22 @@ class QuestionBundle:
 class AssistBundle:
     question_id: str
     kind: str
-    prompt: Optional[Prompt]
-    ui_delta: Dict[str, Any]
+    prompt_clip: Optional[MidiClip]
+
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            "question_id": self.question_id,
+            "kind": self.kind,
+            "prompt_clip": self.prompt_clip.to_json() if self.prompt_clip else None,
+        }
 
     @classmethod
     def from_json(cls, data: Dict[str, Any]) -> "AssistBundle":
-        prompt = data.get("prompt")
+        clip = data.get("prompt_clip") if isinstance(data, dict) else None
         return cls(
             question_id=data["question_id"],
             kind=data["kind"],
-            prompt=Prompt.from_json(prompt) if isinstance(prompt, dict) else None,
-            ui_delta=dict(data.get("ui_delta", {})),
+            prompt_clip=MidiClip.from_json(clip) if isinstance(clip, dict) else None,
         )
 
 
@@ -261,7 +347,7 @@ class ResultAttempt:
 @dataclass
 class ResultReport:
     question_id: str
-    final_answer: TypedPayload
+    final_answer: AnswerPayload
     correct: bool
     metrics: ResultMetrics
     attempts: List[ResultAttempt] = field(default_factory=list)
@@ -270,7 +356,7 @@ class ResultReport:
     def to_json(self) -> Dict[str, Any]:
         data = {
             "question_id": self.question_id,
-            "final_answer": self.final_answer.to_json(),
+            "final_answer": answer_to_json(self.final_answer),
             "correct": self.correct,
             "metrics": self.metrics.to_json(),
             "client_info": dict(self.client_info),
@@ -294,7 +380,7 @@ class ResultReport:
         ]
         return cls(
             question_id=data["question_id"],
-            final_answer=TypedPayload.from_json(data["final_answer"]),
+            final_answer=answer_from_json(dict(data.get("final_answer", {}))),
             correct=bool(data.get("correct", False)),
             metrics=metrics,
             attempts=attempts,

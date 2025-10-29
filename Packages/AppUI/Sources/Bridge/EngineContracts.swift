@@ -269,34 +269,144 @@ public struct MidiClip: Codable, Equatable {
     }
 }
 
-public struct Prompt: Codable, Equatable {
-    public var modality: String
-    public var midiClip: MidiClip?
+public struct ChordAnswer: Equatable {
+    public var rootDegree: Int
+    public var bassDeg: Int?
+    public var topDeg: Int?
 
+    public init(rootDegree: Int, bassDeg: Int? = nil, topDeg: Int? = nil) {
+        self.rootDegree = rootDegree
+        self.bassDeg = bassDeg
+        self.topDeg = topDeg
+    }
+}
+
+public struct MelodyAnswer: Equatable {
+    public var melody: [Int]
+
+    public init(melody: [Int]) {
+        self.melody = melody
+    }
+}
+
+public struct HarmonyAnswer: Equatable {
+    public var notes: [Int]
+
+    public init(notes: [Int]) {
+        self.notes = notes
+    }
+}
+
+public enum AnswerPayload: Equatable {
+    case chord(ChordAnswer)
+    case melody(MelodyAnswer)
+    case harmony(HarmonyAnswer)
+}
+
+extension AnswerPayload: Codable {
     private enum CodingKeys: String, CodingKey {
-        case modality
-        case midiClip = "midi_clip"
+        case type
+        case rootDegree = "root_degree"
+        case bassDeg = "bass_deg"
+        case topDeg = "top_deg"
+        case melody
+        case notes
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
+        case "chord":
+            let answer = ChordAnswer(
+                rootDegree: try container.decode(Int.self, forKey: .rootDegree),
+                bassDeg: container.decodeIfPresent(Int.self, forKey: .bassDeg),
+                topDeg: container.decodeIfPresent(Int.self, forKey: .topDeg)
+            )
+            self = .chord(answer)
+        case "melody":
+            let answer = MelodyAnswer(melody: try container.decode([Int].self, forKey: .melody))
+            self = .melody(answer)
+        case "harmony":
+            let answer = HarmonyAnswer(notes: try container.decode([Int].self, forKey: .notes))
+            self = .harmony(answer)
+        default:
+            throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Unknown answer payload type \(type)")
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case let .chord(answer):
+            try container.encode("chord", forKey: .type)
+            try container.encode(answer.rootDegree, forKey: .rootDegree)
+            try container.encodeIfPresent(answer.bassDeg, forKey: .bassDeg)
+            try container.encodeIfPresent(answer.topDeg, forKey: .topDeg)
+        case let .melody(answer):
+            try container.encode("melody", forKey: .type)
+            try container.encode(answer.melody, forKey: .melody)
+        case let .harmony(answer):
+            try container.encode("harmony", forKey: .type)
+            try container.encode(answer.notes, forKey: .notes)
+        }
+    }
+}
+
+public extension AnswerPayload {
+    var type: String {
+        switch self {
+        case .chord:
+            return "chord"
+        case .melody:
+            return "melody"
+        case .harmony:
+            return "harmony"
+        }
+    }
+
+    var jsonValue: JSONValue {
+        switch self {
+        case let .chord(answer):
+            var object: [String: JSONValue] = [
+                "type": .string("chord"),
+                "root_degree": .int(answer.rootDegree)
+            ]
+            object["bass_deg"] = answer.bassDeg.map(JSONValue.int) ?? .null
+            object["top_deg"] = answer.topDeg.map(JSONValue.int) ?? .null
+            return .object(object)
+        case let .melody(answer):
+            return .object([
+                "type": .string("melody"),
+                "melody": .array(answer.melody.map(JSONValue.int))
+            ])
+        case let .harmony(answer):
+            return .object([
+                "type": .string("harmony"),
+                "notes": .array(answer.notes.map(JSONValue.int))
+            ])
+        }
     }
 }
 
 public struct QuestionBundle: Codable, Equatable {
     public var questionId: String
-    public var question: TypedPayload
-    public var correctAnswer: TypedPayload
-    public var prompt: Prompt?
+    public var question: JSONValue?
+    public var correctAnswer: AnswerPayload
+    public var promptClip: MidiClip?
     public var uiHints: JSONValue
 
     public init(
         questionId: String,
-        question: TypedPayload,
-        correctAnswer: TypedPayload,
-        prompt: Prompt? = nil,
+        question: JSONValue? = nil,
+        correctAnswer: AnswerPayload,
+        promptClip: MidiClip? = nil,
         uiHints: JSONValue = .null
     ) {
         self.questionId = questionId
         self.question = question
         self.correctAnswer = correctAnswer
-        self.prompt = prompt
+        self.promptClip = promptClip
         self.uiHints = uiHints
     }
 
@@ -304,7 +414,7 @@ public struct QuestionBundle: Codable, Equatable {
         case questionId = "question_id"
         case question
         case correctAnswer = "correct_answer"
-        case prompt
+        case promptClip = "prompt_clip"
         case uiHints = "ui_hints"
     }
 }
@@ -357,7 +467,7 @@ public struct ResultAttempt: Codable, Equatable {
 
 public struct ResultReport: Codable, Equatable {
     public var questionId: String
-    public var finalAnswer: TypedPayload
+    public var finalAnswer: AnswerPayload
     public var correct: Bool
     public var metrics: ResultMetrics
     public var attempts: [ResultAttempt]
@@ -365,7 +475,7 @@ public struct ResultReport: Codable, Equatable {
 
     public init(
         questionId: String,
-        finalAnswer: TypedPayload,
+        finalAnswer: AnswerPayload,
         correct: Bool,
         metrics: ResultMetrics,
         attempts: [ResultAttempt] = [],

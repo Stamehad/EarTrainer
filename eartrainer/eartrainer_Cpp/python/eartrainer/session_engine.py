@@ -66,9 +66,9 @@ class SessionEngine:
     def session_key(self, session_id: str) -> str:
         return str(self._engine.session_key(session_id))
 
-    def orientation_prompt(self, session_id: str) -> models.Prompt:
+    def orientation_prompt(self, session_id: str) -> models.MidiClip:
         payload = self._engine.orientation_prompt(session_id)
-        return models.Prompt.from_json(payload)
+        return models.MidiClip.from_json(payload)
 
     def end_session(self, session_id: str) -> models.MemoryPackage:
         payload = self._engine.end_session(session_id)

@@ -115,7 +115,7 @@ public final class MockBridge: SessionEngine {
         return cachedCatalog
     }
 
-    public func orientationPrompt() throws -> Prompt? {
+    public func orientationPrompt() throws -> MidiClip? {
         nil
     }
 
@@ -128,22 +128,16 @@ public final class MockBridge: SessionEngine {
                 JSONValue.object(["id": JSONValue.string("B"), "label": JSONValue.string("Choice B")]),
                 JSONValue.object(["id": JSONValue.string("C"), "label": JSONValue.string("Choice C")])
             ])
-            let question = TypedPayload(
-                type: "multiple_choice",
-                payload: JSONValue.object([
-                    "prompt": JSONValue.string("Question \(index + 1) for \(spec.drillKind.capitalized)"),
-                    "choices": choicePayload
-                ])
-            )
-            let answer = TypedPayload(
-                type: "choice_id",
-                payload: JSONValue.object(["id": JSONValue.string("A")])
-            )
+            let question = JSONValue.object([
+                "prompt": JSONValue.string("Question \(index + 1) for \(spec.drillKind.capitalized)"),
+                "choices": choicePayload
+            ])
+            let answer = AnswerPayload.chord(ChordAnswer(rootDegree: 0))
             return QuestionBundle(
                 questionId: questionId,
                 question: question,
                 correctAnswer: answer,
-                prompt: nil,
+                promptClip: nil,
                 uiHints: JSONValue.object([
                     "track_levels": JSONValue.array(spec.trackLevels.map { JSONValue.int($0) })
                 ])

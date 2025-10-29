@@ -144,9 +144,9 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
   //-----------------------------------------------------
   // PREPARE QUESTION AND ANSWER
   //-----------------------------------------------------
-  ear::MelodyAnswerV2 note_answer = ear::MelodyAnswerV2{std::vector<int>(degree)};
+  ear::MelodyAnswerV2 note_answer = ear::MelodyAnswerV2{std::vector<int>{degree}};
   ear::MelodyQuestionV2 note_question = ear::MelodyQuestionV2{
-   tonic_midi, spec_.key, spec_.quality, std::vector<int>(degree)
+   tonic_midi, spec_.key, spec_.quality, std::vector<int>{degree}
   };
 
   //-----------------------------------------------------------------

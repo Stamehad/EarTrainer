@@ -126,7 +126,7 @@ public final class SessionViewModel: ObservableObject {
         }
     }
 
-    public func submit(answer: TypedPayload, isCorrect: Bool, latencyMs: Int = 3_000) {
+    public func submit(answer: AnswerPayload, isCorrect: Bool, latencyMs: Int = 3_000) {
         guard !isProcessing, let question = currentQuestion else { return }
         perform {
             let report = buildReport(
@@ -213,7 +213,7 @@ public final class SessionViewModel: ObservableObject {
     }
 
     public func replayPromptAudio() {
-        guard let clip = currentQuestion?.bundle.prompt?.midiClip else { return }
+        guard let clip = currentQuestion?.bundle.promptClip else { return }
         audioPlayer.play(clip: clip)
     }
 
@@ -417,7 +417,7 @@ public final class SessionViewModel: ObservableObject {
             debugJSON = summariseDebugInfo(envelope.debug) ?? envelope.debug?.prettyPrinted()
             route = .game
             if !suppressNextPromptAutoPlay,
-               let clip = envelope.bundle.prompt?.midiClip {
+               let clip = envelope.bundle.promptClip {
                 audioPlayer.play(clip: clip)
             }
             suppressNextPromptAutoPlay = false
@@ -451,13 +451,9 @@ public final class SessionViewModel: ObservableObject {
 
     private func summariseQuestionBundle(_ bundle: QuestionBundle) -> String? {
         var summary: [String: JSONValue] = [:]
-        if case let .object(answerPayload) = bundle.correctAnswer.payload,
-           let degrees = answerPayload["degrees"] {
-            summary["correct_answer"] = .object(["degrees": degrees])
-        } else {
-            summary["correct_answer"] = bundle.correctAnswer.payload
-        }
-        if case let .object(payload) = bundle.question.payload,
+        summary["correct_answer"] = bundle.correctAnswer.jsonValue
+        if let question = bundle.question,
+           case let .object(payload) = question,
            let degrees = payload["degrees"] {
             summary["question_degrees"] = degrees
         }
@@ -493,8 +489,7 @@ public final class SessionViewModel: ObservableObject {
 
     public func playOrientationPrompt(autoTriggered: Bool = false) {
         do {
-            let prompt = try engine.orientationPrompt()
-            guard let clip = prompt?.midiClip else {
+            guard let clip = try engine.orientationPrompt() else {
                 if autoTriggered {
                     suppressNextPromptAutoPlay = false
                     needsDeferredPromptPlayback = false
@@ -518,7 +513,7 @@ public final class SessionViewModel: ObservableObject {
 
     private func buildReport(
         for bundle: QuestionBundle,
-        answer: TypedPayload,
+        answer: AnswerPayload,
         isCorrect: Bool,
         latencyMs: Int,
         autoSubmit: Bool
