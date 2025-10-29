@@ -400,7 +400,9 @@ public final class SessionViewModel: ObservableObject {
             Task { [weak self] in
                 let nanoseconds = UInt64(max(delay, 0) * 1_000_000_000)
                 try await Task.sleep(nanoseconds: nanoseconds)
-                await self?.apply(response: response)
+                await MainActor.run {
+                    self?.apply(response: response)
+                }
             }
             return
         }

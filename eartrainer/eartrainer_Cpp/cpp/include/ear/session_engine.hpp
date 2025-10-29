@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <variant>
+#include <vector>
 
 namespace ear {
 
@@ -18,12 +19,10 @@ public:
 
   virtual Next next_question(const std::string& session_id) = 0;
 
-  virtual AssistBundle assist(const std::string& session_id,
-                              const std::string& question_id,
-                              const std::string& kind) = 0;
+  virtual std::vector<std::string> assist_options(const std::string& session_id) = 0;
 
-  virtual AssistBundle session_assist(const std::string& session_id,
-                                      const std::string& kind) = 0;
+  virtual AssistBundle assist(const std::string& session_id,
+                              const std::string& kind) = 0;
 
   virtual Next submit_result(const std::string& session_id,
                              const ResultReport& report) = 0;

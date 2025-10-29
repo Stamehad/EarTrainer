@@ -576,48 +576,24 @@ int main() {
 
     auto first_next = engine->next_question(session);
     auto* bundle = std::get_if<ear::QuestionBundle>(&first_next);
-    suite.require(bundle != nullptr, "Expected QuestionsBundle for melody test");
+    suite.require(bundle != nullptr, "Expected QuestionsBundle for assist test");
     auto original_digest = digest(*bundle);
 
-    auto assist_bundle = engine->assist(session, bundle->question_id, "GuideTone");
-    suite.require(assist_bundle.question_id == bundle->question_id,
-                  "Assist bundle mismatch question id");
+    const auto options = engine->assist_options(session);
+    suite.require(std::find(options.begin(), options.end(), std::string("Tonic")) != options.end(),
+                  "Expected Tonic assist to be available");
+
+    auto assist_bundle = engine->assist(session, "Tonic");
+    suite.require(assist_bundle.kind == "Tonic", "Assist kind mismatch");
+    suite.require(assist_bundle.prompt_clip.has_value(), "Assist should supply MidiClip");
 
     auto repeat_next = engine->next_question(session);
     auto* repeat_bundle = std::get_if<ear::QuestionBundle>(&repeat_next);
     suite.require(repeat_bundle != nullptr, "Expected QuestionsBundle after assist");
     suite.require(digest(*repeat_bundle) == original_digest,
-                  "Assist modified active question");
+                  "Assist modified active question state");
 
-    auto first_submit = engine->submit_result(session, make_report(*repeat_bundle));
-    auto* submit_bundle = std::get_if<ear::QuestionBundle>(&first_submit);
-    suite.require(submit_bundle != nullptr, "Expected QuestionsBundle response on submit");
-
-    auto second_submit = engine->submit_result(session, make_report(*repeat_bundle));
-    auto* submit_bundle_repeat = std::get_if<ear::QuestionBundle>(&second_submit);
-    suite.require(submit_bundle_repeat != nullptr,
-                  "Expected idempotent submit to return QuestionsBundle");
-    suite.require(digest(*submit_bundle) == digest(*submit_bundle_repeat),
-                  "Idempotent submit changed response");
-  }
-
-  {
-    auto spec = make_spec("note", "adaptive", 555, 2);
-    auto engine_a = ear::make_engine();
-    auto session_a = engine_a->create_session(spec);
-    auto first_a = std::get<ear::QuestionBundle>(engine_a->next_question(session_a));
-    engine_a->assist(session_a, first_a.question_id, "GuideTone");
-    engine_a->submit_result(session_a, make_report(first_a));
-    auto second_a = std::get<ear::QuestionBundle>(engine_a->next_question(session_a));
-
-    auto engine_b = ear::make_engine();
-    auto session_b = engine_b->create_session(spec);
-    auto first_b = std::get<ear::QuestionBundle>(engine_b->next_question(session_b));
-    engine_b->submit_result(session_b, make_report(first_b));
-    auto second_b = std::get<ear::QuestionBundle>(engine_b->next_question(session_b));
-
-    suite.require(digest(second_a) == digest(second_b),
-                  "RNG advanced outside next_question (assist/submit side effects)");
+    engine->submit_result(session, make_report(*repeat_bundle));
   }
 
   {

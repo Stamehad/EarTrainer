@@ -36,12 +36,11 @@ class SessionEngine:
             return models.QuestionBundle.from_json(payload)
         return models.SessionSummary.from_json(payload)
 
-    def assist(self, session_id: str, question_id: str, kind: str) -> models.AssistBundle:
-        payload = self._engine.assist(session_id, question_id, kind)
-        return models.AssistBundle.from_json(payload)
+    def assist_options(self, session_id: str) -> list[str]:
+        return list(self._engine.assist_options(session_id))
 
-    def session_assist(self, session_id: str, kind: str) -> models.AssistBundle:
-        payload = self._engine.session_assist(session_id, kind)
+    def assist(self, session_id: str, kind: str) -> models.AssistBundle:
+        payload = self._engine.assist(session_id, kind)
         return models.AssistBundle.from_json(payload)
 
     def set_level(self, session_id: str, level: int, tier: int) -> None:

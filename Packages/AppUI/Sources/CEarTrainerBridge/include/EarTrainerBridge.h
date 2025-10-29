@@ -16,6 +16,8 @@ char *next_question(void);
 char *feedback(const char *answer_json);
 char *end_session(void);
 char *level_catalog_entries(const char *spec_json);
+char *assist_options(void);
+char *assist_clip(const char *kind);
 char *orientation_prompt(void);
 void free_string(char *ptr);
 

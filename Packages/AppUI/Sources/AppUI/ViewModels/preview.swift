@@ -30,6 +30,8 @@ final class NoopSessionEngine: SessionEngine {
     func orientationPrompt() throws -> MidiClip? {
         nil
     }
+    func assistOptions() throws -> [String] { [] }
+    func assist(kind: String) throws -> AssistBundle? { nil }
     var hasActiveSession: Bool { false }
 }
 

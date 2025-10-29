@@ -15,6 +15,8 @@ public protocol SessionEngine {
     func restore(checkpoint: Checkpoint) throws
     func levelCatalogEntries(_ spec: SessionSpec) throws -> [LevelCatalogEntry]
     func orientationPrompt() throws -> MidiClip?
+    func assistOptions() throws -> [String]
+    func assist(kind: String) throws -> AssistBundle?
 }
 
 public final class Bridge: SessionEngine {
@@ -155,6 +157,35 @@ public final class Bridge: SessionEngine {
         }
     }
 
+    public func assistOptions() throws -> [String] {
+        guard let response = try callString({ assist_options() }) else {
+            return []
+        }
+        let envelope = try decode(BridgeEnvelope.self, from: response)
+        switch envelope.status {
+        case .ok:
+            return envelope.options ?? []
+        case .error:
+            throw BridgeError.engineError(envelope.message ?? "Engine error")
+        }
+    }
+
+    public func assist(kind: String) throws -> AssistBundle? {
+        let response = try kind.withCString { pointer in
+            try callString { assist_clip(pointer) }
+        }
+        guard let response else {
+            return nil
+        }
+        let envelope = try decode(BridgeEnvelope.self, from: response)
+        switch envelope.status {
+        case .ok:
+            return envelope.assist
+        case .error:
+            throw BridgeError.engineError(envelope.message ?? "Engine error")
+        }
+    }
+
     // MARK: - Persistence helpers
 
     public func loadCheckpointIfAny(from url: URL) throws -> Checkpoint? {
@@ -276,4 +307,6 @@ private struct BridgeEnvelope: Codable {
     var debug: JSONValue?
     var memory: MemoryPackage?
     var message: String?
+    var options: [String]?
+    var assist: AssistBundle?
 }

@@ -320,8 +320,8 @@ extension AnswerPayload: Codable {
         case "chord":
             let answer = ChordAnswer(
                 rootDegree: try container.decode(Int.self, forKey: .rootDegree),
-                bassDeg: container.decodeIfPresent(Int.self, forKey: .bassDeg),
-                topDeg: container.decodeIfPresent(Int.self, forKey: .topDeg)
+                bassDeg: try container.decodeIfPresent(Int.self, forKey: .bassDeg),
+                topDeg: try container.decodeIfPresent(Int.self, forKey: .topDeg)
             )
             self = .chord(answer)
         case "melody":
@@ -416,6 +416,24 @@ public struct QuestionBundle: Codable, Equatable {
         case correctAnswer = "correct_answer"
         case promptClip = "prompt_clip"
         case uiHints = "ui_hints"
+    }
+}
+
+public struct AssistBundle: Codable, Equatable {
+    public var questionId: String
+    public var kind: String
+    public var promptClip: MidiClip?
+
+    public init(questionId: String, kind: String, promptClip: MidiClip? = nil) {
+        self.questionId = questionId
+        self.kind = kind
+        self.promptClip = promptClip
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case questionId = "question_id"
+        case kind
+        case promptClip = "prompt_clip"
     }
 }
 

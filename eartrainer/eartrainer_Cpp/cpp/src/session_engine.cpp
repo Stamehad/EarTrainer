@@ -47,56 +47,6 @@ std::string factory_family_for(const std::string& kind) {
   return kind;
 }
 
-int json_number_to_nonneg(const nlohmann::json& node, int fallback) {
-  if (node.is_number_integer()) {
-    return std::max(0, node.get<int>());
-  }
-  if (node.is_number_float()) {
-    return std::max(0, static_cast<int>(std::lround(node.get<double>())));
-  }
-  return std::max(0, fallback);
-}
-
-std::pair<int, int> session_pitch_bounds(const SessionSpec& spec) {
-  int below = 12;
-  int above = 12;
-  if (spec.sampler_params.is_object()) {
-    const auto& params = spec.sampler_params;
-    const auto read_optional = [&](const char* key) -> std::optional<int> {
-      if (!params.contains(key)) {
-        return std::nullopt;
-      }
-      return json_number_to_nonneg(params[key], 0);
-    };
-    if (auto value = read_optional("range_below_semitones")) {
-      below = *value;
-    } else if (auto value = read_optional("note_range_semitones")) {
-      below = *value;
-    } else if (auto value = read_optional("interval_range_semitones")) {
-      below = *value;
-    } else if (auto value = read_optional("chord_range_semitones")) {
-      below = *value;
-    }
-    if (auto value = read_optional("range_above_semitones")) {
-      above = *value;
-    } else if (auto value = read_optional("note_range_semitones")) {
-      above = *value;
-    } else if (auto value = read_optional("interval_range_semitones")) {
-      above = *value;
-    } else if (auto value = read_optional("chord_range_semitones")) {
-      above = *value;
-    }
-  }
-
-  const int tonic = drills::central_tonic_midi(spec.key);
-  int lower = std::max(0, tonic - below);
-  int upper = std::min(127, tonic + above);
-  if (lower > upper) {
-    std::swap(lower, upper);
-  }
-  return {lower, upper};
-}
-
 DrillFactory& ensure_factory() {
   static std::once_flag flag;
   auto& factory = DrillFactory::instance();
@@ -132,7 +82,6 @@ struct SessionData {
   std::optional<std::size_t> active_question;
   SessionSummary summary_cache;
   bool summary_ready = false;
-  std::unordered_map<std::string, MidiClip> session_assists;
   SessionMode mode = SessionMode::Manual;
 
   bool adaptive = false;
@@ -271,56 +220,6 @@ void attach_adaptive_summary(SessionData& session) {
   session.summary_cache.totals["adaptive_drill_score_map"] = std::move(drill_map);
 }
 
-std::string normalize_kind(const std::string& kind) {
-  std::string normalized;
-  normalized.reserve(kind.size());
-  for (char ch : kind) {
-    if (std::isalnum(static_cast<unsigned char>(ch))) {
-      normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-    } else if (ch == ' ' || ch == '-' || ch == '_') {
-      normalized.push_back('_');
-    }
-  }
-  if (normalized.empty()) {
-    normalized = "unknown";
-  }
-  return normalized;
-}
-
-MidiClip make_tonic_clip(const SessionSpec& spec) {
-  const int tempo = spec.tempo_bpm.has_value() ? spec.tempo_bpm.value() : 96;
-  MidiClipBuilder b(tempo, 480);
-  auto track = b.add_track("tonic", 0, 0); // GM Piano on channel 0
-  const int tonic = drills::central_tonic_midi(spec.key);
-  const auto bounds = session_pitch_bounds(spec);
-  const int clamped = std::clamp(tonic, bounds.first, bounds.second);
-  Beats beat{0.0};
-  b.add_note(track, beat, Beats{1.8}, clamped, std::nullopt);
-  return b.build();
-}
-
-std::unordered_map<std::string, MidiClip> build_session_assists(const SessionSpec& spec) {
-  std::unordered_map<std::string, MidiClip> assists;
-  assists.emplace(normalize_kind("Tonic"), make_tonic_clip(spec));
-  return assists;
-}
-
-AssistBundle session_assist_bundle(SessionData& session, const std::string& kind,
-                                   const std::string& question_id) {
-  AssistBundle bundle;
-  bundle.question_id = question_id;
-  bundle.kind = kind;
-  bundle.prompt_clip = std::nullopt;
-
-  std::string normalized = normalize_kind(kind);
-  auto it = session.session_assists.find(normalized);
-  if (it != session.session_assists.end()) {
-    bundle.prompt_clip = it->second;
-  }
-  return bundle;
-}
-
-
 } // namespace
 
 class SessionEngineImpl : public SessionEngine {
@@ -357,52 +256,15 @@ public:
     }
   }
 
-  AssistBundle assist(const std::string& session_id, const std::string& question_id,
-                      const std::string& kind) override {
-    auto& session = get_session(session_id);
-    auto normalized_kind = normalize_kind(kind);
-    if (session.session_assists.find(normalized_kind) != session.session_assists.end()) {
-      if (!question_id.empty()) {
-        auto id_check = session.id_lookup.find(question_id);
-        if (id_check == session.id_lookup.end()) {
-          throw std::runtime_error("Unknown question id");
-        }
-      }
-      return session_assist_bundle(session, kind, question_id);
-    }
-    if (session.mode == SessionMode::Adaptive) {
-      auto it = session.id_lookup.find(question_id);
-      if (it == session.id_lookup.end()) {
-        throw std::runtime_error("Unknown question id");
-      }
-      auto& state = session.questions[it->second];
-      if (!state.bundle.has_value()) {
-        throw std::runtime_error("Question not yet materialised");
-      }
-      auto bundle = make_bundle(session, state);
-      return assistance::make_assist(bundle, kind);
-    }
-    auto it = session.id_lookup.find(question_id);
-    if (it == session.id_lookup.end()) {
-      throw std::runtime_error("Unknown question id");
-    }
-    auto& state = session.questions[it->second];
-    if (!state.served) {
-      throw std::runtime_error("Question not yet served");
-    }
-    if (session.mode != SessionMode::LevelInspector) {
-      ensure_question(session, it->second);
-    } else if (!state.bundle.has_value()) {
-      throw std::runtime_error("Level inspector question missing payload");
-    }
-    auto bundle = make_bundle(session, state);
-    return assistance::make_assist(bundle, kind);
+  std::vector<std::string> assist_options(const std::string& session_id) override {
+    (void)session_id;
+    return assistance::session_assist_kinds();
   }
 
-  AssistBundle session_assist(const std::string& session_id,
-                              const std::string& kind) override {
+  AssistBundle assist(const std::string& session_id,
+                      const std::string& kind) override {
     auto& session = get_session(session_id);
-    return session_assist_bundle(session, kind, "");
+    return assistance::make_session_assist(session.spec, kind);
   }
 
   void set_level(const std::string& session_id, int level, int tier) override;
@@ -456,7 +318,9 @@ public:
     assists.push_back("PathwayHint");
     caps["assists"] = assists;
     nlohmann::json session_assists = nlohmann::json::array();
-    session_assists.push_back("Tonic");
+    for (const auto& kind : assistance::session_assist_kinds()) {
+      session_assists.push_back(kind);
+    }
     caps["session_assists"] = session_assists;
     return caps;
   }
@@ -658,7 +522,6 @@ std::string SessionEngineImpl::create_manual_session(const SessionSpec& spec) {
 
   std::string session_id = generate_session_id();
   session.summary_cache.session_id = session_id;
-  session.session_assists = build_session_assists(session.spec);
   sessions_.emplace(session_id, std::move(session));
   return session_id;
 }
@@ -740,7 +603,6 @@ std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) 
 
   std::string session_id = generate_session_id();
   session.summary_cache.session_id = session_id;
-  session.session_assists = build_session_assists(session.spec);
   sessions_.emplace(session_id, std::move(session));
   return session_id;
 }
@@ -754,7 +616,6 @@ std::string SessionEngineImpl::create_level_inspector_session(const SessionSpec&
   session.summary_cache.totals = nlohmann::json::object();
   session.summary_cache.by_category = nlohmann::json::array();
   session.summary_cache.results = nlohmann::json::array();
-  session.session_assists = build_session_assists(session.spec);
   session.inspector_level = spec.inspect_level;
   session.inspector_tier = spec.inspect_tier;
 
@@ -1141,23 +1002,7 @@ std::string SessionEngineImpl::session_key(const std::string& session_id) {
 
 MidiClip SessionEngineImpl::orientation_prompt(const std::string& session_id) {
   auto& session = get_session(session_id);
-  const int tempo = session.spec.tempo_bpm.has_value() ? session.spec.tempo_bpm.value() : 96;
-  MidiClipBuilder b(tempo, 480);
-  auto track = b.add_track("orientation", 0, 0);
-  const int tonic = drills::central_tonic_midi(session.spec.key);
-  const auto bounds = session_pitch_bounds(session.spec);
-  // Build a full scale up and back to tonic (11 notes total like before)
-  const std::vector<int> pattern = {0,1,2,3,4,5,6,7,4,2,0};
-  Beats beat{0.0};
-  for (std::size_t i = 0; i < pattern.size(); ++i) {
-    int degree = pattern[i];
-    int midi = tonic + drills::degree_to_offset(degree);
-    midi = std::clamp(midi, bounds.first, bounds.second);
-    Beats dur = Beats{i == pattern.size() - 1 ? 1.08 : 0.72};
-    b.add_note(track, beat, dur, midi, std::nullopt);
-    beat.advance_by(dur.value);
-  }
-  return b.build();
+  return assistance::orientation_clip(session.spec);
 }
 
 } // namespace ear

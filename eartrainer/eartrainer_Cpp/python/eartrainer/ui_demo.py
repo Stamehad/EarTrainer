@@ -57,7 +57,7 @@ def main() -> None:
                 sys.exit(0)
             if user.startswith("assist "):
                 _, kind = user.split(maxsplit=1)
-                assist_payload = engine.assist(session_id, bundle.question_id, kind)
+                assist_payload = engine.assist(session_id, kind)
                 if isinstance(assist_payload, AssistBundle):
                     print(f"Assist[{kind}] available (clip={'yes' if assist_payload.prompt_clip else 'no'})")
                 continue

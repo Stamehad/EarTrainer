@@ -94,6 +94,7 @@ public struct EntranceView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Color.appBackground)
             .navigationTitle("Ear Trainer")
+#if os(iOS)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
@@ -107,6 +108,21 @@ public struct EntranceView: View {
                     }
                 }
             }
+#else
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    Menu {
+                        Picker("Input Method", selection: $viewModel.answerInputMode) {
+                            ForEach(SessionViewModel.AnswerInputMode.allCases) { mode in
+                                Text(mode.label).tag(mode)
+                            }
+                        }
+                    } label: {
+                        Label("Answer Input", systemImage: "dial.min.fill")
+                    }
+                }
+            }
+#endif
         }
         .onAppear {
             viewModel.bootstrap()

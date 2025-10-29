@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <vector>
 
 #include "../Engine/include/nlohmann/json.hpp"
 #include "../Engine/include/ear/session_engine.hpp"
@@ -287,6 +288,47 @@ char* level_catalog_entries(const char* spec_json) {
       }
     }
     payload["entries"] = std::move(entries);
+    return copy_json(payload);
+  } catch (const std::exception& ex) {
+    return copy_json(error_envelope(ex.what()));
+  }
+}
+
+char* assist_options(void) {
+  auto& s = state();
+  std::scoped_lock guard(s.mutex);
+  if (!s.session_active || !s.session_id.has_value()) {
+    return copy_json(error_envelope("No active session"));
+  }
+  try {
+    auto& engine = ensure_engine();
+    auto options = engine.assist_options(*s.session_id);
+    nlohmann::json payload = ok_envelope();
+    nlohmann::json arr = nlohmann::json::array();
+    for (const auto& option : options) {
+      arr.push_back(option);
+    }
+    payload["options"] = std::move(arr);
+    return copy_json(payload);
+  } catch (const std::exception& ex) {
+    return copy_json(error_envelope(ex.what()));
+  }
+}
+
+char* assist_clip(const char* kind) {
+  if (!kind) {
+    return copy_json(error_envelope("Missing assist kind"));
+  }
+  auto& s = state();
+  std::scoped_lock guard(s.mutex);
+  if (!s.session_active || !s.session_id.has_value()) {
+    return copy_json(error_envelope("No active session"));
+  }
+  try {
+    auto& engine = ensure_engine();
+    auto assist = engine.assist(*s.session_id, kind);
+    nlohmann::json payload = ok_envelope();
+    payload["assist"] = ear::bridge::to_json(assist);
     return copy_json(payload);
   } catch (const std::exception& ex) {
     return copy_json(error_envelope(ex.what()));

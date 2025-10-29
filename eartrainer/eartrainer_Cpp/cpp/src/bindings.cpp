@@ -96,15 +96,18 @@ public:
     return json_to_py(ear::bridge::to_json(std::get<ear::SessionSummary>(next)));
   }
 
-  py::object assist(const std::string& session_id, const std::string& question_id,
-                    const std::string& kind) {
-    auto assist_bundle = engine_->assist(session_id, question_id, kind);
+  py::object assist(const std::string& session_id, const std::string& kind) {
+    auto assist_bundle = engine_->assist(session_id, kind);
     return json_to_py(ear::bridge::to_json(assist_bundle));
   }
 
-  py::object session_assist(const std::string& session_id, const std::string& kind) {
-    auto assist_bundle = engine_->session_assist(session_id, kind);
-    return json_to_py(ear::bridge::to_json(assist_bundle));
+  py::list assist_options(const std::string& session_id) {
+    auto options = engine_->assist_options(session_id);
+    py::list result;
+    for (const auto& kind : options) {
+      result.append(kind);
+    }
+    return result;
   }
 
   void set_level(const std::string& session_id, int level, int tier) {
@@ -178,7 +181,7 @@ PYBIND11_MODULE(_earcore, m) {
       .def("create_session", &PySessionEngine::create_session)
       .def("next_question", &PySessionEngine::next_question)
       .def("assist", &PySessionEngine::assist)
-      .def("session_assist", &PySessionEngine::session_assist)
+      .def("assist_options", &PySessionEngine::assist_options)
       .def("set_level", &PySessionEngine::set_level)
       .def("level_catalog_overview", &PySessionEngine::level_catalog_overview)
       .def("level_catalog_levels", &PySessionEngine::level_catalog_levels)

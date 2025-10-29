@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 try:
     from eartrainer.eartrainer_Cpp.python.eartrainer.models import (
+        MidiClip,
         QuestionBundle,
         ResultMetrics,
         ResultReport,
@@ -385,7 +386,7 @@ class SessionController:
         self.audio_thread: Optional[threading.Thread] = None
         self.current_total = 0
         self.reference_pending = False
-        self.session_assists: Dict[str, Prompt] = {}
+        self.session_assists: Dict[str, MidiClip] = {}
 
     # Session lifecycle -------------------------------------------------
     def start(self, steps: List[SessionStep]) -> None:
@@ -440,11 +441,11 @@ class SessionController:
     def play_prompt(self) -> None:
         if self.player is None or self.current_bundle is None:
             return
-        prompt = self.current_bundle.prompt
+        prompt_clip = self.current_bundle.prompt_clip
 
         def worker() -> None:
             try:
-                self.player.play_prompt(prompt)
+                self.player.play_prompt(prompt_clip)
             except Exception:
                 pass
 
@@ -456,17 +457,17 @@ class SessionController:
                 self.play_prompt()
             return
 
-        prompt = self._get_session_assist_prompt(kind)
-        if prompt is None:
+        clip = self._get_session_assist_clip(kind)
+        if clip is None:
             if include_prompt:
                 self.play_prompt()
             return
 
         def worker() -> None:
             try:
-                self.player.play_prompt(prompt)
+                self.player.play_prompt(clip)
                 if include_prompt and self.current_bundle is not None:
-                    self.player.play_prompt(self.current_bundle.prompt)
+                    self.player.play_prompt(self.current_bundle.prompt_clip)
             except Exception:
                 pass
 
@@ -619,15 +620,19 @@ class SessionController:
         self.session_assists.clear()
         if self.session_id is None:
             return
-        for label in ("ScaleArpeggio", "Tonic"):
+        try:
+            options = self.engine.assist_options(self.session_id)
+        except Exception:
+            return
+        for label in options:
             try:
-                bundle = self.engine.session_assist(self.session_id, label)
+                bundle = self.engine.assist(self.session_id, label)
             except Exception:
                 continue
-            if bundle.prompt is not None:
-                self.session_assists[label.lower()] = bundle.prompt
+            if bundle.prompt_clip is not None:
+                self.session_assists[label.lower()] = bundle.prompt_clip
 
-    def _get_session_assist_prompt(self, kind: str) -> Optional[Prompt]:
+    def _get_session_assist_clip(self, kind: str) -> Optional[MidiClip]:
         return self.session_assists.get(kind.lower())
 
 
