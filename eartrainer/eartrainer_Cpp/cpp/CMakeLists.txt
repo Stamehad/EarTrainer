@@ -21,6 +21,7 @@ add_library(ear_core STATIC
     src/midi_clip.cpp
     drills/chord.cpp
     drills/chord_core.cpp
+    drills/harmony.cpp
     drills/interval.cpp
     drills/melody.cpp
     drills/note.cpp

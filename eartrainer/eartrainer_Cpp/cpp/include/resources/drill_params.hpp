@@ -41,8 +41,8 @@ struct NoteParams {
 };
 struct IntervalParams {
   int tempo_bpm = 60;
-  double note_beat = 1.0;
-  int program = 0;
+  double note_beat = 2.0;
+  int program = 48;  // 0: PIANO, 48: STRINGS
   std::vector<int> allowed_bottom_degrees{};
   std::vector<int> allowed_degrees = {0,1,2,3,4,5,6};
   std::vector<int> allowed_sizes{};
@@ -50,6 +50,8 @@ struct IntervalParams {
   int range_semitones = 12;
   int velocity = 96; 
   DrillInstrument inst = DrillInstrument::Piano;
+  std::vector<int> cluster_ids = {1,2,3,4,5,6};
+  bool add_helper = false;
 };
 struct MelodyParams {
   int tempo_bpm = 80;
