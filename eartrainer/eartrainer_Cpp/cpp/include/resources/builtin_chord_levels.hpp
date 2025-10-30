@@ -29,7 +29,6 @@ inline DrillSpec make_chord_drill(std::string id,
   spec.level = level;
   spec.tier = tier;
   spec.params = std::move(params);
-  spec.apply_defaults();
   return spec;
 }
 

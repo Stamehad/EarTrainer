@@ -1,6 +1,6 @@
 #pragma once
 
-#include "track_selector.hpp"
+#include "../resources/track_selector_builtin.hpp"
 #include "drill_factory.hpp"
 #include "types.hpp"
 #include "question_bundle_v2.hpp"

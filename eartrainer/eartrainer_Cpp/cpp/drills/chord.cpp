@@ -23,28 +23,6 @@ namespace ear {
 
 namespace {
 
-std::vector<int> extract_allowed(const DrillSpec& spec, const std::string& key) {
-  std::vector<int> values;
-  if (spec.j_params.is_object() && spec.j_params.contains(key)) {
-    const auto& node = spec.j_params[key];
-    if (node.is_array()) {
-      for (const auto& entry : node.get_array()) {
-        values.push_back(entry.get<int>());
-      }
-    }
-  }
-  return values;
-}
-
-bool avoid_repetition(const DrillSpec& spec) {
-  if (!spec.j_params.is_object() || !spec.j_params.contains("chord_avoid_repeat")) {
-    if (!spec.j_params.is_object() || !spec.j_params.contains("avoid_repeat")) {
-      return true;
-    }
-    return spec.j_params["avoid_repeat"].get<bool>();
-  }
-  return spec.j_params["chord_avoid_repeat"].get<bool>();
-}
 
 int pick_degree(const ChordParams& params, std::uint64_t& rng_state,
                 const std::optional<int>& previous) {
@@ -77,49 +55,6 @@ std::string chord_quality_for_degree(int degree) {
   return "major";
 }
 
-std::optional<std::string> spec_param_string(const DrillSpec& spec, const std::string& key) {
-  if (!spec.j_params.is_object()) {
-    return std::nullopt;
-  }
-  if (!spec.j_params.contains(key)) {
-    return std::nullopt;
-  }
-  const auto& node = spec.j_params[key];
-  if (!node.is_string()) {
-    return std::nullopt;
-  }
-  std::string value = node.get<std::string>();
-  std::transform(value.begin(), value.end(), value.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return value;
-}
-
-nlohmann::json build_degrees_payload(int root_degree,
-                                     const std::string& quality,
-                                     const ChordVoicingEngine::RightHandPattern& right_pattern,
-                                     int bass_offset,
-                                     const std::string& right_voicing_id,
-                                     bool add_seventh = false) {
-  const auto& relative_offsets = right_pattern.degree_offsets;
-
-  nlohmann::json right_offsets_json = nlohmann::json::array();
-  nlohmann::json right_degrees_json = nlohmann::json::array();
-  for (int offset : relative_offsets) {
-    right_offsets_json.push_back(offset);
-    right_degrees_json.push_back(root_degree + offset);
-  }
-
-  nlohmann::json payload = nlohmann::json::object();
-  payload["root"] = root_degree;
-  payload["degrees"] = right_degrees_json;
-  payload["quality"] = quality;
-  payload["voicing_id"] = right_voicing_id;
-  payload["add_seventh"] = add_seventh;
-  payload["bass_offset"] = bass_offset;
-  payload["bass_degree"] = root_degree + bass_offset;
-  payload["right_offsets"] = right_offsets_json;
-  return payload;
-}
 
 } // namespace
 

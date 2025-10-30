@@ -27,7 +27,6 @@ struct DrillSpec {
   ear::KeyQuality quality = ear::KeyQuality::Major;
   std::unordered_map<std::string, int> assistance_policy;
   ear::DrillParams params{};
-  nlohmann::json j_params = nlohmann::json::object();
 
   // Raw authoring data (kept for serialization/backward compatibility).
   nlohmann::json defaults;        // core defaults (tempo, key, range, assistance...)
@@ -38,8 +37,6 @@ struct DrillSpec {
     if (!defaults.contains(k)) return fallback;
     return defaults[k].get<T>();
   }
-
-  void apply_defaults();
 
   static DrillSpec from_session(const ear::SessionSpec& spec);
 };

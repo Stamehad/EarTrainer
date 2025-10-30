@@ -46,20 +46,6 @@ std::vector<int> pathway_resolution_degrees(const pathways::PathwayPattern& patt
   return result;
 }
 
-
-// std::vector<int> extract_allowed(const DrillSpec& spec, const std::string& key) {
-//   std::vector<int> values;
-//   if (spec.j_params.is_object() && spec.j_params.contains(key)) {
-//     const auto& node = spec.j_params[key];
-//     if (node.is_array()) {
-//       for (const auto& entry : node.get_array()) {
-//         values.push_back(entry.get<int>());
-//       }
-//     }
-//   }
-//   return values;
-// }
-
 std::vector<int> base_degrees() {
   return {0, 1, 2, 3, 4, 5, 6};
 }

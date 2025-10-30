@@ -13,7 +13,7 @@ add_library(ear_core STATIC
     src/adaptive_drills.cpp
     src/level_inspector.cpp
     src/track_selector_builtin.cpp
-    src/track_selector.cpp
+    # src/track_selector.cpp (removed; builtin-only now)
     src/session_engine.cpp
     src/drill_factory.cpp
     src/chord_voicings.cpp
@@ -28,7 +28,7 @@ add_library(ear_core STATIC
     drills/pathways.cpp
     assistance/assistance.cpp
     scoring/scoring.cpp
-    controller/drill_hub.cpp
+    # controller/drill_hub.cpp (removed)
 )
 
 target_include_directories(ear_core

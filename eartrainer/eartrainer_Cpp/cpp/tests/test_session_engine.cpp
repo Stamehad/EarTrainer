@@ -1,5 +1,8 @@
 #include "../include/ear/session_engine.hpp"
-#include "../include/ear/track_selector.hpp"
+#include "../include/resources/track_selector_builtin.hpp"
+#include "../include/resources/builtin_degree_levels.hpp"
+#include "../include/resources/builtin_melody_levels.hpp"
+#include "../include/resources/builtin_chord_levels.hpp"
 #include "../include/ear/types.hpp"
 #include "../include/ear/question_bundle_v2.hpp"
 #include "scoring/scoring.hpp"
@@ -419,39 +422,45 @@ ear::SessionSpec make_spec(const std::string& drill_kind, const std::string& gen
 }
 
 void test_track_selector(TestSuite& suite) {
-  using ear::adaptive::TrackCatalogDescriptor;
   using ear::adaptive::compute_track_phase_weights;
 
-  const auto base_dir = std::filesystem::path(__FILE__).parent_path() / "catalogs";
-  std::vector<TrackCatalogDescriptor> catalog_descriptors = {
-      {"degree", base_dir / "degree_levels_test.json"},
-      {"melody", base_dir / "melody_levels_test.json"},
-      {"chord",  base_dir / "chord_levels_test.json"},
+  // Use builtin catalogs instead of filesystem JSON.
+  std::vector<std::string_view> names = {
+      ear::builtin::DegreeLevels::name,
+      ear::builtin::MelodyLevels::name,
+      ear::builtin::ChordLevels::name,
   };
-  auto catalogs = ear::adaptive::load_track_phase_catalogs(catalog_descriptors);
+  auto catalogs = ear::adaptive::load_track_phase_catalogs_builtin(names);
 
   {
-    auto result = compute_track_phase_weights(std::vector<int>{11, 111, 211}, catalogs);
-    suite.require(result.phase_digit == 1, "expected phase digit 1 for initial phase");
+    // Active phase is smallest tens-digit among positives => phase 1.
+    // degree: phase 1 levels [11] -> from 11 pending 1
+    // melody: phase 1 levels [111,112,113] -> from 111 pending 3
+    // chord: phase 2 > 1 -> 0
+    auto result = compute_track_phase_weights(std::vector<int>{11, 111, 220}, catalogs);
+    suite.require(result.phase_digit == 1, "expected phase digit 1 for builtin catalogs");
     suite.require(result.weights.size() == catalogs.size(), "weight count should match tracks");
-    suite.require(result.weights[0] == 3, "degree track should have 3 pending levels");
-    suite.require(result.weights[1] == 2, "melody track should have 2 pending levels");
-    suite.require(result.weights[2] == 3, "chord track should have 3 pending levels");
+    suite.require(result.weights[0] == 1, "degree track should have 1 pending at phase 1");
+    suite.require(result.weights[1] == 3, "melody track should have 3 pending at phase 1");
+    suite.require(result.weights[2] == 0, "chord track should be ahead of phase 1");
   }
 
   {
-    auto result = compute_track_phase_weights(std::vector<int>{19, 118, 211}, catalogs);
-    suite.require(result.weights[0] == 1, "degree track should have 1 pending level after progress");
-    suite.require(result.weights[1] == 1, "melody track should have 1 pending level after progress");
-    suite.require(result.weights[2] == 3, "chord track remains at 3 pending levels");
-  }
-
-  {
-    auto result = compute_track_phase_weights(std::vector<int>{21, 118, 217}, catalogs);
+    // Active phase remains 1. Melody progressed to 112: pending 2; degree has 11: pending 1.
+    auto result = compute_track_phase_weights(std::vector<int>{11, 112, 220}, catalogs);
     suite.require(result.phase_digit == 1, "phase should remain 1 until all phase-1 levels complete");
-    suite.require(result.weights[0] == 0, "track ahead of phase should contribute zero weight");
-    suite.require(result.weights[1] == 1, "melody track should have 1 pending level");
-    suite.require(result.weights[2] == 1, "chord track should have 1 pending level");
+    suite.require(result.weights[0] == 1, "degree track should have 1 pending level");
+    suite.require(result.weights[1] == 2, "melody track should have 2 pending levels");
+    suite.require(result.weights[2] == 0, "chord track ahead of phase should be 0");
+  }
+
+  {
+    // Single chord active at phase 2 -> pending 4 in chord; others zero.
+    auto result = compute_track_phase_weights(std::vector<int>{0, 0, 220}, catalogs);
+    suite.require(result.phase_digit == 2, "phase should be 2 when only chord is active");
+    suite.require(result.weights[0] == 0, "degree track weight 0 at phase 2");
+    suite.require(result.weights[1] == 0, "melody track weight 0 at phase 2");
+    suite.require(result.weights[2] == 4, "chord track should have 4 pending levels from 220");
   }
 
   {

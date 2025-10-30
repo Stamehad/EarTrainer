@@ -28,7 +28,6 @@ inline DrillSpec make_note_drill(std::string id,
   spec.level = level;
   spec.tier = tier;
   spec.params = std::move(params);
-  spec.apply_defaults();
   return spec;
 }
 

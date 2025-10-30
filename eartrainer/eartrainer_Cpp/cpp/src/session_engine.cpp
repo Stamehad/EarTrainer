@@ -4,7 +4,6 @@
 #include "../drills/drill.hpp"
 #include "../drills/common.hpp"
 #include "../scoring/scoring.hpp"
-#include "../include/ear/drill_hub.hpp"
 #include "../include/ear/drill_factory.hpp"
 #include "../include/ear/adaptive_drills.hpp"
 #include "../include/ear/level_inspector.hpp"
@@ -85,7 +84,6 @@ struct SessionData {
   SessionMode mode = SessionMode::Manual;
 
   bool adaptive = false;
-  std::unique_ptr<DrillHub> drill_hub;
   std::unique_ptr<AdaptiveDrills> adaptive_drills;
   std::vector<int> track_levels;
   double adaptive_fitness = 0.5;
@@ -599,7 +597,7 @@ std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) 
   session.adaptive_drills->set_bout(session.track_levels);
   session.track_levels = session.adaptive_drills->last_used_track_levels();
   session.spec.track_levels = session.track_levels;
-  session.drill_hub = std::make_unique<DrillHub>();
+  // DrillHub deprecated; adaptive_drills drives question selection directly
 
   std::string session_id = generate_session_id();
   session.summary_cache.session_id = session_id;
@@ -800,9 +798,7 @@ SessionEngine::Next SessionEngineImpl::next_question_adaptive(const std::string&
     return make_bundle(session, state);
   }
 
-  if (!session.drill_hub) {
-    throw std::runtime_error("Adaptive session missing drill hub");
-  }
+  // DrillHub removed; no hub check needed
 
   if (session.adaptive_target_questions != 0 &&
       session.adaptive_asked >= session.adaptive_target_questions) {

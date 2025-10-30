@@ -12,47 +12,18 @@
 namespace ear {
 namespace {
 
-std::vector<int> extract_allowed(const DrillSpec& spec, const std::string& key) {
-  std::vector<int> values;
-  if (spec.j_params.is_object() && spec.j_params.contains(key)) {
-    const auto& node = spec.j_params[key];
-    if (node.is_array()) {
-      for (const auto& entry : node.get_array()) {
-        values.push_back(entry.get<int>());
-      }
-    }
-  }
-  return values;
-}
-
 std::vector<int> base_bottom_degrees() {
   return {0, 1, 2, 3, 4, 5, 6};
 }
 
-bool avoid_repetition(const DrillSpec& spec) {
-  if (!spec.j_params.is_object() || !spec.j_params.contains("interval_avoid_repeat")) {
-    if (!spec.j_params.is_object() || !spec.j_params.contains("avoid_repeat")) {
-      return true;
-    }
-    return spec.j_params["avoid_repeat"].get<bool>();
-  }
-  return spec.j_params["interval_avoid_repeat"].get<bool>();
-}
-
-int pick_bottom_degree(const DrillSpec& spec, std::uint64_t& rng_state,
+int pick_bottom_degree(const IntervalParams& params, std::uint64_t& rng_state,
                        const std::optional<int>& previous_degree) {
-  auto allowed = extract_allowed(spec, "interval_allowed_bottom_degrees");
-  if (allowed.empty()) {
-    allowed = extract_allowed(spec, "interval_allowed_degrees");
-  }
-  if (allowed.empty()) {
-    allowed = extract_allowed(spec, "allowed_degrees");
-  }
+  auto allowed = params.allowed_bottom_degrees; 
   if (allowed.empty()) {
     allowed = base_bottom_degrees();
   }
 
-  if (avoid_repetition(spec) && previous_degree.has_value() && allowed.size() > 1) {
+  if (params.avoid_repeat && previous_degree.has_value() && allowed.size() > 1) {
     allowed.erase(std::remove(allowed.begin(), allowed.end(), previous_degree.value()), allowed.end());
     if (allowed.empty()) {
       allowed = base_bottom_degrees();
@@ -63,11 +34,8 @@ int pick_bottom_degree(const DrillSpec& spec, std::uint64_t& rng_state,
   return allowed[static_cast<std::size_t>(idx)];
 }
 
-int pick_interval_size(const DrillSpec& spec, std::uint64_t& rng_state) {
-  auto allowed = extract_allowed(spec, "interval_allowed_sizes");
-  if (allowed.empty()) {
-    allowed = {1, 2, 3, 4, 5, 6, 7};
-  }
+int pick_interval_size(const IntervalParams& params, std::uint64_t& rng_state) {
+  std::vector<int> allowed = {1, 2, 3, 4, 5, 6, 7};;
   int idx = rand_int(rng_state, 0, static_cast<int>(allowed.size()) - 1);
   return allowed[static_cast<std::size_t>(idx)];
 }
@@ -96,8 +64,8 @@ void IntervalDrill::configure(const DrillSpec& spec) {
 }
 
 QuestionBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
-  int bottom_degree = pick_bottom_degree(spec_, rng_state, last_bottom_degree_);
-  int size = pick_interval_size(spec_, rng_state);
+  int bottom_degree = pick_bottom_degree(params, rng_state, last_bottom_degree_);
+  int size = pick_interval_size(params, rng_state);
   int tonic_midi = drills::central_tonic_midi(spec_.key);
   int top_degree = bottom_degree + size;
   std::pair<int, int> midi_range = {tonic_midi, tonic_midi + 12};
@@ -105,7 +73,7 @@ QuestionBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
   auto candidates = drills::midi_candidates_for_degree(spec_.key, bottom_degree, midi_range);
   int bottom_midi = drills::degree_to_midi(spec_, bottom_degree, midi_range);
   if (!candidates.empty()) {
-    if (avoid_repetition(spec_) && last_bottom_midi_.has_value() && candidates.size() > 1) {
+    if (params.avoid_repeat && last_bottom_midi_.has_value() && candidates.size() > 1) {
       candidates.erase(std::remove(candidates.begin(), candidates.end(), last_bottom_midi_.value()),
                        candidates.end());
       if (candidates.empty()) {

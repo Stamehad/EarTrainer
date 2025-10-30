@@ -1,10 +1,8 @@
 #include "ear/adaptive_drills.hpp"
 
-#include "ear/adaptive_catalog.hpp"
-#include "ear/track_selector.hpp"
-#include "ear/drill_factory.hpp"
 #include "resources/adaptive_catalog_builtin.hpp"
 #include "resources/track_selector_builtin.hpp"
+#include "ear/drill_factory.hpp"
 #include "resources/builtin_degree_levels.hpp"
 #include "resources/builtin_melody_levels.hpp"
 #include "rng.hpp"
@@ -31,9 +29,7 @@ void ensure_factory_registered() {
 }
 
 std::vector<DrillSpec> load_catalog_for_level(const adaptive::TrackPhaseCatalog& catalog, int level) {
-  if (!catalog.resolved_path.empty()) {
-    return adaptive::load_level_catalog(catalog.resolved_path.string(), level);
-  }
+  // Builtin-only: ignore filesystem paths and resolve by catalog name.
   return adaptive::load_level_catalog_builtin(catalog.descriptor.name, level);
 }
 
@@ -55,27 +51,8 @@ AdaptiveDrills::AdaptiveDrills(std::string resources_dir, std::uint64_t seed)
   };
 
   track_phase_catalogs_ = adaptive::load_track_phase_catalogs_builtin(builtin_catalogs);
-  if (!track_phase_catalogs_.empty()) {
-    using_builtin_catalogs_ = true;
-    track_catalog_error_.reset();
-    return;
-  }
-
-  std::vector<adaptive::TrackCatalogDescriptor> descriptors =
-      adaptive::track_catalogs_from_resources(resources_dir_);
-
-  try {
-    track_phase_catalogs_ = adaptive::load_track_phase_catalogs(descriptors);
-    using_builtin_catalogs_ = false;
-    if (track_phase_catalogs_.empty()) {
-      track_catalog_error_ = "AdaptiveDrills: no track catalogs loaded from filesystem";
-    } else {
-      track_catalog_error_.reset();
-    }
-  } catch (const std::exception& ex) {
-    track_phase_catalogs_.clear();
-    track_catalog_error_ = ex.what();
-  }
+  using_builtin_catalogs_ = true;
+  track_catalog_error_.reset();
 }
 
 int AdaptiveDrills::weighted_pick(const std::vector<int>& weights, std::uint64_t& rng_state) {
@@ -214,56 +191,6 @@ void AdaptiveDrills::set_bout(const std::vector<int>& track_levels) {
   const auto& descriptor = track_phase_catalogs_[static_cast<std::size_t>(track_index)];
   auto specs = load_catalog_for_level(descriptor, target_level);
   initialize_bout(target_level, specs);
-  active_track_index_ = track_index;
-}
-
-void AdaptiveDrills::set_bout_from_json(const std::vector<int>& track_levels, const nlohmann::json& document) {
-  auto normalized_levels = normalize_track_levels(track_levels);
-  if (track_phase_catalogs_.empty()) {
-    if (normalized_levels.empty()) {
-      throw std::runtime_error("AdaptiveDrills: track levels required when catalogs unavailable");
-    }
-    last_track_levels_ = normalized_levels;
-    last_track_weights_.assign(normalized_levels.size(), 0);
-    last_track_pick_.reset();
-    last_phase_digit_.reset();
-    phase_consistent_.reset();
-
-    int target_level = normalized_levels.front();
-    if (target_level <= 0) {
-      throw std::runtime_error("AdaptiveDrills: invalid target level");
-    }
-
-    auto specs = adaptive::parse_catalog_document(document);
-    auto filtered = adaptive::filter_catalog_by_level(specs, target_level);
-    if (filtered.empty()) {
-      throw std::runtime_error("No adaptive drills configured for level " + std::to_string(target_level));
-    }
-    active_track_index_.reset();
-    initialize_bout(target_level, filtered);
-    return;
-  }
-  auto pick = pick_track(normalized_levels);
-  if (pick.phase_digit < 0 || pick.picked_track < 0) {
-    throw std::runtime_error("AdaptiveDrills: cannot evaluate track selection for JSON bout");
-  }
-
-  int track_index = pick.picked_track;
-  int current_level = normalized_levels[static_cast<std::size_t>(track_index)];
-  auto scope = levels_in_scope_for_track(track_index, current_level, pick.phase_digit);
-  if (scope.empty()) {
-    throw std::runtime_error("AdaptiveDrills: selected track has no pending levels in current phase");
-  }
-  int target_level = scope.front();
-
-  const auto& descriptor = track_phase_catalogs_[static_cast<std::size_t>(track_index)];
-
-  auto specs = adaptive::parse_catalog_document(document);
-  auto filtered = adaptive::filter_catalog_by_level(specs, target_level);
-  if (filtered.empty()) {
-    throw std::runtime_error("No adaptive drills configured for level " + std::to_string(target_level));
-  }
-  initialize_bout(target_level, filtered);
   active_track_index_ = track_index;
 }
 
