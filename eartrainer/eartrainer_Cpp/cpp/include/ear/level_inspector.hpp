@@ -1,9 +1,9 @@
 #pragma once
 
-#include "types.hpp"
 #include "drill_factory.hpp"
+#include "types.hpp"
+#include "../resources/catalog_manager.hpp"
 
-#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -32,13 +32,6 @@ public:
   QuestionBundle next();
 
 private:
-public:
-  struct DrillEntry {
-    DrillSpec spec;
-    int tier = 0;
-  };
-
-private:
   struct Slot {
     std::string id;
     DrillSpec spec;
@@ -51,8 +44,9 @@ private:
 
   std::string catalog_basename_;
   std::string catalog_display_name_;
-  std::vector<DrillEntry> entries_;
-  std::map<int, std::map<int, std::vector<std::size_t>>> index_;
+  resources::CatalogIndex catalog_index_;
+  std::vector<int> levels_;
+  std::vector<std::string> allowed_catalogs_;
   std::vector<Slot> slots_;
   std::uint64_t master_rng_;
   std::uint64_t question_counter_ = 0;
@@ -60,6 +54,7 @@ private:
   std::optional<int> active_level_;
   std::optional<int> active_tier_;
   DrillFactory& factory_;
+  std::optional<std::string> base_key_;
 };
 
 } // namespace ear

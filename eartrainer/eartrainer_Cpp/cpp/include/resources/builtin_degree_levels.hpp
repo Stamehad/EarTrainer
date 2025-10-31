@@ -170,6 +170,21 @@ inline const std::vector<DrillSpec>& level_11() {
   return drills;
 }
 
+struct GeneratorRow {
+  int level;
+  const std::vector<DrillSpec>& (*generator)();
+};
+
+inline const std::vector<GeneratorRow>& generator_table() {
+  static const std::vector<GeneratorRow> rows = {
+      {1,  level_1},
+      {2,  level_2},
+      {3,  level_3},
+      {11, level_11},
+  };
+  return rows;
+}
+
 inline const std::vector<typename CatalogBase<Impl>::Row>& table() {
   static const std::vector<typename CatalogBase<Impl>::Row> rows = {
       {1, &level_1()},

@@ -145,6 +145,20 @@ inline const std::vector<DrillSpec>& level_113() {
   return drills;
 }
 
+struct GeneratorRow {
+  int level;
+  const std::vector<DrillSpec>& (*generator)();
+};
+
+inline const std::vector<GeneratorRow>& generator_table() {
+  static const std::vector<GeneratorRow> rows = {
+      {111, level_111},
+      {112, level_112},
+      {113, level_113},
+  };
+  return rows;
+}
+
 inline const std::vector<typename CatalogBase<Impl>::Row>& table() {
   static const std::vector<typename CatalogBase<Impl>::Row> rows = {
       {111, &level_111()},
@@ -165,4 +179,3 @@ inline const std::map<int, std::vector<int>>& phases()           { return detail
 inline const std::vector<DrillSpec>& drills_for_level(int level) { return detail::Impl::drills_for_level(level); }
 
 } // namespace ear::builtin::MelodyLevels
-

@@ -37,6 +37,11 @@ public:
 
   virtual nlohmann::json capabilities() const = 0;
 
+  // Returns a JSON description of drill parameter defaults and schema
+  // for each supported drill family (e.g., note, interval, melody, chord).
+  // Intended for client UIs to know which fields can be configured in manual mode.
+  // virtual nlohmann::json drill_param_spec() const = 0;
+
   virtual nlohmann::json adaptive_diagnostics(const std::string& session_id) = 0;
 
   virtual void set_level(const std::string& session_id, int level, int tier) = 0;

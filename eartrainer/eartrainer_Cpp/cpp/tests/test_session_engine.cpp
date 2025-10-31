@@ -1,5 +1,4 @@
 #include "../include/ear/session_engine.hpp"
-#include "../include/resources/track_selector_builtin.hpp"
 #include "../include/resources/builtin_degree_levels.hpp"
 #include "../include/resources/builtin_melody_levels.hpp"
 #include "../include/resources/builtin_chord_levels.hpp"
@@ -421,79 +420,13 @@ ear::SessionSpec make_spec(const std::string& drill_kind, const std::string& gen
   return question_bundle_json(bundle).dump();
 }
 
-void test_track_selector(TestSuite& suite) {
-  using ear::adaptive::compute_track_phase_weights;
-
-  // Use builtin catalogs instead of filesystem JSON.
-  std::vector<std::string_view> names = {
-      ear::builtin::DegreeLevels::name,
-      ear::builtin::MelodyLevels::name,
-      ear::builtin::ChordLevels::name,
-  };
-  auto catalogs = ear::adaptive::load_track_phase_catalogs_builtin(names);
-
-  {
-    // Active phase is smallest tens-digit among positives => phase 1.
-    // degree: phase 1 levels [11] -> from 11 pending 1
-    // melody: phase 1 levels [111,112,113] -> from 111 pending 3
-    // chord: phase 2 > 1 -> 0
-    auto result = compute_track_phase_weights(std::vector<int>{11, 111, 220}, catalogs);
-    suite.require(result.phase_digit == 1, "expected phase digit 1 for builtin catalogs");
-    suite.require(result.weights.size() == catalogs.size(), "weight count should match tracks");
-    suite.require(result.weights[0] == 1, "degree track should have 1 pending at phase 1");
-    suite.require(result.weights[1] == 3, "melody track should have 3 pending at phase 1");
-    suite.require(result.weights[2] == 0, "chord track should be ahead of phase 1");
-  }
-
-  {
-    // Active phase remains 1. Melody progressed to 112: pending 2; degree has 11: pending 1.
-    auto result = compute_track_phase_weights(std::vector<int>{11, 112, 220}, catalogs);
-    suite.require(result.phase_digit == 1, "phase should remain 1 until all phase-1 levels complete");
-    suite.require(result.weights[0] == 1, "degree track should have 1 pending level");
-    suite.require(result.weights[1] == 2, "melody track should have 2 pending levels");
-    suite.require(result.weights[2] == 0, "chord track ahead of phase should be 0");
-  }
-
-  {
-    // Single chord active at phase 2 -> pending 4 in chord; others zero.
-    auto result = compute_track_phase_weights(std::vector<int>{0, 0, 220}, catalogs);
-    suite.require(result.phase_digit == 2, "phase should be 2 when only chord is active");
-    suite.require(result.weights[0] == 0, "degree track weight 0 at phase 2");
-    suite.require(result.weights[1] == 0, "melody track weight 0 at phase 2");
-    suite.require(result.weights[2] == 4, "chord track should have 4 pending levels from 220");
-  }
-
-  {
-    auto result = compute_track_phase_weights(std::vector<int>{0, 0, 0}, catalogs);
-    suite.require(result.phase_digit == -1, "no active phase when all tracks finished");
-    suite.require(std::all_of(result.weights.begin(), result.weights.end(),
-                              [](int weight) { return weight == 0; }),
-                  "weights should be zero when no track is active");
-  }
-
-  bool mismatched_sizes_threw = false;
-  try {
-    (void)compute_track_phase_weights(std::vector<int>{11, 111}, catalogs);
-  } catch (const std::invalid_argument&) {
-    mismatched_sizes_threw = true;
-  }
-  suite.require(mismatched_sizes_threw, "size mismatch should raise invalid_argument");
-
-  bool missing_level_threw = false;
-  try {
-    (void)compute_track_phase_weights(std::vector<int>{12, 111, 211}, catalogs);
-  } catch (const std::runtime_error&) {
-    missing_level_threw = true;
-  }
-  suite.require(missing_level_threw, "unknown current level should raise runtime_error");
-}
 
 } // namespace
 
 int main() {
   TestSuite suite;
 
-  test_track_selector(suite);
+  // Track selector tests retired; selection is now exercised via SessionEngine flows.
 
   {
     auto engine1 = ear::make_engine();

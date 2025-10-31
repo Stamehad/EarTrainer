@@ -30,6 +30,10 @@ temp.sh
 /eartrainer/eartrainer_Cpp/**/*.so
 /eartrainer/eartrainer_Cpp/**/*.dylib
 
+# CTest artifacts (source tree)
+/eartrainer/eartrainer_Cpp/Testing/
+/eartrainer/eartrainer_Cpp/Testing/**
+
 # Python caches and egg-info
 *.egg-info/
 **/.pytest_cache/

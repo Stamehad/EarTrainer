@@ -323,6 +323,223 @@ public:
     return caps;
   }
 
+  // nlohmann::json drill_param_spec() const override {
+  //   // Enumerations exposed as strings for client UIs
+  //   const std::vector<std::string> inst_enum = {"Piano", "Strings"};
+  //   const std::vector<std::string> chord_delivery_enum = {"Together", "Arpeggio"};
+  //   const std::vector<std::string> tonic_anchor_enum = {"Before", "After"};
+
+  //   // Defaults from param structs
+  //   NoteParams note{};
+  //   IntervalParams interval{};
+  //   MelodyParams melody{};
+  //   ChordParams chord{};
+
+  //   nlohmann::json spec = nlohmann::json::object();
+  //   spec["version"] = "v1";
+
+  //   // Enums dictionary for convenience
+  //   nlohmann::json enums = nlohmann::json::object();
+  //   enums["DrillInstrument"] = inst_enum;
+  //   enums["ChordDelivery"] = chord_delivery_enum;
+  //   enums["TonicAnchor"] = tonic_anchor_enum;
+  //   spec["enums"] = enums;
+
+  //   // Drills section
+  //   nlohmann::json drills = nlohmann::json::object();
+
+  //   // note
+  //   {
+  //     nlohmann::json fields = nlohmann::json::object();
+  //     fields["allowed_degrees"] = nlohmann::json::object({
+  //         {"type", "array<int>"}, {"default", note.allowed_degrees}});
+  //     fields["avoid_repeat"] = nlohmann::json::object({
+  //         {"type", "bool"}, {"default", note.avoid_repeat}});
+  //     fields["range_below_semitones"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", note.range_below_semitones}});
+  //     fields["range_above_semitones"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", note.range_above_semitones}});
+  //     fields["inst"] = nlohmann::json::object({
+  //         {"type", "enum"}, {"enum", inst_enum}, {"default", inst_enum[0]}});
+  //     fields["tempo_bpm"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", note.tempo_bpm}});
+  //     fields["note_beats"] = nlohmann::json::object({
+  //         {"type", "number"}, {"default", note.note_beats}});
+  //     fields["program"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", note.program}});
+  //     fields["velocity"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", note.velocity}});
+
+  //     // PATHWAY
+  //     fields["use_pathway"] = nlohmann::json::object({
+  //         {"type", "bool"}, {"default", note.use_pathway}});
+  //     fields["pathway_repeat_lead"] = nlohmann::json::object({
+  //         {"type", "bool"}, {"default", note.pathway_repeat_lead}});
+  //     fields["pathway_beats"] = nlohmann::json::object({
+  //         {"type", "number"}, {"default", note.pathway_beats}});
+  //     fields["pathway_rest"] = nlohmann::json::object({
+  //         {"type", "number"}, {"default", note.pathway_rest}});
+
+  //     // ANCHOR TONIC
+  //     fields["note_step_beats"] = nlohmann::json::object({
+  //         {"type", "number"}, {"default", note.note_step_beats}});
+  //     fields["note_tempo_bpm"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", note.note_tempo_bpm}});
+  //     fields["use_anchor"] = nlohmann::json::object({
+  //         {"type", "bool"}, {"default", note.use_anchor}});
+  //     fields["tonic_anchor"] = nlohmann::json::object({
+  //         {"type", "enum|null"}, {"enum", tonic_anchor_enum}, {"default", nullptr},
+  //         {"null_means", "choose_random_per_question"}});
+  //     fields["tonic_anchor_include_octave"] = nlohmann::json::object({
+  //         {"type", "bool"}, {"default", note.tonic_anchor_include_octave}});
+
+  //     nlohmann::json drill = nlohmann::json::object();
+  //     drill["fields"] = fields;
+  //     drills["note"] = drill;
+  //   }
+
+    // // interval
+    // {
+    //   nlohmann::json fields = nlohmann::json::object();
+    //   fields["tempo_bpm"] = nlohmann::json::object({
+    //       {"type", "int"}, {"default", interval.tempo_bpm}});
+    //   fields["note_beat"] = nlohmann::json::object({
+    //       {"type", "number"}, {"default", interval.note_beat}});
+    //   fields["program"] = nlohmann::json::object({
+    //       {"type", "int"}, {"default", interval.program}});
+    //   fields["allowed_bottom_degrees"] = nlohmann::json::object({
+    //       {"type", "array<int>"}, {"default", interval.allowed_bottom_degrees}});
+    //   fields["allowed_degrees"] = nlohmann::json::object({
+    //       {"type", "array<int>"}, {"default", interval.allowed_degrees}});
+    //   fields["allowed_sizes"] = nlohmann::json::object({
+    //       {"type", "array<int>"}, {"default", interval.allowed_sizes}});
+    //   fields["avoid_repeat"] = nlohmann::json::object({
+    //       {"type", "bool"}, {"default", interval.avoid_repeat}});
+    //   fields["range_semitones"] = nlohmann::json::object({
+    //       {"type", "int"}, {"default", interval.range_semitones}});
+    //   fields["velocity"] = nlohmann::json::object({
+    //       {"type", "int"}, {"default", interval.velocity}});
+    //   fields["inst"] = nlohmann::json::object({
+    //       {"type", "enum"}, {"enum", inst_enum}, {"default", inst_enum[0]}});
+    //   fields["cluster_ids"] = nlohmann::json::object({
+    //       {"type", "array<int>"}, {"default", interval.cluster_ids}});
+    //   fields["add_helper"] = nlohmann::json::object({
+    //       {"type", "bool"}, {"default", interval.add_helper}});
+
+    //   nlohmann::json drill = nlohmann::json::object();
+    //   drill["fields"] = fields;
+    //   drills["interval"] = drill;
+    // }
+
+  //   // melody
+  //   {
+  //     nlohmann::json fields = nlohmann::json::object();
+  //     fields["tempo_bpm"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", melody.tempo_bpm}});
+  //     fields["program"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", melody.program}});
+  //     fields["melody_lengths"] = nlohmann::json::object({
+  //         {"type", "array<int>"}, {"default", melody.melody_lengths}});
+  //     fields["melody_max_step"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", melody.melody_max_step}});
+  //     fields["avoid_repeat"] = nlohmann::json::object({
+  //         {"type", "bool"}, {"default", melody.avoid_repeat}});
+  //     fields["range_below_semitones"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", melody.range_below_semitones}});
+  //     fields["range_above_semitones"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", melody.range_above_semitones}});
+  //     fields["note_beat"] = nlohmann::json::object({
+  //         {"type", "number"}, {"default", melody.note_beat}});
+  //     fields["velocity"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", melody.velocity}});
+  //     fields["inst"] = nlohmann::json::object({
+  //         {"type", "enum"}, {"enum", inst_enum}, {"default", inst_enum[0]}});
+
+  //     nlohmann::json drill = nlohmann::json::object();
+  //     drill["fields"] = fields;
+  //     drills["melody"] = drill;
+  //   }
+
+  //   // chord
+  //   {
+  //     nlohmann::json fields = nlohmann::json::object();
+  //     fields["allowed_degrees"] = nlohmann::json::object({
+  //         {"type", "array<int>"}, {"default", chord.allowed_degrees}});
+  //     fields["inst"] = nlohmann::json::object({
+  //         {"type", "enum"}, {"enum", inst_enum}, {"default", inst_enum[0]}});
+  //     fields["delivery"] = nlohmann::json::object({
+  //         {"type", "enum"}, {"enum", chord_delivery_enum}, {"default", chord_delivery_enum[0]}});
+  //     fields["allowed_top_degrees"] = nlohmann::json::object({
+  //         {"type", "array<int>"}, {"default", chord.allowed_top_degrees}});
+  //     fields["avoid_repeat"] = nlohmann::json::object({
+  //         {"type", "bool"}, {"default", chord.avoid_repeat}});
+  //     fields["chord_avoid_repeat"] = nlohmann::json::object({
+  //         {"type", "bool|null"}, {"default", nullptr}});
+  //     fields["range_semitones"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.range_semitones}});
+  //     fields["add_seventh"] = nlohmann::json::object({
+  //         {"type", "bool"}, {"default", chord.add_seventh}});
+  //     fields["tempo_bpm"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.tempo_bpm}});
+  //     fields["right_voicing_id"] = nlohmann::json::object({
+  //         {"type", "string"}, {"default", chord.right_voicing_id}});
+  //     fields["bass_voicing_id"] = nlohmann::json::object({
+  //         {"type", "string"}, {"default", chord.bass_voicing_id}});
+  //     fields["voicing_profile"] = nlohmann::json::object({
+  //         {"type", "string|null"}, {"default", nullptr}});
+  //     fields["prompt_split_tracks"] = nlohmann::json::object({
+  //         {"type", "bool"}, {"default", chord.prompt_split_tracks}});
+  //     fields["prompt_program"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.prompt_program}});
+  //     fields["prompt_channel"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.prompt_channel}});
+  //     fields["right_program"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.right_program}});
+  //     fields["right_channel"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.right_channel}});
+  //     fields["bass_program"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.bass_program}});
+  //     fields["bass_channel"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.bass_channel}});
+  //     fields["velocity"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.velocity}});
+  //     fields["dur_beats"] = nlohmann::json::object({
+  //         {"type", "number"}, {"default", chord.dur_beats}});
+  //     fields["duration_ms"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.duration_ms}});
+  //     fields["strum_step_ms"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.strum_step_ms}});
+  //     fields["voice_leading_continuity"] = nlohmann::json::object({
+  //         {"type", "bool"}, {"default", chord.voice_leading_continuity}});
+
+  //     // training_root nested struct
+  //     nlohmann::json training_root = nlohmann::json::object();
+  //     training_root["enabled"] = nlohmann::json::object({
+  //         {"type", "bool"}, {"default", chord.training_root.enabled}});
+  //     training_root["delay_beats"] = nlohmann::json::object({
+  //         {"type", "number"}, {"default", chord.training_root.delay_beats}});
+  //     training_root["dur_beats"] = nlohmann::json::object({
+  //         {"type", "number"}, {"default", chord.training_root.dur_beats}});
+  //     training_root["channel"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.training_root.channel}});
+  //     training_root["program"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.training_root.program}});
+  //     training_root["velocity"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.training_root.velocity}});
+  //     training_root["duration_ms"] = nlohmann::json::object({
+  //         {"type", "int"}, {"default", chord.training_root.duration_ms}});
+  //     fields["training_root"] = nlohmann::json::object({
+  //         {"type", "object"}, {"fields", training_root}});
+
+  //     nlohmann::json drill = nlohmann::json::object();
+  //     drill["fields"] = fields;
+  //     drills["chord"] = drill;
+  //   }
+
+  //   spec["drills"] = drills;
+  //   return spec;
+  // }
+
   nlohmann::json debug_state(const std::string& session_id) override {
     auto& session = get_session(session_id);
     nlohmann::json info = nlohmann::json::object();

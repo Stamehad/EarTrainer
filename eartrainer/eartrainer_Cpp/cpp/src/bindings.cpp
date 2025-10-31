@@ -208,20 +208,6 @@ PYBIND11_MODULE(_earcore, m) {
              ad.set_bout(std::vector<int>{level});
            },
            py::arg("level"))
-      .def("set_bout_from_catalog",
-           [](ear::AdaptiveDrills& ad, const std::vector<int>& levels, py::object catalog_obj) {
-             auto json_doc = py_to_json(catalog_obj);
-             ad.set_bout_from_json(levels, json_doc);
-           },
-           py::arg("levels"),
-           py::arg("catalog_data"))
-      .def("set_bout_from_catalog",
-           [](ear::AdaptiveDrills& ad, int level, py::object catalog_obj) {
-             auto json_doc = py_to_json(catalog_obj);
-             ad.set_bout_from_json(std::vector<int>{level}, json_doc);
-           },
-           py::arg("level"),
-           py::arg("catalog_data"))
       .def("next", [](ear::AdaptiveDrills& ad) {
         auto b = ad.next();
         return json_to_py(ear::bridge::to_json(b));
