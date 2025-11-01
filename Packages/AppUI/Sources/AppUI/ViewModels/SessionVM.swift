@@ -42,6 +42,7 @@ public final class SessionViewModel: ObservableObject {
     @Published public var errorBanner: String?
     @Published public private(set) var isProcessing: Bool = false
     @Published public private(set) var inspectorOptions: [LevelCatalogEntry] = []
+    @Published public private(set) var drillCatalog: DrillCatalog?
     @Published public var answerInputMode: AnswerInputMode = .keypad3x3
 
     private let engine: SessionEngine
@@ -208,6 +209,18 @@ public final class SessionViewModel: ObservableObject {
         do {
             let entries = try engine.levelCatalogEntries(spec)
             inspectorOptions = entries
+        } catch {
+            presentError(error)
+        }
+    }
+
+    public func loadDrillCatalogIfNeeded() {
+        guard drillCatalog == nil else { return }
+        do {
+            let payload = try engine.drillParamSpec()
+            let data = try displayEncoder.encode(payload)
+            let catalog = try decoder.decode(DrillCatalog.self, from: data)
+            drillCatalog = catalog
         } catch {
             presentError(error)
         }
