@@ -127,6 +127,23 @@ public final class MockBridge: SessionEngine {
         return AssistBundle(questionId: "", kind: kind, promptClip: nil)
     }
 
+    public func drillParamSpec() throws -> JSONValue {
+        let intervalFields: [String: JSONValue] = [
+            "tempo_bpm": .object(["label": .string("Tempo (BPM)"), "kind": .string("int"), "default": .int(60)]),
+            "allowed_degrees": .object(["label": .string("Allowed degrees"), "kind": .string("int_list"), "default": .array([.int(0), .int(2), .int(4)])])
+        ]
+        return .object([
+            "version": .string("v1"),
+            "drills": .object([
+                "interval": .object([
+                    "id": .string("interval_params"),
+                    "version": .int(1),
+                    "fields": .object(intervalFields)
+                ])
+            ])
+        ])
+    }
+
     private func makeQuestions(from spec: SessionSpec) -> [QuestionBundle] {
         let count = max(1, spec.nQuestions)
         return (0..<count).map { index in

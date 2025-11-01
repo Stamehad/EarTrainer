@@ -315,6 +315,19 @@ char* assist_options(void) {
   }
 }
 
+char* drill_param_spec(void) {
+  auto& s = state();
+  std::scoped_lock guard(s.mutex);
+  try {
+    auto& engine = ensure_engine();
+    nlohmann::json payload = ok_envelope();
+    payload["spec"] = engine.drill_param_spec();
+    return copy_json(payload);
+  } catch (const std::exception& ex) {
+    return copy_json(error_envelope(ex.what()));
+  }
+}
+
 char* assist_clip(const char* kind) {
   if (!kind) {
     return copy_json(error_envelope("Missing assist kind"));

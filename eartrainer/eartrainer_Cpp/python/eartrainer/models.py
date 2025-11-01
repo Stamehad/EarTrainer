@@ -16,6 +16,7 @@ class SessionSpec:
     feedback_policy: Dict[str, Any] = field(default_factory=dict)
     assistance_policy: Dict[str, int] = field(default_factory=dict)
     sampler_params: Dict[str, Any] = field(default_factory=dict)
+    params: Dict[str, Any] = field(default_factory=dict)
     seed: int = 1
     adaptive: bool = False
     track_levels: List[int] = field(default_factory=list)
@@ -29,6 +30,7 @@ class SessionSpec:
         data["range"] = list(self.range)
         data["tempo_bpm"] = self.tempo_bpm
         data["sampler_params"] = dict(self.sampler_params)
+        data["params"] = dict(self.params)
         data["track_levels"] = list(self.track_levels)
         return data
 
@@ -45,6 +47,7 @@ class SessionSpec:
             feedback_policy=dict(data.get("feedback_policy", {})),
             assistance_policy=dict(data.get("assistance_policy", {})),
             sampler_params=dict(data.get("sampler_params", {})),
+            params=dict(data.get("params", {})),
             seed=int(data.get("seed", 1)),
             adaptive=bool(data.get("adaptive", False)),
             track_levels=list(data.get("track_levels", [])),

@@ -76,6 +76,9 @@ class SessionEngine:
     def capabilities(self) -> dict:
         return dict(self._engine.capabilities())
 
+    def drill_param_spec(self) -> dict:
+        return dict(self._engine.drill_param_spec())
+
     def debug_state(self, session_id: str) -> dict:
         return dict(self._engine.debug_state(session_id))
 

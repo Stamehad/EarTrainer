@@ -32,6 +32,7 @@ final class NoopSessionEngine: SessionEngine {
     }
     func assistOptions() throws -> [String] { [] }
     func assist(kind: String) throws -> AssistBundle? { nil }
+    func drillParamSpec() throws -> JSONValue { .object([:]) }
     var hasActiveSession: Bool { false }
 }
 

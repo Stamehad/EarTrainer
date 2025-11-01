@@ -156,6 +156,10 @@ public:
     return json_to_py(engine_->capabilities());
   }
 
+  py::object drill_param_spec() const {
+    return json_to_py(engine_->drill_param_spec());
+  }
+
   py::object debug_state(const std::string& session_id) {
     return json_to_py(engine_->debug_state(session_id));
   }
@@ -191,6 +195,7 @@ PYBIND11_MODULE(_earcore, m) {
       .def("orientation_prompt", &PySessionEngine::orientation_prompt)
       .def("end_session", &PySessionEngine::end_session)
       .def("capabilities", &PySessionEngine::capabilities)
+      .def("drill_param_spec", &PySessionEngine::drill_param_spec)
       .def("debug_state", &PySessionEngine::debug_state)
       .def("adaptive_diagnostics", &PySessionEngine::adaptive_diagnostics);
 

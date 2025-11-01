@@ -17,6 +17,7 @@ public protocol SessionEngine {
     func orientationPrompt() throws -> MidiClip?
     func assistOptions() throws -> [String]
     func assist(kind: String) throws -> AssistBundle?
+    func drillParamSpec() throws -> JSONValue
 }
 
 public final class Bridge: SessionEngine {
@@ -186,6 +187,22 @@ public final class Bridge: SessionEngine {
         }
     }
 
+    public func drillParamSpec() throws -> JSONValue {
+        guard let response = try callString({ drill_param_spec() }) else {
+            throw BridgeError.missingData("Drill parameter spec")
+        }
+        let envelope = try decode(BridgeEnvelope.self, from: response)
+        switch envelope.status {
+        case .ok:
+            guard let spec = envelope.spec else {
+                throw BridgeError.missingData("Drill parameter spec payload")
+            }
+            return spec
+        case .error:
+            throw BridgeError.engineError(envelope.message ?? "Engine error")
+        }
+    }
+
     // MARK: - Persistence helpers
 
     public func loadCheckpointIfAny(from url: URL) throws -> Checkpoint? {
@@ -309,4 +326,5 @@ private struct BridgeEnvelope: Codable {
     var message: String?
     var options: [String]?
     var assist: AssistBundle?
+    var spec: JSONValue?
 }

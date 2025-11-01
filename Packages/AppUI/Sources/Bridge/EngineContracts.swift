@@ -132,6 +132,7 @@ public struct SessionSpec: Codable, Equatable {
     public var generation: String
     public var assistancePolicy: [String: Int]
     public var samplerParams: [String: JSONValue]
+    public var params: [String: JSONValue]?
     public var seed: Int
     public var adaptive: Bool
     public var trackLevels: [Int]
@@ -149,6 +150,7 @@ public struct SessionSpec: Codable, Equatable {
         generation: String = "adaptive",
         assistancePolicy: [String: Int] = [:],
         samplerParams: [String: JSONValue] = [:],
+        params: [String: JSONValue]? = nil,
         seed: Int = 1,
         adaptive: Bool = true,
         trackLevels: [Int] = [1],
@@ -165,6 +167,7 @@ public struct SessionSpec: Codable, Equatable {
         self.generation = generation
         self.assistancePolicy = assistancePolicy
         self.samplerParams = samplerParams
+        self.params = params
         self.seed = seed
         self.adaptive = adaptive
         self.trackLevels = trackLevels
@@ -184,6 +187,7 @@ public struct SessionSpec: Codable, Equatable {
         generation = try container.decodeIfPresent(String.self, forKey: .generation) ?? "adaptive"
         assistancePolicy = try container.decodeIfPresent([String: Int].self, forKey: .assistancePolicy) ?? [:]
         samplerParams = try container.decodeIfPresent([String: JSONValue].self, forKey: .samplerParams) ?? [:]
+        params = try container.decodeIfPresent([String: JSONValue].self, forKey: .params)
         seed = try container.decodeIfPresent(Int.self, forKey: .seed) ?? 1
         adaptive = try container.decodeIfPresent(Bool.self, forKey: .adaptive) ?? false
         trackLevels = try container.decodeIfPresent([Int].self, forKey: .trackLevels) ?? [1]
@@ -202,6 +206,7 @@ public struct SessionSpec: Codable, Equatable {
         case generation
         case assistancePolicy = "assistance_policy"
         case samplerParams = "sampler_params"
+        case params
         case seed
         case adaptive
         case trackLevels = "track_levels"
