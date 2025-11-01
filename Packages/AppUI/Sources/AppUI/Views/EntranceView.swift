@@ -72,6 +72,7 @@ public struct EntranceView: View {
     ]
 
     @EnvironmentObject private var viewModel: SessionViewModel
+    @EnvironmentObject private var userStore: UserStore
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedMode: ModeSelection = .adaptive
     @State private var selectedKeyValue: String = "C"
@@ -96,6 +97,9 @@ public struct EntranceView: View {
             .navigationTitle("Ear Trainer")
 #if os(iOS)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    playerMenu
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         Picker("Input Method", selection: $viewModel.answerInputMode) {
@@ -110,6 +114,9 @@ public struct EntranceView: View {
             }
 #else
             .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    playerMenu
+                }
                 ToolbarItem(placement: .automatic) {
                     Menu {
                         Picker("Input Method", selection: $viewModel.answerInputMode) {
@@ -362,6 +369,17 @@ public struct EntranceView: View {
             applyInspectorSelection(for: first.id)
         } else {
             inspectorSelectionID = ""
+        }
+    }
+
+    private var playerMenu: some View {
+        Menu {
+            Button("Switch Player") {
+                viewModel.resetToEntrance()
+                userStore.signOut()
+            }
+        } label: {
+            Label(userStore.selectedUser?.displayName ?? "Player", systemImage: "person.crop.circle")
         }
     }
 

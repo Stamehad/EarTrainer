@@ -45,7 +45,7 @@ public final class MockBridge: SessionEngine {
 
     public func nextQuestion() throws -> EngineResponse? {
         guard currentIndex < questions.count else {
-            return .summary(makeSummary(total: questions.count, correct: currentIndex))
+            return .summary(makeSummary(total: questions.count, correct: currentIndex), nil)
         }
         let bundle = questions[currentIndex]
         let debugInfo = JSONValue.object([
@@ -57,7 +57,7 @@ public final class MockBridge: SessionEngine {
 
     public func submit(_ report: ResultReport) throws -> EngineResponse? {
         guard currentIndex < questions.count else {
-            return .summary(makeSummary(total: questions.count, correct: currentIndex))
+            return .summary(makeSummary(total: questions.count, correct: currentIndex), nil)
         }
         currentIndex += 1
         if currentIndex < questions.count {
@@ -71,7 +71,7 @@ public final class MockBridge: SessionEngine {
             ])
             return .question(QuestionEnvelope(bundle: bundle, debug: debugInfo))
         } else {
-            return .summary(makeSummary(total: questions.count, correct: currentIndex))
+            return .summary(makeSummary(total: questions.count, correct: currentIndex), nil)
         }
     }
 
@@ -85,7 +85,7 @@ public final class MockBridge: SessionEngine {
             snapshot.updatedAt = Date()
             self.snapshot = snapshot
         }
-        return .summary(makeSummary(total: total, correct: correct))
+        return .summary(makeSummary(total: total, correct: correct), nil)
     }
 
     public var hasActiveSession: Bool {

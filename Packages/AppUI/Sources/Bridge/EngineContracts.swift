@@ -589,5 +589,5 @@ public struct QuestionEnvelope: Equatable {
 
 public enum EngineResponse: Equatable {
     case question(QuestionEnvelope)
-    case summary(SessionSummary)
+    case summary(SessionSummary, MemoryPackage?)
 }

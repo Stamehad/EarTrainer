@@ -36,6 +36,7 @@ public final class SessionViewModel: ObservableObject {
     @Published public var spec: SessionSpec
     @Published public private(set) var currentQuestion: QuestionEnvelope?
     @Published public private(set) var summary: SessionSummary?
+    @Published public private(set) var lastMemory: MemoryPackage?
     @Published public private(set) var questionJSON: String?
     @Published public private(set) var debugJSON: String?
     @Published public var errorBanner: String?
@@ -47,6 +48,7 @@ public final class SessionViewModel: ObservableObject {
     private let profileName: String
     private var profile: ProfileSnapshot?
     private var hasBootstrapped = false
+    private var hasCapturedMemory = false
     private var questionsAnswered = 0
     private let audioPlayer = MidiAudioPlayer.shared
     private var suppressNextPromptAutoPlay = false
@@ -85,6 +87,9 @@ public final class SessionViewModel: ObservableObject {
         do {
             try prepareEngine()
             try loadProfileSnapshot()
+            if let stored = try loadStoredMemory() {
+                lastMemory = stored
+            }
             try restoreCheckpointIfAvailable()
         } catch {
             presentError(error)
@@ -118,6 +123,7 @@ public final class SessionViewModel: ObservableObject {
             suppressNextPromptAutoPlay = false
             needsDeferredPromptPlayback = false
             deferredPromptPlaybackDelay = 0
+            hasCapturedMemory = false
             try engine.startSession(spec)
             playOrientationPrompt(autoTriggered: true)
             route = .game
@@ -192,6 +198,7 @@ public final class SessionViewModel: ObservableObject {
         suppressNextPromptAutoPlay = false
         needsDeferredPromptPlayback = false
         deferredPromptPlaybackDelay = 0
+        hasCapturedMemory = false
     }
 
     // MARK: - Level Inspector
@@ -346,6 +353,16 @@ public final class SessionViewModel: ObservableObject {
         }
     }
 
+    private func loadStoredMemory() throws -> MemoryPackage? {
+        let url = try Paths.memoryURL(for: profileName)
+        let manager = FileManager.default
+        guard manager.fileExists(atPath: url.path) else {
+            return nil
+        }
+        let data = try Data(contentsOf: url)
+        return try decoder.decode(MemoryPackage.self, from: data)
+    }
+
     private func restoreCheckpointIfAvailable() throws {
         let url = try Paths.checkpointURL()
         let manager = FileManager.default
@@ -368,6 +385,39 @@ public final class SessionViewModel: ObservableObject {
         var snapshot = try engine.serializeProfile()
         snapshot.updatedAt = Date()
         try writeProfile(snapshot)
+    }
+
+    private func handleMemoryPersistence(with memory: MemoryPackage?) {
+        guard !hasCapturedMemory else { return }
+        if let memory {
+            persist(memory: memory)
+            return
+        }
+        do {
+            if let response = try engine.endSession(),
+               case let .summary(_, fetchedMemory) = response,
+               let fetchedMemory {
+                persist(memory: fetchedMemory)
+            }
+        } catch {
+            presentError(error)
+        }
+    }
+
+    private func persist(memory: MemoryPackage) {
+        lastMemory = memory
+        hasCapturedMemory = true
+        do {
+            try saveMemoryToDisk(memory)
+        } catch {
+            presentError(error)
+        }
+    }
+
+    private func saveMemoryToDisk(_ memory: MemoryPackage) throws {
+        let url = try Paths.memoryURL(for: profileName)
+        let data = try encoder.encode(memory)
+        try data.write(to: url, options: .atomic)
     }
 
     private func writeProfile(_ snapshot: ProfileSnapshot) throws {
@@ -435,11 +485,12 @@ public final class SessionViewModel: ObservableObject {
                     replayPromptAudio()
                 }
             }
-        case let .summary(report):
+        case let .summary(report, memory):
             currentQuestion = nil
             questionJSON = nil
             debugJSON = nil
             summary = report
+            handleMemoryPersistence(with: memory)
             route = .results
             questionsAnswered = 0
             do {

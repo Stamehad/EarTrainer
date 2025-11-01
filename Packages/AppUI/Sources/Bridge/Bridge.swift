@@ -287,11 +287,8 @@ public final class Bridge: SessionEngine {
                 let debug = envelope.debug
                 return .question(QuestionEnvelope(bundle: bundle, debug: debug))
             case .summary:
-                if let summary = envelope.summary {
-                    return .summary(summary)
-                }
-                if let memory = envelope.memory?.summary {
-                    return .summary(memory)
+                if let summary = envelope.summary ?? envelope.memory?.summary {
+                    return .summary(summary, envelope.memory)
                 }
                 throw BridgeError.missingData("Session summary")
             }

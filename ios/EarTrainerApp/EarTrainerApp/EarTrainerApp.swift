@@ -4,22 +4,23 @@ import Bridge
 
 @main
 struct EarTrainerApp: App {
-    @StateObject private var viewModel: SessionViewModel
+    private let engine: SessionEngine
+    @StateObject private var userStore: UserStore
 
     init() {
 #if DEBUG
         let useMock = ProcessInfo.processInfo.environment["USE_MOCK_BRIDGE"] == "1"
-        let engine: SessionEngine = useMock ? MockBridge() : Bridge()
+        self.engine = useMock ? MockBridge() : Bridge()
 #else
-        let engine: SessionEngine = Bridge()
+        self.engine = Bridge()
 #endif
-        _viewModel = StateObject(wrappedValue: SessionViewModel(engine: engine))
+        _userStore = StateObject(wrappedValue: UserStore())
     }
 
     var body: some Scene {
         WindowGroup {
-            EntranceView()
-                .environmentObject(viewModel)
+            RootCoordinatorView(engine: engine)
+                .environmentObject(userStore)
         }
     }
     
@@ -30,7 +31,11 @@ struct EarTrainerApp: App {
 //    }
 }
 
-#Preview("Entrance") {
-    EntranceView()
-        .environmentObject(SessionViewModel.preview())
+#Preview("App") {
+    let records = [
+        UserProfileRecord.preview(name: "Alice", sessions: 4),
+        UserProfileRecord.preview(name: "Bob", sessions: 1)
+    ]
+    return RootCoordinatorView(engine: MockBridge())
+        .environmentObject(UserStore.preview(records: records))
 }

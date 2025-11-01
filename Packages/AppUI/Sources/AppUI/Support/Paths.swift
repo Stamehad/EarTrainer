@@ -29,6 +29,10 @@ public enum Paths {
         try appSupportRoot().appendingPathComponent("\(profileName)_profile.json", isDirectory: false)
     }
 
+    public static func memoryURL(for profileName: String) throws -> URL {
+        try appSupportRoot().appendingPathComponent("\(profileName)_memory.json", isDirectory: false)
+    }
+
     public static func checkpointURL() throws -> URL {
         try appSupportRoot().appendingPathComponent("session_checkpoint.json", isDirectory: false)
     }
