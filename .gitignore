@@ -83,3 +83,7 @@ Packages/AppUI/Sources/CEarTrainerBridge/Engine/
 
 # Allow committed Xcode project under ios/; still ignore user/caches
 # (Keep patterns above: DerivedData/, xcuserdata/, *.xcworkspace/, *.xcuserstate)
+
+REPO_STRUCTURE.md
+repo_tree.py
+repo_tree2.py

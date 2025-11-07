@@ -75,33 +75,6 @@ inline int clamp_to_range(int midi, int min, int max) {
   return std::max(min, std::min(max, midi));
 }
 
-// inline std::pair<int, int> semitone_window(const DrillSpec& spec, int default_span) {
-//   int below = default_span;
-//   int above = default_span;
-//   if (spec.params.is_object()) {
-//     if (spec.params.contains("range_below_semitones")) {
-//       below = std::max(0, spec.params["range_below_semitones"].get<int>());
-//     }
-//     if (spec.params.contains("range_above_semitones")) {
-//       above = std::max(0, spec.params["range_above_semitones"].get<int>());
-//     }
-//   }
-//   return {below, above};
-// }
-
-// inline std::pair<int, int> relative_bounds(const DrillSpec& spec, int default_span) {
-//   int tonic = central_tonic_midi(spec.key);
-//   auto window = semitone_window(spec, default_span);
-//   const int below = window.first;
-//   const int above = window.second;
-//   int lower = std::max(0, tonic - below);
-//   int upper = std::min(127, tonic + above);
-//   if (lower > upper) {
-//     std::swap(lower, upper);
-//   }
-//   return {lower, upper};
-// }
-
 inline std::vector<int> midi_candidates_for_degree(std::string key, int degree,
                                                    std::pair<int, int> midi_range) {
   const int lower = midi_range.first;

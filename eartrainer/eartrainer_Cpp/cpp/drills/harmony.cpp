@@ -166,12 +166,12 @@ QuestionBundle HarmonyDrill::next_question(std::uint64_t& rng_state) {
   //-----------------------------------------------------------------
   // GENERATE MIDI-CLIP
   //-----------------------------------------------------------------
-  MidiClipBuilder builder(params.tempo_bpm, 480);
+  MidiClipBuilder builder(params.bpm, 480);
   auto track = builder.add_track("harmony", 0, params.program);
   Beats start{0.0};
   builder.add_chord(track, start, Beats{params.note_beat}, midis, params.velocity);
 
-  if (params.add_helper) {
+  if (params.helper) {
     // ADD HELPER MELODY (ROOTS)
     auto helper_track = builder.add_track("helper", 1, 0); // PIANO
     Beats helper_start{1.0};

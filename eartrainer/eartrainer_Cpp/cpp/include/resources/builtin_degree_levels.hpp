@@ -34,34 +34,23 @@ inline DrillSpec make_note_drill(std::string id,
 inline const std::vector<DrillSpec>& level_1() {
   static const std::vector<DrillSpec> drills = [] {
     std::vector<DrillSpec> out;
+    
+    ear::NoteParams params;
+    params.range_down = 0;
+    params.pathway = true;
+    params.bpm = 90;
+    
+    // TIER 0
+    params.degrees = {0, 1, 2, 3};
+    out.push_back(make_note_drill("PATHWAYS_90_1_4", 1, 0, std::move(params)));
+    
+    // TIER 1
+    params.degrees = {4, 5, 6, 7};
+    out.push_back(make_note_drill("PATHWAYS90_5_7", 1, 1, std::move(params)));
 
-    {
-      ear::NoteParams params;
-      params.allowed_degrees = {0, 1, 2, 3};
-      params.avoid_repeat = true;
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 12;
-      params.use_pathway = true;
-      params.pathway_repeat_lead = false;
-      params.tempo_bpm = 60;
-      params.pathway_beats = 1.0;
-      params.pathway_rest = 0.5;
-      out.push_back(make_note_drill("PATHWAYS_1_4", 1, 0, std::move(params)));
-    }
-
-    {
-      ear::NoteParams params;
-      params.allowed_degrees = {4, 5, 6};
-      params.avoid_repeat = true;
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 12;
-      params.use_pathway = true;
-      params.pathway_repeat_lead = false;
-      params.tempo_bpm = 60;
-      params.pathway_beats = 1.0;
-      params.pathway_rest = 0.5;
-      out.push_back(make_note_drill("PATHWAYS_5_7", 1, 1, std::move(params)));
-    }
+    // TIER 2
+    params.degrees = {0, 1, 2, 3, 4, 5, 6, 7};
+    out.push_back(make_note_drill("PATHWAYS90_ALL", 1, 2, std::move(params)));
 
     return out;
   }();
@@ -72,23 +61,22 @@ inline const std::vector<DrillSpec>& level_2() {
   static const std::vector<DrillSpec> drills = [] {
     std::vector<DrillSpec> out;
 
-    {
-      ear::NoteParams params;
-      params.allowed_degrees = {0, 1, 2, 3};
-      params.avoid_repeat = true;
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 12;
-      out.push_back(make_note_drill("NOTE_1_4", 2, 0, std::move(params)));
-    }
+    ear::NoteParams params;
+    params.range_down = 0;
+    // params.use_pathway = true;
 
-    {
-      ear::NoteParams params;
-      params.allowed_degrees = {4, 5, 6};
-      params.avoid_repeat = true;
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 11;
-      out.push_back(make_note_drill("NOTE_5_7", 2, 1, std::move(params)));
-    }
+    // TIER 0
+    params.degrees = {0, 1, 2, 3};
+    out.push_back(make_note_drill("NOTE_1_4", 2, 0, std::move(params)));
+    
+    // TIER 1
+    params.degrees = {4, 5, 6, 7};
+    out.push_back(make_note_drill("NOTE_5_7", 2, 1, std::move(params)));
+
+    // TIER 2
+    params.degrees = {0, 1, 2, 3, 4, 5, 6, 7};
+    out.push_back(make_note_drill("NOTE_ALL", 2, 2, std::move(params)));
+
 
     return out;
   }();
@@ -101,10 +89,10 @@ inline const std::vector<DrillSpec>& level_3() {
 
     {
       ear::NoteParams params;
-      params.allowed_degrees = {1, 2, 3, 4, 5, 6};
+      params.degrees = {1, 2, 3, 4, 5, 6};
       params.avoid_repeat = true;
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 12;
+      params.range_down = 0;
+      params.range_up = 12;
       params.tonic_anchor = NoteParams::TonicAnchor::After;
       params.tonic_anchor_include_octave = false;
       params.note_tempo_bpm = 60;
@@ -113,10 +101,10 @@ inline const std::vector<DrillSpec>& level_3() {
 
     {
       ear::NoteParams params;
-      params.allowed_degrees = {1, 2, 3, 4, 5, 6};
+      params.degrees = {1, 2, 3, 4, 5, 6};
       params.avoid_repeat = true;
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 12;
+      params.range_down = 0;
+      params.range_up = 12;
       params.tonic_anchor = NoteParams::TonicAnchor::Before;
       params.tonic_anchor_include_octave = false;
       params.note_tempo_bpm = 60;
@@ -135,11 +123,11 @@ inline const std::vector<DrillSpec>& level_11() {
     {
       ear::NoteParams params;
       params.avoid_repeat = true;
-      params.range_below_semitones = 12;
-      params.range_above_semitones = 12;
-      params.use_pathway = true;
+      params.range_down = 12;
+      params.range_up = 12;
+      params.pathway = true;
       params.pathway_repeat_lead = false;
-      params.tempo_bpm = 80;
+      params.bpm = 80;
       params.pathway_beats = 1.0;
       params.pathway_rest = 0.5;
       out.push_back(make_note_drill("PATHWAYS_2OCT", 11, 0, std::move(params)));
@@ -147,10 +135,10 @@ inline const std::vector<DrillSpec>& level_11() {
 
     {
       ear::NoteParams params;
-      params.allowed_degrees = {1, 2, 3, 4, 5, 6};
+      params.degrees = {1, 2, 3, 4, 5, 6};
       params.avoid_repeat = true;
-      params.range_below_semitones = 12;
-      params.range_above_semitones = 12;
+      params.range_down = 12;
+      params.range_up = 12;
       params.tonic_anchor = NoteParams::TonicAnchor::Before;
       params.tonic_anchor_include_octave = true;
       params.note_tempo_bpm = 80;
@@ -160,8 +148,8 @@ inline const std::vector<DrillSpec>& level_11() {
     {
       ear::NoteParams params;
       params.avoid_repeat = true;
-      params.range_below_semitones = 12;
-      params.range_above_semitones = 12;
+      params.range_down = 12;
+      params.range_up = 12;
       out.push_back(make_note_drill("NOTE_2OCT", 11, 2, std::move(params)));
     }
 

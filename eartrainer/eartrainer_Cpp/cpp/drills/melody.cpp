@@ -112,18 +112,18 @@ int choose_step(std::uint64_t& rng_state, const std::vector<double>& probs) {
 }
 
 std::vector<int> generate_degrees(const MelodyParams& params, std::uint64_t& rng_state) {
-  int idx = rand_int(rng_state, 0, params.melody_lengths.size()-1);
-  int length = params.melody_lengths[static_cast<std::size_t>(idx)];
+  int idx = rand_int(rng_state, 0, params.length.size()-1);
+  int length = params.length[static_cast<std::size_t>(idx)];
 
-  int max_step = params.melody_max_step;
+  int max_step = params.max_step;
   max_step = std::clamp(max_step, 0, 7);
   
 
-  std::vector<int> all_degrees = base_degrees();
-  int start_index = rand_int(rng_state, 0, static_cast<int>(all_degrees.size()) - 1);
+  std::vector<int> start_degrees =  params.start;//base_degrees();
+  int start_index = rand_int(rng_state, 0, static_cast<int>(start_degrees.size()) - 1);
   std::vector<int> sequence;
   sequence.reserve(static_cast<std::size_t>(length));
-  sequence.push_back(all_degrees[static_cast<std::size_t>(start_index)]);
+  sequence.push_back(start_degrees[static_cast<std::size_t>(start_index)]);
 
   MelodyState state;
 
@@ -239,8 +239,8 @@ void MelodyDrill::configure(const DrillSpec& spec) {
   params = std::get<MelodyParams>(spec_.params);
   tonic_midi = drills::central_tonic_midi(spec_.key);
   midi_range = {
-    tonic_midi - params.range_below_semitones, 
-    tonic_midi + params.range_above_semitones
+    tonic_midi - params.range_down, 
+    tonic_midi + params.range_up
   };
 
   recent_sequences_.clear();
@@ -252,24 +252,45 @@ void MelodyDrill::configure(const DrillSpec& spec) {
 QuestionBundle MelodyDrill::next_question(std::uint64_t& rng_state) {
   std::vector<int> degrees;
   std::vector<int> midis;
-
-  for (int attempt = 0; attempt < kMaxTries; ++attempt) {
-    degrees = generate_degrees(params, rng_state);
-    if (kRecentCapacity == 0) {
-      break;
+  
+  if (params.length.size() == 1 && params.length[0] == 2 && params.interval != 0) {
+    //-----------------------------------------------------
+    // N=2 AND INTERVALLIC (-> MELODIC INTERVAL DRILLS)
+    //-----------------------------------------------------
+    int interval = params.max_step;
+    std::vector<int> allowed_start = params.start;
+    if (allowed_start.size() == 0) {
+      allowed_start = base_degrees();
     }
-    if (std::find(recent_sequences_.begin(), recent_sequences_.end(), degrees) == recent_sequences_.end()) {
-      break;
+    int idx = rand_int(rng_state, 0, static_cast<int>(allowed_start.size()) - 1);
+    int first_degree = allowed_start[static_cast<std::size_t>(idx)];
+    int sign = params.interval;
+    if (sign != 1 && sign != -1) {
+      sign = (advance_rng(rng_state) % 2 == 0) ? 1 : -1;
+    }
+    int second_degree = first_degree + sign * interval;
+    degrees = {first_degree, second_degree};
+  } else {
+    //-----------------------------------------------------
+    // GENERATE MELODY
+    //-----------------------------------------------------
+    for (int attempt = 0; attempt < kMaxTries; ++attempt) {
+      degrees = generate_degrees(params, rng_state);
+      if (kRecentCapacity == 0) {
+        break;
+      }
+      if (std::find(recent_sequences_.begin(), recent_sequences_.end(), degrees) == recent_sequences_.end()) {
+        break;
+      }
+    }
+
+    if (kRecentCapacity > 0) {
+      recent_sequences_.push_back(degrees);
+      if (recent_sequences_.size() > kRecentCapacity) {
+        recent_sequences_.pop_front();
+      }
     }
   }
-
-  if (kRecentCapacity > 0) {
-    recent_sequences_.push_back(degrees);
-    if (recent_sequences_.size() > kRecentCapacity) {
-      recent_sequences_.pop_front();
-    }
-  }
-
   midis = degrees_to_midi(spec_, degrees, midi_range);
 
   //-----------------------------------------------------
@@ -283,7 +304,7 @@ QuestionBundle MelodyDrill::next_question(std::uint64_t& rng_state) {
   //-----------------------------------------------------------------
   // GENERATE MIDI-CLIP
   //-----------------------------------------------------------------
-  MidiClipBuilder b(params.tempo_bpm, 480);
+  MidiClipBuilder b(params.bpm, 480);
   auto melody_track = b.add_track("melody", 0, params.program);
 
   Beats beat = Beats{0}; // CURRENT BEAT

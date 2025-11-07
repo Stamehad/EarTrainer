@@ -29,14 +29,14 @@ struct DrillSpec {
   ear::DrillParams params{};
 
   // Raw authoring data (kept for serialization/backward compatibility).
-  nlohmann::json defaults;        // core defaults (tempo, key, range, assistance...)
+  //nlohmann::json defaults;        // core defaults (tempo, key, range, assistance...)
 
   // Convenience helpers on raw defaults
-  bool has_default(const char* k) const { return defaults.contains(k); }
-  template <class T> T def_as(const char* k, const T& fallback) const {
-    if (!defaults.contains(k)) return fallback;
-    return defaults[k].get<T>();
-  }
+  // bool has_default(const char* k) const { return defaults.contains(k); }
+  // template <class T> T def_as(const char* k, const T& fallback) const {
+  //   if (!defaults.contains(k)) return fallback;
+  //   return defaults[k].get<T>();
+  // }
 
   static DrillSpec from_session(const ear::SessionSpec& spec);
 };

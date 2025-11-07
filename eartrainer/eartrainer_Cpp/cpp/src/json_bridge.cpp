@@ -148,22 +148,22 @@ nlohmann::json ints_to_json_array(const std::vector<int>& values) {
 NoteParams parse_note_params(const nlohmann::json& overrides) {
   NoteParams params;
   assign_if_present(overrides, "allowed_degrees", [&](const nlohmann::json& value) {
-    params.allowed_degrees = json_to_int_vector(value, "allowed_degrees");
+    params.degrees = json_to_int_vector(value, "allowed_degrees");
   });
   assign_if_present(overrides, "avoid_repeat", [&](const nlohmann::json& value) {
     params.avoid_repeat = json_to_bool(value, "avoid_repeat");
   });
   assign_if_present(overrides, "range_below_semitones", [&](const nlohmann::json& value) {
-    params.range_below_semitones = json_to_int(value, "range_below_semitones");
+    params.range_down = json_to_int(value, "range_below_semitones");
   });
   assign_if_present(overrides, "range_above_semitones", [&](const nlohmann::json& value) {
-    params.range_above_semitones = json_to_int(value, "range_above_semitones");
+    params.range_up = json_to_int(value, "range_above_semitones");
   });
   assign_if_present(overrides, "inst", [&](const nlohmann::json& value) {
     params.inst = json_to_instrument(value, "inst");
   });
   assign_if_present(overrides, "tempo_bpm", [&](const nlohmann::json& value) {
-    params.tempo_bpm = json_to_int(value, "tempo_bpm");
+    params.bpm = json_to_int(value, "tempo_bpm");
   });
   assign_if_present(overrides, "note_beats", [&](const nlohmann::json& value) {
     params.note_beats = json_to_double(value, "note_beats");
@@ -175,7 +175,7 @@ NoteParams parse_note_params(const nlohmann::json& overrides) {
     params.velocity = json_to_int(value, "velocity");
   });
   assign_if_present(overrides, "use_pathway", [&](const nlohmann::json& value) {
-    params.use_pathway = json_to_bool(value, "use_pathway");
+    params.pathway = json_to_bool(value, "use_pathway");
   });
   assign_if_present(overrides, "pathway_repeat_lead", [&](const nlohmann::json& value) {
     params.pathway_repeat_lead = json_to_bool(value, "pathway_repeat_lead");
@@ -207,7 +207,7 @@ NoteParams parse_note_params(const nlohmann::json& overrides) {
 IntervalParams parse_interval_params(const nlohmann::json& overrides) {
   IntervalParams params;
   assign_if_present(overrides, "tempo_bpm", [&](const nlohmann::json& value) {
-    params.tempo_bpm = json_to_int(value, "tempo_bpm");
+    params.bpm = json_to_int(value, "tempo_bpm");
   });
   assign_if_present(overrides, "note_beat", [&](const nlohmann::json& value) {
     params.note_beat = json_to_double(value, "note_beat");
@@ -222,7 +222,7 @@ IntervalParams parse_interval_params(const nlohmann::json& overrides) {
     params.allowed_degrees = json_to_int_vector(value, "allowed_degrees");
   });
   assign_if_present(overrides, "allowed_sizes", [&](const nlohmann::json& value) {
-    params.allowed_sizes = json_to_int_vector(value, "allowed_sizes");
+    params.intervals = json_to_int_vector(value, "allowed_sizes");
   });
   assign_if_present(overrides, "avoid_repeat", [&](const nlohmann::json& value) {
     params.avoid_repeat = json_to_bool(value, "avoid_repeat");
@@ -240,7 +240,7 @@ IntervalParams parse_interval_params(const nlohmann::json& overrides) {
     params.cluster_ids = json_to_int_vector(value, "cluster_ids");
   });
   assign_if_present(overrides, "add_helper", [&](const nlohmann::json& value) {
-    params.add_helper = json_to_bool(value, "add_helper");
+    params.helper = json_to_bool(value, "add_helper");
   });
   return params;
 }
@@ -248,25 +248,25 @@ IntervalParams parse_interval_params(const nlohmann::json& overrides) {
 MelodyParams parse_melody_params(const nlohmann::json& overrides) {
   MelodyParams params;
   assign_if_present(overrides, "tempo_bpm", [&](const nlohmann::json& value) {
-    params.tempo_bpm = json_to_int(value, "tempo_bpm");
+    params.bpm = json_to_int(value, "tempo_bpm");
   });
   assign_if_present(overrides, "program", [&](const nlohmann::json& value) {
     params.program = json_to_int(value, "program");
   });
   assign_if_present(overrides, "melody_lengths", [&](const nlohmann::json& value) {
-    params.melody_lengths = json_to_int_vector(value, "melody_lengths");
+    params.length = json_to_int_vector(value, "melody_lengths");
   });
   assign_if_present(overrides, "melody_max_step", [&](const nlohmann::json& value) {
-    params.melody_max_step = json_to_int(value, "melody_max_step");
+    params.max_step = json_to_int(value, "melody_max_step");
   });
   assign_if_present(overrides, "avoid_repeat", [&](const nlohmann::json& value) {
     params.avoid_repeat = json_to_bool(value, "avoid_repeat");
   });
   assign_if_present(overrides, "range_below_semitones", [&](const nlohmann::json& value) {
-    params.range_below_semitones = json_to_int(value, "range_below_semitones");
+    params.range_down = json_to_int(value, "range_below_semitones");
   });
   assign_if_present(overrides, "range_above_semitones", [&](const nlohmann::json& value) {
-    params.range_above_semitones = json_to_int(value, "range_above_semitones");
+    params.range_up = json_to_int(value, "range_above_semitones");
   });
   assign_if_present(overrides, "note_beat", [&](const nlohmann::json& value) {
     params.note_beat = json_to_double(value, "note_beat");
@@ -450,16 +450,16 @@ int optional_bool_to_int(const std::optional<bool>& value) {
 
 nlohmann::json note_params_to_json(const NoteParams& params) {
   nlohmann::json json = nlohmann::json::object();
-  json["allowed_degrees"] = ints_to_json_array(params.allowed_degrees);
+  json["allowed_degrees"] = ints_to_json_array(params.degrees);
   json["avoid_repeat"] = params.avoid_repeat;
-  json["range_below_semitones"] = params.range_below_semitones;
-  json["range_above_semitones"] = params.range_above_semitones;
+  json["range_below_semitones"] = params.range_down;
+  json["range_above_semitones"] = params.range_up;
   json["inst"] = instrument_to_int(params.inst);
-  json["tempo_bpm"] = params.tempo_bpm;
+  json["tempo_bpm"] = params.bpm;
   json["note_beats"] = params.note_beats;
   json["program"] = params.program;
   json["velocity"] = params.velocity;
-  json["use_pathway"] = params.use_pathway;
+  json["use_pathway"] = params.pathway;
   json["pathway_repeat_lead"] = params.pathway_repeat_lead;
   json["pathway_beats"] = params.pathway_beats;
   json["pathway_rest"] = params.pathway_rest;
@@ -473,30 +473,30 @@ nlohmann::json note_params_to_json(const NoteParams& params) {
 
 nlohmann::json interval_params_to_json(const IntervalParams& params) {
   nlohmann::json json = nlohmann::json::object();
-  json["tempo_bpm"] = params.tempo_bpm;
+  json["tempo_bpm"] = params.bpm;
   json["note_beat"] = params.note_beat;
   json["program"] = params.program;
   json["allowed_bottom_degrees"] = ints_to_json_array(params.allowed_bottom_degrees);
   json["allowed_degrees"] = ints_to_json_array(params.allowed_degrees);
-  json["allowed_sizes"] = ints_to_json_array(params.allowed_sizes);
+  json["allowed_sizes"] = ints_to_json_array(params.intervals);
   json["avoid_repeat"] = params.avoid_repeat;
   json["range_semitones"] = params.range_semitones;
   json["velocity"] = params.velocity;
   json["inst"] = instrument_to_int(params.inst);
   json["cluster_ids"] = ints_to_json_array(params.cluster_ids);
-  json["add_helper"] = params.add_helper;
+  json["add_helper"] = params.helper;
   return json;
 }
 
 nlohmann::json melody_params_to_json(const MelodyParams& params) {
   nlohmann::json json = nlohmann::json::object();
-  json["tempo_bpm"] = params.tempo_bpm;
+  json["tempo_bpm"] = params.bpm;
   json["program"] = params.program;
-  json["melody_lengths"] = ints_to_json_array(params.melody_lengths);
-  json["melody_max_step"] = params.melody_max_step;
+  json["melody_lengths"] = ints_to_json_array(params.length);
+  json["melody_max_step"] = params.max_step;
   json["avoid_repeat"] = params.avoid_repeat;
-  json["range_below_semitones"] = params.range_below_semitones;
-  json["range_above_semitones"] = params.range_above_semitones;
+  json["range_below_semitones"] = params.range_down;
+  json["range_above_semitones"] = params.range_up;
   json["note_beat"] = params.note_beat;
   json["velocity"] = params.velocity;
   json["inst"] = instrument_to_int(params.inst);

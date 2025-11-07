@@ -19,21 +19,22 @@ enum class DrillInstrument {Piano, Strings /*, Guitar*/};
 enum class ChordDelivery {Together, Arpeggio};
 
 struct NoteParams {
-  std::vector<int> allowed_degrees = {0,1,2,3,4,5,6};
+  std::vector<int> degrees = {0,1,2,3,4,5,6};
   bool avoid_repeat = true;
-  int range_below_semitones = 12;
-  int range_above_semitones = 12;
+  int range_down = 12; // semitones below tonic
+  int range_up = 12; // semitones above tonic
   DrillInstrument inst = DrillInstrument::Piano;
-  int tempo_bpm = 120;
+  int bpm = 120;
   double note_beats = 1;
   int program = 0;
   int velocity = 96;
   
   // PATHWAY:
-  bool use_pathway = false; 
+  bool pathway = false; 
   bool pathway_repeat_lead = false;
   double pathway_beats = 1.0;
   double pathway_rest = 1.0;
+  bool incomplete = false;
   
   // ANCHOR TONIC:
   enum class TonicAnchor {Before, After};
@@ -44,27 +45,29 @@ struct NoteParams {
   bool tonic_anchor_include_octave = false;
 };
 struct IntervalParams {
-  int tempo_bpm = 60;
+  int bpm = 60;
   double note_beat = 2.0;
   int program = 48;  // 0: PIANO, 48: STRINGS
   std::vector<int> allowed_bottom_degrees{};
   std::vector<int> allowed_degrees = {0,1,2,3,4,5,6};
-  std::vector<int> allowed_sizes{};
+  std::vector<int> intervals{};
   bool avoid_repeat = true;
   int range_semitones = 12;
   int velocity = 96; 
   DrillInstrument inst = DrillInstrument::Piano;
   std::vector<int> cluster_ids = {1,2,3,4,5,6};
-  bool add_helper = false;
+  int helper = 0; // 0: no helper, 1: play ascending, -1: play descending, 2: play both
 };
 struct MelodyParams {
-  int tempo_bpm = 80;
+  int bpm = 80;
   int program = 0 ;
-  std::vector<int> melody_lengths = {3};
-  int melody_max_step = 7;
+  std::vector<int> length = {3};
+  std::vector<int> start = {0,1,2,3,4,5,6};
+  int interval = 2; // 0: not intervallic, 1: up, -1: down, 2: both
+  int max_step = 7;
   bool avoid_repeat = true;
-  int range_below_semitones = 12;
-  int range_above_semitones = 12;
+  int range_down = 12;
+  int range_up = 12;
   double note_beat = 1.0;
   int velocity = 96;
   DrillInstrument inst = DrillInstrument::Piano;

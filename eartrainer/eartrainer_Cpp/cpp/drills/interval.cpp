@@ -35,7 +35,7 @@ int pick_bottom_degree(const IntervalParams& params, std::uint64_t& rng_state,
 }
 
 int pick_interval_size(const IntervalParams& params, std::uint64_t& rng_state) {
-  std::vector<int> allowed = {1, 2, 3, 4, 5, 6, 7};;
+  std::vector<int> allowed = params.intervals;//{1, 2, 3, 4, 5, 6, 7};
   int idx = rand_int(rng_state, 0, static_cast<int>(allowed.size()) - 1);
   return allowed[static_cast<std::size_t>(idx)];
 }
@@ -87,9 +87,6 @@ QuestionBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
   int semitone_diff = drills::degree_to_offset(top_degree) - drills::degree_to_offset(bottom_degree);
   int top_midi = bottom_midi + semitone_diff;
 
-  bool ascending = rand_int(rng_state, 0, 1) == 1;
-  std::string orientation = ascending ? "ascending" : "descending";
-
   last_bottom_degree_ = bottom_degree;
   last_bottom_midi_ = bottom_midi;
 
@@ -108,7 +105,7 @@ QuestionBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
   //-----------------------------------------------------------------
   // GENERATE MIDI-CLIP
   //-----------------------------------------------------------------
-  MidiClipBuilder b(params.tempo_bpm, 480);
+  MidiClipBuilder b(params.bpm, 480);
   auto melody_track = b.add_track("melody", 0, params.program);
 
   Beats beat = Beats{0}; // CURRENT BEAT
@@ -117,8 +114,21 @@ QuestionBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
     b.add_note(melody_track, beat, Beats{params.note_beat}, midi, params.velocity);
   }
 
-  if (params.add_helper) {
-    // ADD HELPER MELODY (BOTTOM NOTE)
+  if (params.helper != 0) {
+    // ADD HELPER MELODY
+    if (params.helper == 1) {
+      // ASCENDING
+      std::sort(midis.begin(), midis.end());
+    } else if (params.helper == -1) {
+      // DESCENDING
+      std::sort(midis.begin(), midis.end(), std::greater<int>());
+    } else {
+      // CHOOSE RANDOMLY
+      if (rand_int(rng_state, 0, 1) == 0) {
+        std::sort(midis.begin(), midis.end());
+      } else {
+        std::sort(midis.begin(), midis.end(), std::greater<int>());
+    }
     auto helper_track = b.add_track("helper", 1, 0); // PIANO
     Beats helper_beat = Beats{1.0};
     for (int midi : midis) {

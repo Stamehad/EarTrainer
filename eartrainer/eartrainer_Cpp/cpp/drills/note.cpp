@@ -52,7 +52,7 @@ std::vector<int> base_degrees() {
 
 int pick_degree(const NoteParams& params, std::uint64_t& rng_state,
                 const std::optional<int>& previous) {
-  auto allowed = params.allowed_degrees; 
+  auto allowed = params.degrees; 
 
   if (params.avoid_repeat && previous.has_value() && allowed.size() > 1) {
     allowed.erase(std::remove(allowed.begin(), allowed.end(), previous.value()), allowed.end());
@@ -65,20 +65,20 @@ int pick_degree(const NoteParams& params, std::uint64_t& rng_state,
   return allowed[static_cast<std::size_t>(idx)];
 }
 
-std::vector<int> get_pathway(int d) {
-  if (d == 0) {return {0}; } 
+std::vector<int> get_pathway(int d, bool incomplete = false){ 
+  if (d == 0) {return {0}; }
   if (d == 1) {return {1, 0}; } 
-  if (d == 2) {return {2, 1, 0}; } 
-  if (d == 3) {return {3, 2, 1, 0}; } 
-  if (d == 4) {return {4, 5, 6, 7}; } 
-  if (d == 5) {return {5, 6, 7}; } 
+  if (d == 2) {if (!incomplete) {return {2, 1, 0}; } else {return {2,0};} }
+  if (d == 3) {if (!incomplete) {return {3, 2, 1, 0};} else {return {3,0};} }
+  if (d == 4) {if (!incomplete) {return {4, 5, 6, 7}; } else {return {4,7};} }
+  if (d == 5) {if (!incomplete) {return {5, 6, 7}; } else {return {5,7};} }
   if (d == 6) {return {6, 7}; } 
   return {7}; 
 }
 
-std::vector<int> get_pathway_midi (int degree, int midi, int tonic_midi){
+std::vector<int> get_pathway_midi (int degree, int midi, int tonic_midi, bool incomplete = false){
   int tonic_below_midi = midi - (midi - tonic_midi) % 12; 
-  std::vector<int> pw = get_pathway(degree);
+  std::vector<int> pw = get_pathway(degree, incomplete);
   for (int& p : pw) {
     p = drills::degree_to_offset(p);
     p+= tonic_below_midi; 
@@ -98,8 +98,8 @@ void NoteDrill::configure(const DrillSpec& spec) {
   last_midi_.reset();
   tonic_midi = drills::central_tonic_midi(spec_.key);
   midi_range = {
-    tonic_midi - params.range_below_semitones, 
-    tonic_midi + params.range_above_semitones
+    tonic_midi - params.range_down, 
+    tonic_midi + params.range_up
   };
 
 }
@@ -138,7 +138,7 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
   //-----------------------------------------------------------------
   // GENERATE MIDI-CLIP
   //-----------------------------------------------------------------
-  MidiClipBuilder b(params.tempo_bpm, 480);
+  MidiClipBuilder b(params.bpm, 480);
   auto melody_track = b.add_track("melody", 0, params.program);
 
   Beats beat = Beats{0}; // CURRENT BEAT
@@ -149,8 +149,8 @@ QuestionBundle NoteDrill::next_question(std::uint64_t& rng_state) {
   //-------------------------------------------------------------------
   // USE PATHWAYS: PLAYS NOTE WITH RESOLUTION TO TONIC
   //-------------------------------------------------------------------
-  if (params.use_pathway && !params.tonic_anchor){
-    std::vector<int> pathway = get_pathway_midi(degree, midi, tonic_midi);
+  if (params.pathway && !params.tonic_anchor){
+    std::vector<int> pathway = get_pathway_midi(degree, midi, tonic_midi, params.incomplete);
     // REMOVE ROOT: E.G. 2 -> 1,0 INSTEAD OF 2 -> 2,1,0
     if (!params.pathway_repeat_lead){ pathway.erase(pathway.begin()); }
 

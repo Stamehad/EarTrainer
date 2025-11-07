@@ -37,30 +37,30 @@ inline const std::vector<DrillSpec>& level_111() {
 
     {
       ear::MelodyParams params;
-      params.melody_lengths = {2};
-      params.melody_max_step = 1;
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 12;
-      params.tempo_bpm = 60;
+      params.length = {2};
+      params.max_step = 1;
+      params.range_down = 0;
+      params.range_up = 12;
+      params.bpm = 60;
       out.push_back(make_melody_drill("MELODY60_STEP1", 111, 0, std::move(params)));
     }
 
     {
       ear::MelodyParams params;
-      params.melody_lengths = {2};
-      params.melody_max_step = 2;
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 12;
-      params.tempo_bpm = 60;
+      params.length = {2};
+      params.max_step = 2;
+      params.range_down = 0;
+      params.range_up = 12;
+      params.bpm = 60;
       out.push_back(make_melody_drill("MELODY60_STEP2", 111, 1, std::move(params)));
     }
 
     {
       ear::MelodyParams params;
-      params.melody_lengths = {2};
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 12;
-      params.tempo_bpm = 60;
+      params.length = {2};
+      params.range_down = 0;
+      params.range_up = 12;
+      params.bpm = 60;
       out.push_back(make_melody_drill("MELODY60", 111, 2, std::move(params)));
     }
 
@@ -75,30 +75,30 @@ inline const std::vector<DrillSpec>& level_112() {
 
     {
       ear::MelodyParams params;
-      params.melody_lengths = {2, 3};
-      params.melody_max_step = 1;
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 12;
-      params.tempo_bpm = 90;
+      params.length = {2, 3};
+      params.max_step = 1;
+      params.range_down = 0;
+      params.range_up = 12;
+      params.bpm = 90;
       out.push_back(make_melody_drill("MELODY90_STEP1", 112, 0, std::move(params)));
     }
 
     {
       ear::MelodyParams params;
-      params.melody_lengths = {2, 3};
-      params.melody_max_step = 2;
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 12;
-      params.tempo_bpm = 60;
+      params.length = {2, 3};
+      params.max_step = 2;
+      params.range_down = 0;
+      params.range_up = 12;
+      params.bpm = 60;
       out.push_back(make_melody_drill("MELODY90_STEP2", 112, 1, std::move(params)));
     }
 
     {
       ear::MelodyParams params;
-      params.melody_lengths = {2, 3};
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 12;
-      params.tempo_bpm = 60;
+      params.length = {2, 3};
+      params.range_down = 0;
+      params.range_up = 12;
+      params.bpm = 60;
       out.push_back(make_melody_drill("MELODY90", 112, 2, std::move(params)));
     }
 
@@ -113,30 +113,30 @@ inline const std::vector<DrillSpec>& level_113() {
 
     {
       ear::MelodyParams params;
-      params.melody_lengths = {2, 3, 4};
-      params.melody_max_step = 1;
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 12;
-      params.tempo_bpm = 90;
+      params.length = {2, 3, 4};
+      params.max_step = 1;
+      params.range_down = 0;
+      params.range_up = 12;
+      params.bpm = 90;
       out.push_back(make_melody_drill("MELODY120_STEP1", 113, 0, std::move(params)));
     }
 
     {
       ear::MelodyParams params;
-      params.melody_lengths = {2, 3, 4};
-      params.melody_max_step = 2;
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 12;
-      params.tempo_bpm = 60;
+      params.length = {2, 3, 4};
+      params.max_step = 2;
+      params.range_down = 0;
+      params.range_up = 12;
+      params.bpm = 60;
       out.push_back(make_melody_drill("MELODY120_STEP2", 113, 1, std::move(params)));
     }
 
     {
       ear::MelodyParams params;
-      params.melody_lengths = {2, 3, 4};
-      params.range_below_semitones = 0;
-      params.range_above_semitones = 12;
-      params.tempo_bpm = 60;
+      params.length = {2, 3, 4};
+      params.range_down = 0;
+      params.range_up = 12;
+      params.bpm = 60;
       out.push_back(make_melody_drill("MELODY120", 113, 2, std::move(params)));
     }
 

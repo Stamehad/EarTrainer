@@ -9,7 +9,7 @@ inline const Schema<IntervalParams>& schema_for_interval() {
     .id = "interval_params",
     .version = 1,
     .fields = {
-      make_int<IntervalParams>("tempo_bpm","Tempo (BPM)", &IntervalParams::tempo_bpm, 30,240,1),
+      make_int<IntervalParams>("tempo_bpm","Tempo (BPM)", &IntervalParams::bpm, 30,240,1),
       make_double<IntervalParams>("note_beat","Note length (beats)", &IntervalParams::note_beat, 0.25,8.0,0.25),
       make_enum<IntervalParams, int>("program","MIDI Program", &IntervalParams::program,
                                      {{"Piano",0},{"Strings",48}}),
@@ -18,7 +18,7 @@ inline const Schema<IntervalParams>& schema_for_interval() {
       make_vec_int<IntervalParams>("allowed_degrees","Allowed upper degrees",
                                    &IntervalParams::allowed_degrees),
       make_vec_int<IntervalParams>("allowed_sizes","Allowed interval sizes (semitones)",
-                                   &IntervalParams::allowed_sizes),
+                                   &IntervalParams::intervals),
       make_bool<IntervalParams>("avoid_repeat","Avoid immediate repeats",
                                 &IntervalParams::avoid_repeat),
       make_int<IntervalParams>("range_semitones","Pitch range (± semitones)",
@@ -29,8 +29,8 @@ inline const Schema<IntervalParams>& schema_for_interval() {
                 {{"Piano",(int)DrillInstrument::Piano},{"Strings",(int)DrillInstrument::Strings}}),
       make_vec_int<IntervalParams>("cluster_ids","Difficulty clusters",
                                    &IntervalParams::cluster_ids),
-      make_bool<IntervalParams>("add_helper","Play helper tone",
-                                &IntervalParams::add_helper),
+      make_int<IntervalParams>("add_helper","Play helper tone",
+                                &IntervalParams::helper, -1,2,1),
     }
   };
   return S;

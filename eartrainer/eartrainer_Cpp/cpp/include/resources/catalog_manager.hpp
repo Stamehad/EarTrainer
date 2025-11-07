@@ -102,4 +102,6 @@ private:
 
 CatalogIndex build_builtin_catalog_index();
 
+
+
 } // namespace ear::resources
