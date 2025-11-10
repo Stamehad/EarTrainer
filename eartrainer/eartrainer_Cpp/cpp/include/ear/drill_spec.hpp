@@ -29,7 +29,7 @@ struct DrillSpec {
   ear::DrillParams params{};
 
   // Raw authoring data (kept for serialization/backward compatibility).
-  //nlohmann::json defaults;        // core defaults (tempo, key, range, assistance...)
+  nlohmann::json defaults;        // core defaults (tempo, key, range, assistance...)
 
   // Convenience helpers on raw defaults
   // bool has_default(const char* k) const { return defaults.contains(k); }

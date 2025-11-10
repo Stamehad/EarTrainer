@@ -275,14 +275,57 @@ public struct MidiClip: Codable, Equatable {
 }
 
 public struct ChordAnswer: Equatable {
-    public var rootDegree: Int
-    public var bassDeg: Int?
-    public var topDeg: Int?
+    public var rootDegrees: [Int]
+    public var bassDegrees: [Int?]
+    public var topDegrees: [Int?]
+    public var expectRoot: [Bool]
+    public var expectBass: [Bool]
+    public var expectTop: [Bool]
+
+    public var rootDegree: Int { rootDegrees.first ?? 0 }
+    public var bassDeg: Int? { bassDegrees.first ?? nil }
+    public var topDeg: Int? { topDegrees.first ?? nil }
+
+    public init(
+        rootDegrees: [Int],
+        bassDegrees: [Int?] = [],
+        topDegrees: [Int?] = [],
+        expectRoot: [Bool]? = nil,
+        expectBass: [Bool]? = nil,
+        expectTop: [Bool]? = nil
+    ) {
+        let sanitizedRoots = rootDegrees.isEmpty ? [0] : rootDegrees
+        self.rootDegrees = sanitizedRoots
+        let count = sanitizedRoots.count
+        self.bassDegrees = ChordAnswer.padOptionalArray(bassDegrees, count: count)
+        self.topDegrees = ChordAnswer.padOptionalArray(topDegrees, count: count)
+        self.expectRoot = expectRoot.map { ChordAnswer.padBoolArray($0, count: count, defaultValue: true) }
+            ?? Array(repeating: true, count: count)
+        self.expectBass = expectBass.map { ChordAnswer.padBoolArray($0, count: count, defaultValue: false) }
+            ?? Array(repeating: false, count: count)
+        self.expectTop = expectTop.map { ChordAnswer.padBoolArray($0, count: count, defaultValue: true) }
+            ?? Array(repeating: true, count: count)
+    }
 
     public init(rootDegree: Int, bassDeg: Int? = nil, topDeg: Int? = nil) {
-        self.rootDegree = rootDegree
-        self.bassDeg = bassDeg
-        self.topDeg = topDeg
+        self.init(
+            rootDegrees: [rootDegree],
+            bassDegrees: [bassDeg],
+            topDegrees: [topDeg],
+            expectRoot: [true],
+            expectBass: [bassDeg != nil],
+            expectTop: [topDeg != nil]
+        )
+    }
+
+    private static func padOptionalArray<T>(_ array: [T?], count: Int) -> [T?] {
+        if array.count >= count { return array }
+        return array + Array(repeating: nil, count: count - array.count)
+    }
+
+    private static func padBoolArray(_ array: [Bool], count: Int, defaultValue: Bool) -> [Bool] {
+        if array.count >= count { return array }
+        return array + Array(repeating: defaultValue, count: count - array.count)
     }
 }
 
@@ -311,11 +354,28 @@ public enum AnswerPayload: Equatable {
 extension AnswerPayload: Codable {
     private enum CodingKeys: String, CodingKey {
         case type
+        case rootDegrees = "root_degrees"
         case rootDegree = "root_degree"
-        case bassDeg = "bass_deg"
-        case topDeg = "top_deg"
+        case bassDegrees = "bass_deg"
+        case topDegrees = "top_deg"
+        case expectRoot = "expect_root"
+        case expectBass = "expect_bass"
+        case expectTop = "expect_top"
         case melody
         case notes
+    }
+
+    private static func decodeOptionalIntArray(from container: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) throws -> [Int?] {
+        if let array = try? container.decode([Int?].self, forKey: key) {
+            return array
+        }
+        if let value = try container.decodeIfPresent(Int.self, forKey: key) {
+            return [value]
+        }
+        if (try? container.decodeNil(forKey: key)) == true {
+            return [nil]
+        }
+        return []
     }
 
     public init(from decoder: Decoder) throws {
@@ -323,10 +383,23 @@ extension AnswerPayload: Codable {
         let type = try container.decode(String.self, forKey: .type)
         switch type {
         case "chord":
+            let roots = (try? container.decode([Int].self, forKey: .rootDegrees))
+                ?? [try container.decode(Int.self, forKey: .rootDegree)]
+            let bass = try AnswerPayload.decodeOptionalIntArray(from: container, key: .bassDegrees)
+            let top = try AnswerPayload.decodeOptionalIntArray(from: container, key: .topDegrees)
+            let expectRoot = (try? container.decode([Bool].self, forKey: .expectRoot))
+                ?? Array(repeating: true, count: roots.count)
+            let expectBass = (try? container.decode([Bool].self, forKey: .expectBass))
+                ?? Array(repeating: false, count: roots.count)
+            let expectTop = (try? container.decode([Bool].self, forKey: .expectTop))
+                ?? Array(repeating: true, count: roots.count)
             let answer = ChordAnswer(
-                rootDegree: try container.decode(Int.self, forKey: .rootDegree),
-                bassDeg: try container.decodeIfPresent(Int.self, forKey: .bassDeg),
-                topDeg: try container.decodeIfPresent(Int.self, forKey: .topDeg)
+                rootDegrees: roots,
+                bassDegrees: bass,
+                topDegrees: top,
+                expectRoot: expectRoot,
+                expectBass: expectBass,
+                expectTop: expectTop
             )
             self = .chord(answer)
         case "melody":
@@ -345,9 +418,15 @@ extension AnswerPayload: Codable {
         switch self {
         case let .chord(answer):
             try container.encode("chord", forKey: .type)
-            try container.encode(answer.rootDegree, forKey: .rootDegree)
-            try container.encodeIfPresent(answer.bassDeg, forKey: .bassDeg)
-            try container.encodeIfPresent(answer.topDeg, forKey: .topDeg)
+            try container.encode(answer.rootDegrees, forKey: .rootDegrees)
+            if let first = answer.rootDegrees.first {
+                try container.encode(first, forKey: .rootDegree)
+            }
+            try container.encode(answer.bassDegrees, forKey: .bassDegrees)
+            try container.encode(answer.topDegrees, forKey: .topDegrees)
+            try container.encode(answer.expectRoot, forKey: .expectRoot)
+            try container.encode(answer.expectBass, forKey: .expectBass)
+            try container.encode(answer.expectTop, forKey: .expectTop)
         case let .melody(answer):
             try container.encode("melody", forKey: .type)
             try container.encode(answer.melody, forKey: .melody)
@@ -375,10 +454,14 @@ public extension AnswerPayload {
         case let .chord(answer):
             var object: [String: JSONValue] = [
                 "type": .string("chord"),
-                "root_degree": .int(answer.rootDegree)
+                "root_degrees": .array(answer.rootDegrees.map(JSONValue.int)),
+                "bass_deg": .array(answer.bassDegrees.map { $0.map(JSONValue.int) ?? .null }),
+                "top_deg": .array(answer.topDegrees.map { $0.map(JSONValue.int) ?? .null }),
+                "expect_root": .array(answer.expectRoot.map(JSONValue.bool)),
+                "expect_bass": .array(answer.expectBass.map(JSONValue.bool)),
+                "expect_top": .array(answer.expectTop.map(JSONValue.bool))
             ]
-            object["bass_deg"] = answer.bassDeg.map(JSONValue.int) ?? .null
-            object["top_deg"] = answer.topDeg.map(JSONValue.int) ?? .null
+            object["root_degree"] = .int(answer.rootDegree)
             return .object(object)
         case let .melody(answer):
             return .object([

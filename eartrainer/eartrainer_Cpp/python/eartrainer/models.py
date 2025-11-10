@@ -177,24 +177,90 @@ class MidiClip:
 
 @dataclass
 class ChordAnswer:
-    root_degree: int
-    bass_deg: Optional[int] = None
-    top_deg: Optional[int] = None
+    root_degrees: List[int]
+    bass_deg: List[Optional[int]]
+    top_deg: List[Optional[int]]
+    expect_root: List[bool]
+    expect_bass: List[bool]
+    expect_top: List[bool]
+
+    @property
+    def root_degree(self) -> int:
+        return self.root_degrees[0] if self.root_degrees else 0
 
     def to_json(self) -> Dict[str, Any]:
+        def opt_array(values: List[Optional[int]]) -> List[Optional[int]]:
+            return [v if v is not None else None for v in values]
+
         return {
             "type": "chord",
+            "root_degrees": list(self.root_degrees),
+            "bass_deg": opt_array(self.bass_deg),
+            "top_deg": opt_array(self.top_deg),
+            "expect_root": list(self.expect_root),
+            "expect_bass": list(self.expect_bass),
+            "expect_top": list(self.expect_top),
             "root_degree": self.root_degree,
-            "bass_deg": self.bass_deg,
-            "top_deg": self.top_deg,
         }
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> "ChordAnswer":
+    def single(cls, root_degree: int, bass_deg: Optional[int] = None, top_deg: Optional[int] = None) -> "ChordAnswer":
         return cls(
-            root_degree=int(data.get("root_degree", 0)),
-            bass_deg=data.get("bass_deg"),
-            top_deg=data.get("top_deg"),
+            root_degrees=[root_degree],
+            bass_deg=[bass_deg],
+            top_deg=[top_deg],
+            expect_root=[True],
+            expect_bass=[bass_deg is not None],
+            expect_top=[top_deg is not None],
+        )
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "ChordAnswer":
+        def parse_int_list(key: str) -> List[int]:
+            values = data.get(key)
+            if isinstance(values, list):
+                return [int(v) for v in values]
+            if key == "root_degrees" and "root_degree" in data:
+                return [int(data.get("root_degree", 0))]
+            return []
+
+        def parse_optional_list(key: str) -> List[Optional[int]]:
+            values = data.get(key)
+            if isinstance(values, list):
+                return [int(v) if v is not None else None for v in values]
+            if key in {"bass_deg", "top_deg"} and key in data:
+                return [data.get(key)]
+            return []
+
+        def parse_bool_list(key: str, default: bool) -> List[bool]:
+            values = data.get(key)
+            if isinstance(values, list):
+                return [bool(v) for v in values]
+            return []
+
+        root_degrees = parse_int_list("root_degrees")
+        if not root_degrees:
+            root_degrees = [int(data.get("root_degree", 0))]
+        count = len(root_degrees)
+
+        def pad_list(values: List[Any], pad_value: Any) -> List[Any]:
+            if len(values) < count:
+                values = list(values) + [pad_value] * (count - len(values))
+            return values
+
+        bass = pad_list(parse_optional_list("bass_deg"), None)
+        top = pad_list(parse_optional_list("top_deg"), None)
+        expect_root = pad_list(parse_bool_list("expect_root", True) or [True], True)
+        expect_bass = pad_list(parse_bool_list("expect_bass", False) or [False], False)
+        expect_top = pad_list(parse_bool_list("expect_top", True) or [True], True)
+
+        return cls(
+            root_degrees=root_degrees,
+            bass_deg=bass,
+            top_deg=top,
+            expect_root=expect_root,
+            expect_bass=expect_bass,
+            expect_top=expect_top,
         )
 
 

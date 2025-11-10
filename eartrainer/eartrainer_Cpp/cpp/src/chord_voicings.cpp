@@ -72,24 +72,28 @@ std::vector<RHChord> make_simple_triad_right_patterns() {
   };
 }
 
-RHChords get_rh_chords(const DrillInstrument& inst){
+RHChords get_rh_chords(const VoicingsStyle& inst){
   switch (inst){
-    case DrillInstrument::Piano:
+    case VoicingsStyle::Piano:
       return RHChords{std::move(make_default_triad_right_patterns())};
-    case DrillInstrument::Strings:
+    case VoicingsStyle::Strings:
       return RHChords{std::move(make_strings_triad_right_patterns())};
+    case VoicingsStyle::Triad:
+      return RHChords{std::move(make_simple_triad_right_patterns())};
     default:
       return RHChords{std::move(make_default_triad_right_patterns())};
     //case DrillInstrument::Guitar;
   }
 }
 
-std::vector<BassPattern> get_bass_options(const DrillInstrument& inst){
+std::vector<BassPattern> get_bass_options(const VoicingsStyle& inst){
   switch (inst){
-    case DrillInstrument::Piano:
+    case VoicingsStyle::Piano:
       return make_default_triad_bass_patterns();
-    case DrillInstrument::Strings:
+    case VoicingsStyle::Strings:
       return make_strings_triad_bass_patterns();
+    case VoicingsStyle::Triad:
+      return make_simple_triad_bass_patterns();
     default:
       return make_strings_triad_bass_patterns();
     //case DrillInstrument::Guitar;
@@ -162,18 +166,20 @@ ChordVoicingEngine& ChordVoicingEngine::instance() {
 void ChordVoicingEngine::configure(
   const KeyQuality& quality, 
   const DrillInstrument& inst, 
+  const VoicingsStyle& voicing_style,
   int tonic_midi, 
   bool voice_leading_continuity
 ){
   keytype_ = quality;                           // Major, Minor
   inst_ = inst;                                 // Piano, String
+  voicing_style_ = voicing_style;
   tonic_midi_ = tonic_midi;
   continuity_ = voice_leading_continuity;
 }
 
 RightVoicing ChordVoicingEngine::get_voicing(int deg, std::uint64_t& rng_state){
   // GET VOICINGS -> SHIFT TO CHORD DEGREE -> SHIFT TO MIDIS
-  RHChords rh_chords = get_rh_chords(inst_);
+  RHChords rh_chords = get_rh_chords(voicing_style_);
   RHChords shifted_chords = rh_chords.shift_to(deg);
   if (continuity_ && top_degree_.has_value()){
     RHChords new_chords = shifted_chords.filter_by_top_degree(top_degree_.value());
@@ -200,9 +206,24 @@ RightVoicing ChordVoicingEngine::get_voicing(int deg, std::uint64_t& rng_state){
 }
 
 BassChoice ChordVoicingEngine::get_bass(int deg, std::uint64_t& rng_state){
-  // NOT SUPPORTING INVERSIONS YET!!
-  BassPattern bass = make_default_triad_bass_patterns()[0];
+  return get_bass(deg, /*allow_inversions=*/true, rng_state);
+}
+
+BassChoice ChordVoicingEngine::get_bass(int deg, bool allow_inversions, std::uint64_t& rng_state){
+  auto options = get_bass_options(voicing_style_);
+  // fallback safety
+  if (options.empty()) { options = make_default_triad_bass_patterns(); }
   const int* scale_steps_ptr = get_scale_steps(keytype_);
+
+  std::size_t pick = 0;
+  if (allow_inversions && options.size() > 1) {
+    pick = static_cast<std::size_t>(rand_int(rng_state, 0, static_cast<int>(options.size()) - 1));
+  } else {
+    // Try to pick root option (degree_offset == 0); fallback to first
+    auto it = std::find_if(options.begin(), options.end(), [](const BassPattern& b){ return b.degree_offset == 0; });
+    pick = (it != options.end()) ? static_cast<std::size_t>(std::distance(options.begin(), it)) : 0;
+  }
+  const BassPattern& bass = options[pick];
 
   int bass_deg = bass.degree_offset + deg;
   int idx = bass_deg%7; if (idx < 0) idx+=7;
@@ -218,7 +239,7 @@ BassChoice ChordVoicingEngine::get_bass(int deg, std::uint64_t& rng_state){
 }
 
 RHChords ChordVoicingEngine::get_ps(){
-  return get_rh_chords(inst_);
+  return get_rh_chords(voicing_style_);
 }
 
 std::size_t ChordVoicingEngine::quality_index(TriadQuality quality) {

@@ -83,29 +83,57 @@ nlohmann::json question_payload_json(const ear::QuestionPayloadV2& payload) {
           json["tonic_midi"] = q.tonic_midi;
           json["tonic"] = q.tonic;
           json["key"] = ear::key_quality_to_string(q.key);
-          json["root_degree"] = q.root_degree;
-          json["quality"] = triad_quality_to_string(q.quality);
-          if (q.rh_degrees.has_value()) {
+          auto to_int_array = [](const std::vector<int>& values) {
             nlohmann::json arr = nlohmann::json::array();
-            for (int d : q.rh_degrees.value()) arr.push_back(d);
-            json["rh_degrees"] = std::move(arr);
-          } else {
-            json["rh_degrees"] = nullptr;
+            for (int v : values) arr.push_back(v);
+            return arr;
+          };
+          auto to_quality_array = [](const std::vector<ear::TriadQuality>& values) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (auto v : values) arr.push_back(triad_quality_to_string(v));
+            return arr;
+          };
+          auto to_optional_vec_array = [](const std::vector<std::optional<std::vector<int>>>& values) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (const auto& opt : values) {
+              if (!opt.has_value()) {
+                arr.push_back(nullptr);
+              } else {
+                nlohmann::json inner = nlohmann::json::array();
+                for (int v : opt.value()) inner.push_back(v);
+                arr.push_back(std::move(inner));
+              }
+            }
+            return arr;
+          };
+          auto to_optional_array = [](const auto& values) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (const auto& opt : values) {
+              if (opt.has_value()) {
+                arr.push_back(opt.value());
+              } else {
+                arr.push_back(nullptr);
+              }
+            }
+            return arr;
+          };
+          auto to_bool_array = [](const std::vector<bool>& values) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (bool v : values) arr.push_back(v);
+            return arr;
+          };
+          json["root_degrees"] = to_int_array(q.root_degrees);
+          json["qualities"] = to_quality_array(q.qualities);
+          json["rh_degrees"] = to_optional_vec_array(q.rh_degrees);
+          json["bass_degrees"] = to_optional_array(q.bass_degrees);
+          json["right_voicing_id"] = to_optional_array(q.right_voicing_ids);
+          json["bass_voicing_id"] = to_optional_array(q.bass_voicing_ids);
+          json["is_anchor"] = to_bool_array(q.is_anchor);
+          if (!q.root_degrees.empty()) {
+            json["root_degree"] = q.root_degrees.front();
           }
-          if (q.bass_degrees.has_value()) {
-            json["bass_degrees"] = q.bass_degrees.value();
-          } else {
-            json["bass_degrees"] = nullptr;
-          }
-          if (q.right_voicing_id.has_value()) {
-            json["right_voicing_id"] = q.right_voicing_id.value();
-          } else {
-            json["right_voicing_id"] = nullptr;
-          }
-          if (q.bass_voicing_id.has_value()) {
-            json["bass_voicing_id"] = q.bass_voicing_id.value();
-          } else {
-            json["bass_voicing_id"] = nullptr;
+          if (!q.qualities.empty()) {
+            json["quality"] = triad_quality_to_string(q.qualities.front());
           }
         } else if constexpr (std::is_same_v<T, ear::MelodyQuestionV2>) {
           json["type"] = "melody";
@@ -160,26 +188,82 @@ ear::QuestionPayloadV2 question_payload_from_json(const nlohmann::json& json) {
     q.tonic_midi = json["tonic_midi"].get<int>();
     q.tonic = json["tonic"].get<std::string>();
     q.key = key_quality_from_string(json["key"].get<std::string>());
-    q.root_degree = json["root_degree"].get<int>();
-    q.quality = triad_quality_from_string(json["quality"].get<std::string>());
-    if (!json["rh_degrees"].is_null()) {
-      std::vector<int> vals;
-      if (json["rh_degrees"].is_array()) {
-        for (const auto& el : json["rh_degrees"].get_array()) {
-          vals.push_back(el.get<int>());
+
+    auto parse_int_array = [&](const char* key) {
+      std::vector<int> values;
+      if (json.contains(key) && json[key].is_array()) {
+        for (const auto& el : json[key].get_array()) values.push_back(el.get<int>());
+      }
+      return values;
+    };
+    auto parse_quality_array = [&]() {
+      std::vector<ear::TriadQuality> values;
+      if (json.contains("qualities") && json["qualities"].is_array()) {
+        for (const auto& el : json["qualities"].get_array()) {
+          values.push_back(triad_quality_from_string(el.get<std::string>()));
         }
       }
-      q.rh_degrees = std::move(vals);
+      return values;
+    };
+    auto parse_optional_vec_array = [&](const char* key) {
+      std::vector<std::optional<std::vector<int>>> values;
+      if (json.contains(key) && json[key].is_array()) {
+        for (const auto& el : json[key].get_array()) {
+          if (el.is_null()) {
+            values.push_back(std::nullopt);
+          } else {
+            std::vector<int> inner;
+            for (const auto& inner_el : el.get_array()) inner.push_back(inner_el.get<int>());
+            values.push_back(std::move(inner));
+          }
+        }
+      }
+      return values;
+    };
+    auto parse_optional_array = [&](const char* key) {
+      std::vector<std::optional<int>> values;
+      if (json.contains(key) && json[key].is_array()) {
+        for (const auto& el : json[key].get_array()) {
+          values.push_back(el.is_null() ? std::optional<int>() : std::optional<int>(el.get<int>()));
+        }
+      }
+      return values;
+    };
+    auto parse_optional_string_array = [&](const char* key) {
+      std::vector<std::optional<std::string>> values;
+      if (json.contains(key) && json[key].is_array()) {
+        for (const auto& el : json[key].get_array()) {
+          values.push_back(el.is_null() ? std::optional<std::string>() : std::optional<std::string>(el.get<std::string>()));
+        }
+      }
+      return values;
+    };
+    auto parse_bool_array = [&](const char* key) {
+      std::vector<bool> values;
+      if (json.contains(key) && json[key].is_array()) {
+        for (const auto& el : json[key].get_array()) values.push_back(el.get<bool>());
+      }
+      return values;
+    };
+
+    q.root_degrees = parse_int_array("root_degrees");
+    if (q.root_degrees.empty()) {
+      q.root_degrees.push_back(json["root_degree"].get<int>());
     }
-    if (!json["bass_degrees"].is_null()) {
-      q.bass_degrees = json["bass_degrees"].get<int>();
+    q.qualities = parse_quality_array();
+    if (q.qualities.empty()) {
+      q.qualities.push_back(triad_quality_from_string(json["quality"].get<std::string>()));
     }
-    if (!json["right_voicing_id"].is_null()) {
-      q.right_voicing_id = json["right_voicing_id"].get<std::string>();
-    }
-    if (!json["bass_voicing_id"].is_null()) {
-      q.bass_voicing_id = json["bass_voicing_id"].get<std::string>();
-    }
+    std::size_t len = q.root_degrees.size();
+    auto ensure_size = [&](auto vec, auto default_value) {
+      if (vec.size() < len) vec.resize(len, default_value);
+      return vec;
+    };
+    q.rh_degrees = ensure_size(parse_optional_vec_array("rh_degrees"), std::optional<std::vector<int>>{});
+    q.bass_degrees = ensure_size(parse_optional_array("bass_degrees"), std::optional<int>{});
+    q.right_voicing_ids = ensure_size(parse_optional_string_array("right_voicing_id"), std::optional<std::string>{});
+    q.bass_voicing_ids = ensure_size(parse_optional_string_array("bass_voicing_id"), std::optional<std::string>{});
+    q.is_anchor = ensure_size(parse_bool_array("is_anchor"), false);
     return q;
   }
   if (type == "melody") {
@@ -228,16 +312,31 @@ nlohmann::json answer_payload_json(const ear::AnswerPayloadV2& payload) {
         nlohmann::json json = nlohmann::json::object();
         if constexpr (std::is_same_v<T, ear::ChordAnswerV2>) {
           json["type"] = "chord";
-          json["root_degree"] = a.root_degree;
-          if (a.bass_deg.has_value()) {
-            json["bass_deg"] = a.bass_deg.value();
-          } else {
-            json["bass_deg"] = nullptr;
-          }
-          if (a.top_deg.has_value()) {
-            json["top_deg"] = a.top_deg.value();
-          } else {
-            json["top_deg"] = nullptr;
+          auto to_int_array = [](const std::vector<int>& values) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (int v : values) arr.push_back(v);
+            return arr;
+          };
+          auto to_optional_array = [](const std::vector<std::optional<int>>& values) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (const auto& opt : values) {
+              arr.push_back(opt.has_value() ? nlohmann::json(opt.value()) : nlohmann::json(nullptr));
+            }
+            return arr;
+          };
+          auto to_bool_array = [](const std::vector<bool>& values) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (bool v : values) arr.push_back(v);
+            return arr;
+          };
+          json["root_degrees"] = to_int_array(a.root_degrees);
+          json["bass_deg"] = to_optional_array(a.bass_deg);
+          json["top_deg"] = to_optional_array(a.top_deg);
+          json["expect_root"] = to_bool_array(a.expect_root);
+          json["expect_bass"] = to_bool_array(a.expect_bass);
+          json["expect_top"] = to_bool_array(a.expect_top);
+          if (!a.root_degrees.empty()) {
+            json["root_degree"] = a.root_degrees.front();
           }
         } else if constexpr (std::is_same_v<T, ear::MelodyAnswerV2>) {
           json["type"] = "melody";
@@ -263,13 +362,43 @@ ear::AnswerPayloadV2 answer_payload_from_json(const nlohmann::json& json) {
   const std::string type = json["type"].get<std::string>();
   if (type == "chord") {
     ear::ChordAnswerV2 answer;
-    answer.root_degree = json["root_degree"].get<int>();
-    if (!json["bass_deg"].is_null()) {
-      answer.bass_deg = json["bass_deg"].get<int>();
+    auto parse_int_array = [&](const char* key) {
+      std::vector<int> values;
+      if (json.contains(key) && json[key].is_array()) {
+        for (const auto& el : json[key].get_array()) values.push_back(el.get<int>());
+      }
+      return values;
+    };
+    auto parse_optional_array = [&](const char* key) {
+      std::vector<std::optional<int>> values;
+      if (json.contains(key) && json[key].is_array()) {
+        for (const auto& el : json[key].get_array()) {
+          values.push_back(el.is_null() ? std::optional<int>() : std::optional<int>(el.get<int>()));
+        }
+      }
+      return values;
+    };
+    auto parse_bool_array = [&](const char* key) {
+      std::vector<bool> values;
+      if (json.contains(key) && json[key].is_array()) {
+        for (const auto& el : json[key].get_array()) values.push_back(el.get<bool>());
+      }
+      return values;
+    };
+    answer.root_degrees = parse_int_array("root_degrees");
+    if (answer.root_degrees.empty()) {
+      answer.root_degrees.push_back(json["root_degree"].get<int>());
     }
-    if (!json["top_deg"].is_null()) {
-      answer.top_deg = json["top_deg"].get<int>();
-    }
+    std::size_t len = answer.root_degrees.size();
+    auto ensure_size = [&](auto vec, auto default_value) {
+      if (vec.size() < len) vec.resize(len, default_value);
+      return vec;
+    };
+    answer.bass_deg = ensure_size(parse_optional_array("bass_deg"), std::optional<int>{});
+    answer.top_deg = ensure_size(parse_optional_array("top_deg"), std::optional<int>{});
+    answer.expect_root = ensure_size(parse_bool_array("expect_root"), true);
+    answer.expect_bass = ensure_size(parse_bool_array("expect_bass"), false);
+    answer.expect_top = ensure_size(parse_bool_array("expect_top"), true);
     return answer;
   }
   if (type == "melody") {

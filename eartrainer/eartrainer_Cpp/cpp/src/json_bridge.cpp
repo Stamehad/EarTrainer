@@ -283,7 +283,7 @@ MelodyParams parse_melody_params(const nlohmann::json& overrides) {
 ChordParams parse_chord_params(const nlohmann::json& overrides) {
   ChordParams params;
   assign_if_present(overrides, "allowed_degrees", [&](const nlohmann::json& value) {
-    params.allowed_degrees = json_to_int_vector(value, "allowed_degrees");
+    params.degrees = json_to_int_vector(value, "allowed_degrees");
   });
   assign_if_present(overrides, "inst", [&](const nlohmann::json& value) {
     params.inst = json_to_instrument(value, "inst");
@@ -293,6 +293,9 @@ ChordParams parse_chord_params(const nlohmann::json& overrides) {
   });
   assign_if_present(overrides, "allowed_top_degrees", [&](const nlohmann::json& value) {
     params.allowed_top_degrees = json_to_int_vector(value, "allowed_top_degrees");
+  });
+  assign_if_present(overrides, "sequence_lengths", [&](const nlohmann::json& value) {
+    params.sequence_lengths = json_to_int_vector(value, "sequence_lengths");
   });
   assign_if_present(overrides, "avoid_repeat", [&](const nlohmann::json& value) {
     params.avoid_repeat = json_to_bool(value, "avoid_repeat");
@@ -307,7 +310,7 @@ ChordParams parse_chord_params(const nlohmann::json& overrides) {
     params.add_seventh = json_to_bool(value, "add_seventh");
   });
   assign_if_present(overrides, "tempo_bpm", [&](const nlohmann::json& value) {
-    params.tempo_bpm = json_to_int(value, "tempo_bpm");
+    params.bpm = json_to_int(value, "tempo_bpm");
   });
   assign_if_present(overrides, "right_voicing_id", [&](const nlohmann::json& value) {
     params.right_voicing_id = json_to_string(value, "right_voicing_id");
@@ -323,24 +326,24 @@ ChordParams parse_chord_params(const nlohmann::json& overrides) {
       params.voicing_profile = profile;
     }
   });
-  assign_if_present(overrides, "prompt_split_tracks", [&](const nlohmann::json& value) {
-    params.prompt_split_tracks = json_to_bool(value, "prompt_split_tracks");
-  });
-  assign_if_present(overrides, "prompt_program", [&](const nlohmann::json& value) {
-    params.prompt_program = json_to_int(value, "prompt_program");
-  });
-  assign_if_present(overrides, "prompt_channel", [&](const nlohmann::json& value) {
-    params.prompt_channel = json_to_int(value, "prompt_channel");
-  });
-  assign_if_present(overrides, "right_program", [&](const nlohmann::json& value) {
-    params.right_program = json_to_int(value, "right_program");
-  });
+  // // assign_if_present(overrides, "prompt_split_tracks", [&](const nlohmann::json& value) {
+  // //   params.prompt_split_tracks = json_to_bool(value, "prompt_split_tracks");
+  // // });
+  // // assign_if_present(overrides, "prompt_program", [&](const nlohmann::json& value) {
+  // //   params.prompt_program = json_to_int(value, "prompt_program");
+  // // });
+  // // assign_if_present(overrides, "prompt_channel", [&](const nlohmann::json& value) {
+  // //   params.prompt_channel = json_to_int(value, "prompt_channel");
+  // // });
+  // assign_if_present(overrides, "right_program", [&](const nlohmann::json& value) {
+  //   params.right_program = json_to_int(value, "right_program");
+  // });
   assign_if_present(overrides, "right_channel", [&](const nlohmann::json& value) {
     params.right_channel = json_to_int(value, "right_channel");
   });
-  assign_if_present(overrides, "bass_program", [&](const nlohmann::json& value) {
-    params.bass_program = json_to_int(value, "bass_program");
-  });
+  // assign_if_present(overrides, "bass_program", [&](const nlohmann::json& value) {
+  //   params.bass_program = json_to_int(value, "bass_program");
+  // });
   assign_if_present(overrides, "bass_channel", [&](const nlohmann::json& value) {
     params.bass_channel = json_to_int(value, "bass_channel");
   });
@@ -350,9 +353,9 @@ ChordParams parse_chord_params(const nlohmann::json& overrides) {
   assign_if_present(overrides, "dur_beats", [&](const nlohmann::json& value) {
     params.dur_beats = json_to_double(value, "dur_beats");
   });
-  assign_if_present(overrides, "duration_ms", [&](const nlohmann::json& value) {
-    params.duration_ms = json_to_int(value, "duration_ms");
-  });
+  // assign_if_present(overrides, "duration_ms", [&](const nlohmann::json& value) {
+  //   params.duration_ms = json_to_int(value, "duration_ms");
+  // });
   assign_if_present(overrides, "strum_step_ms", [&](const nlohmann::json& value) {
     params.strum_step_ms = json_to_int(value, "strum_step_ms");
   });
@@ -375,26 +378,26 @@ ChordParams parse_chord_params(const nlohmann::json& overrides) {
   };
 
   assign_training("training_root.enabled", "enabled", [&](const nlohmann::json& value) {
-    params.training_root.enabled = json_to_bool(value, "training_root.enabled");
+    params.play_root.enabled = json_to_bool(value, "training_root.enabled");
   });
   assign_training("training_root.delay_beats", "delay_beats", [&](const nlohmann::json& value) {
-    params.training_root.delay_beats = json_to_double(value, "training_root.delay_beats");
+    params.play_root.delay_beats = json_to_double(value, "training_root.delay_beats");
   });
   assign_training("training_root.dur_beats", "dur_beats", [&](const nlohmann::json& value) {
-    params.training_root.dur_beats = json_to_double(value, "training_root.dur_beats");
+    params.play_root.dur_beats = json_to_double(value, "training_root.dur_beats");
   });
   assign_training("training_root.channel", "channel", [&](const nlohmann::json& value) {
-    params.training_root.channel = json_to_int(value, "training_root.channel");
+    params.play_root.channel = json_to_int(value, "training_root.channel");
   });
   assign_training("training_root.program", "program", [&](const nlohmann::json& value) {
-    params.training_root.program = json_to_int(value, "training_root.program");
+    params.play_root.program = json_to_int(value, "training_root.program");
   });
   assign_training("training_root.velocity", "velocity", [&](const nlohmann::json& value) {
-    params.training_root.velocity = json_to_int(value, "training_root.velocity");
+    params.play_root.velocity = json_to_int(value, "training_root.velocity");
   });
-  assign_training("training_root.duration_ms", "duration_ms", [&](const nlohmann::json& value) {
-    params.training_root.duration_ms = json_to_int(value, "training_root.duration_ms");
-  });
+  // assign_training("training_root.duration_ms", "duration_ms", [&](const nlohmann::json& value) {
+  //   params.play_root.duration_ms = json_to_int(value, "training_root.duration_ms");
+  // });
   return params;
 }
 
@@ -505,37 +508,38 @@ nlohmann::json melody_params_to_json(const MelodyParams& params) {
 
 nlohmann::json chord_params_to_json(const ChordParams& params) {
   nlohmann::json json = nlohmann::json::object();
-  json["allowed_degrees"] = ints_to_json_array(params.allowed_degrees);
+  json["allowed_degrees"] = ints_to_json_array(params.degrees);
   json["inst"] = instrument_to_int(params.inst);
   json["delivery"] = delivery_to_int(params.delivery);
   json["allowed_top_degrees"] = ints_to_json_array(params.allowed_top_degrees);
+  json["sequence_lengths"] = ints_to_json_array(params.sequence_lengths);
   json["avoid_repeat"] = params.avoid_repeat;
   json["chord_avoid_repeat"] = optional_bool_to_int(params.chord_avoid_repeat);
   json["range_semitones"] = params.range_semitones;
   json["add_seventh"] = params.add_seventh;
-  json["tempo_bpm"] = params.tempo_bpm;
+  json["tempo_bpm"] = params.bpm;
   json["right_voicing_id"] = params.right_voicing_id;
   json["bass_voicing_id"] = params.bass_voicing_id;
   json["voicing_profile"] = params.voicing_profile.has_value() ? params.voicing_profile.value() : std::string();
-  json["prompt_split_tracks"] = params.prompt_split_tracks;
-  json["prompt_program"] = params.prompt_program;
-  json["prompt_channel"] = params.prompt_channel;
-  json["right_program"] = params.right_program;
-  json["right_channel"] = params.right_channel;
-  json["bass_program"] = params.bass_program;
+  // json["prompt_split_tracks"] = params.prompt_split_tracks;
+  // json["prompt_program"] = params.prompt_program;
+  // json["prompt_channel"] = params.prompt_channel;
+  // json["right_program"] = params.right_program;
+  // json["right_channel"] = params.right_channel;
+  // json["bass_program"] = params.bass_program;
   json["bass_channel"] = params.bass_channel;
   json["velocity"] = params.velocity;
   json["dur_beats"] = params.dur_beats;
-  json["duration_ms"] = params.duration_ms;
+  // json["duration_ms"] = params.duration_ms;
   json["strum_step_ms"] = params.strum_step_ms;
   json["voice_leading_continuity"] = params.voice_leading_continuity;
-  json["training_root.enabled"] = params.training_root.enabled;
-  json["training_root.delay_beats"] = params.training_root.delay_beats;
-  json["training_root.dur_beats"] = params.training_root.dur_beats;
-  json["training_root.channel"] = params.training_root.channel;
-  json["training_root.program"] = params.training_root.program;
-  json["training_root.velocity"] = params.training_root.velocity;
-  json["training_root.duration_ms"] = params.training_root.duration_ms;
+  json["training_root.enabled"] = params.play_root.enabled;
+  json["training_root.delay_beats"] = params.play_root.delay_beats;
+  json["training_root.dur_beats"] = params.play_root.dur_beats;
+  json["training_root.channel"] = params.play_root.channel;
+  json["training_root.program"] = params.play_root.program;
+  json["training_root.velocity"] = params.play_root.velocity;
+  //json["training_root.duration_ms"] = params.play_root.duration_ms;
   return json;
 }
 
@@ -706,9 +710,29 @@ static nlohmann::json answer_payload_v2_to_json(const AnswerPayloadV2& payload) 
         nlohmann::json j = nlohmann::json::object();
         if constexpr (std::is_same_v<T, ChordAnswerV2>) {
           j["type"] = "chord";
-          j["root_degree"] = a.root_degree;
-          j["bass_deg"] = a.bass_deg.has_value() ? nlohmann::json(a.bass_deg.value()) : nlohmann::json(nullptr);
-          j["top_deg"] = a.top_deg.has_value() ? nlohmann::json(a.top_deg.value()) : nlohmann::json(nullptr);
+          auto to_int_array = [](const std::vector<int>& values) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (int v : values) { arr.push_back(v); }
+            return arr;
+          };
+          auto to_optional_array = [](const std::vector<std::optional<int>>& values) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (const auto& v : values) {
+              arr.push_back(v.has_value() ? nlohmann::json(v.value()) : nlohmann::json(nullptr));
+            }
+            return arr;
+          };
+          auto to_bool_array = [](const std::vector<bool>& values) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (bool v : values) { arr.push_back(v); }
+            return arr;
+          };
+          j["root_degrees"] = to_int_array(a.root_degrees);
+          j["bass_deg"] = to_optional_array(a.bass_deg);
+          j["top_deg"] = to_optional_array(a.top_deg);
+          j["expect_root"] = to_bool_array(a.expect_root);
+          j["expect_bass"] = to_bool_array(a.expect_bass);
+          j["expect_top"] = to_bool_array(a.expect_top);
         } else if constexpr (std::is_same_v<T, MelodyAnswerV2>) {
           j["type"] = "melody";
           nlohmann::json arr = nlohmann::json::array();
@@ -764,25 +788,61 @@ static nlohmann::json question_payload_v2_to_json(const QuestionPayloadV2& paylo
           j["tonic_midi"] = q.tonic_midi;
           j["tonic"] = q.tonic;
           j["key"] = key_quality_to_string(q.key);
-          j["root_degree"] = q.root_degree;
-          j["quality"] = triad_quality_to_string(q.quality);
-          if (q.rh_degrees.has_value()) {
+          auto to_int_array = [](const std::vector<int>& values) {
             nlohmann::json arr = nlohmann::json::array();
-            for (int value : q.rh_degrees.value()) {
-              arr.push_back(value);
+            for (int v : values) { arr.push_back(v); }
+            return arr;
+          };
+          auto to_quality_array = [](const std::vector<TriadQuality>& values) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (auto qv : values) { arr.push_back(triad_quality_to_string(qv)); }
+            return arr;
+          };
+          auto to_optional_vec_array = [](const std::vector<std::optional<std::vector<int>>>& values) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (const auto& opt : values) {
+              if (!opt.has_value()) {
+                arr.push_back(nullptr);
+              } else {
+                nlohmann::json inner = nlohmann::json::array();
+                for (int v : opt.value()) { inner.push_back(v); }
+                arr.push_back(std::move(inner));
+              }
             }
-            j["rh_degrees"] = std::move(arr);
-          } else {
-            j["rh_degrees"] = nullptr;
+            return arr;
+          };
+          auto to_optional_array = [](const auto& values) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (const auto& opt : values) {
+              if (opt.has_value()) {
+                arr.push_back(opt.value());
+              } else {
+                arr.push_back(nullptr);
+              }
+            }
+            return arr;
+          };
+          auto to_bool_array = [](const std::vector<bool>& values) {
+            nlohmann::json arr = nlohmann::json::array();
+            for (bool v : values) { arr.push_back(v); }
+            return arr;
+          };
+
+          j["root_degrees"] = to_int_array(q.root_degrees);
+          j["qualities"] = to_quality_array(q.qualities);
+          j["rh_degrees"] = to_optional_vec_array(q.rh_degrees);
+          j["bass_degrees"] = to_optional_array(q.bass_degrees);
+          j["right_voicing_id"] = to_optional_array(q.right_voicing_ids);
+          j["bass_voicing_id"] = to_optional_array(q.bass_voicing_ids);
+          j["is_anchor"] = to_bool_array(q.is_anchor);
+
+          // legacy single-chord mirror for older clients
+          if (!q.root_degrees.empty()) {
+            j["root_degree"] = q.root_degrees.front();
           }
-          j["bass_degrees"] = q.bass_degrees.has_value() ? nlohmann::json(q.bass_degrees.value())
-                                                           : nlohmann::json(nullptr);
-          j["right_voicing_id"] =
-              q.right_voicing_id.has_value() ? nlohmann::json(q.right_voicing_id.value())
-                                             : nlohmann::json(nullptr);
-          j["bass_voicing_id"] =
-              q.bass_voicing_id.has_value() ? nlohmann::json(q.bass_voicing_id.value())
-                                            : nlohmann::json(nullptr);
+          if (!q.qualities.empty()) {
+            j["quality"] = triad_quality_to_string(q.qualities.front());
+          }
         } else if constexpr (std::is_same_v<T, MelodyQuestionV2>) {
           j["type"] = "melody";
           j["tonic_midi"] = q.tonic_midi;
@@ -829,28 +889,109 @@ static QuestionPayloadV2 question_payload_v2_from_json(const nlohmann::json& jso
     q.tonic = json.contains("tonic") && json["tonic"].is_string() ? json["tonic"].get<std::string>() : std::string();
     q.key = json.contains("key") && json["key"].is_string() ? key_quality_from_string(json["key"].get<std::string>())
                                                               : KeyQuality::Major;
-    q.root_degree = json.contains("root_degree") ? json["root_degree"].get<int>() : 0;
-    q.quality = json.contains("quality") && json["quality"].is_string()
-                    ? triad_quality_from_string(json["quality"].get<std::string>())
-                    : TriadQuality::Major;
-    if (json.contains("rh_degrees") && json["rh_degrees"].is_array()) {
-      const auto& arr = json["rh_degrees"];
+    auto parse_int_array = [&](const char* key) {
       std::vector<int> values;
-      values.reserve(arr.size());
-      for (std::size_t i = 0; i < arr.size(); ++i) {
-        values.push_back(arr[i].get<int>());
+      if (json.contains(key) && json[key].is_array()) {
+        const auto& arr = json[key];
+        values.reserve(arr.size());
+        for (std::size_t i = 0; i < arr.size(); ++i) {
+          values.push_back(arr[i].get<int>());
+        }
       }
-      q.rh_degrees = std::move(values);
+      return values;
+    };
+    auto parse_quality_array = [&]() {
+      std::vector<TriadQuality> values;
+      if (json.contains("qualities") && json["qualities"].is_array()) {
+        const auto& arr = json["qualities"];
+        values.reserve(arr.size());
+        for (std::size_t i = 0; i < arr.size(); ++i) {
+          values.push_back(triad_quality_from_string(arr[i].get<std::string>()));
+        }
+      }
+      return values;
+    };
+    auto parse_optional_vec_array = [&](const char* key) {
+      std::vector<std::optional<std::vector<int>>> values;
+      if (json.contains(key) && json[key].is_array()) {
+        const auto& arr = json[key];
+        values.reserve(arr.size());
+        for (std::size_t i = 0; i < arr.size(); ++i) {
+          if (arr[i].is_null()) {
+            values.push_back(std::nullopt);
+          } else if (arr[i].is_array()) {
+            std::vector<int> inner;
+            inner.reserve(arr[i].size());
+            for (std::size_t j = 0; j < arr[i].size(); ++j) {
+              inner.push_back(arr[i][j].get<int>());
+            }
+            values.push_back(std::move(inner));
+          } else {
+            values.push_back(std::nullopt);
+          }
+        }
+      }
+      return values;
+    };
+    auto parse_optional_array = [&](const char* key) {
+      std::vector<std::optional<int>> values;
+      if (json.contains(key) && json[key].is_array()) {
+        const auto& arr = json[key];
+        values.reserve(arr.size());
+        for (std::size_t i = 0; i < arr.size(); ++i) {
+          values.push_back(arr[i].is_null() ? std::optional<int>() : std::optional<int>(arr[i].get<int>()));
+        }
+      }
+      return values;
+    };
+    auto parse_optional_string_array = [&](const char* key) {
+      std::vector<std::optional<std::string>> values;
+      if (json.contains(key) && json[key].is_array()) {
+        const auto& arr = json[key];
+        values.reserve(arr.size());
+        for (std::size_t i = 0; i < arr.size(); ++i) {
+          values.push_back(arr[i].is_null() ? std::optional<std::string>()
+                                            : std::optional<std::string>(arr[i].get<std::string>()));
+        }
+      }
+      return values;
+    };
+    auto parse_bool_array = [&](const char* key) {
+      std::vector<bool> values;
+      if (json.contains(key) && json[key].is_array()) {
+        const auto& arr = json[key];
+        values.reserve(arr.size());
+        for (std::size_t i = 0; i < arr.size(); ++i) {
+          values.push_back(arr[i].get<bool>());
+        }
+      }
+      return values;
+    };
+
+    q.root_degrees = parse_int_array("root_degrees");
+    if (q.root_degrees.empty()) {
+      q.root_degrees.push_back(json.contains("root_degree") ? json["root_degree"].get<int>() : 0);
     }
-    if (json.contains("bass_degrees") && !json["bass_degrees"].is_null()) {
-      q.bass_degrees = json["bass_degrees"].get<int>();
+    q.qualities = parse_quality_array();
+    if (q.qualities.empty()) {
+      q.qualities.push_back(json.contains("quality") && json["quality"].is_string()
+                                ? triad_quality_from_string(json["quality"].get<std::string>())
+                                : TriadQuality::Major);
     }
-    if (json.contains("right_voicing_id") && !json["right_voicing_id"].is_null()) {
-      q.right_voicing_id = json["right_voicing_id"].get<std::string>();
-    }
-    if (json.contains("bass_voicing_id") && !json["bass_voicing_id"].is_null()) {
-      q.bass_voicing_id = json["bass_voicing_id"].get<std::string>();
-    }
+    std::size_t len = q.root_degrees.size();
+    auto ensure_size = [&](auto&& vec, auto default_value) {
+      using Vec = std::decay_t<decltype(vec)>;
+      Vec out = std::forward<decltype(vec)>(vec);
+      if (out.size() < len) {
+        out.resize(len, default_value);
+      }
+      return out;
+    };
+    q.rh_degrees = ensure_size(parse_optional_vec_array("rh_degrees"), std::optional<std::vector<int>>{});
+    q.bass_degrees = ensure_size(parse_optional_array("bass_degrees"), std::optional<int>{});
+    q.right_voicing_ids = ensure_size(parse_optional_string_array("right_voicing_id"), std::optional<std::string>{});
+    q.bass_voicing_ids = ensure_size(parse_optional_string_array("bass_voicing_id"), std::optional<std::string>{});
+    q.is_anchor = ensure_size(parse_bool_array("is_anchor"), false);
     return q;
   }
   if (type == "melody") {
@@ -908,9 +1049,74 @@ static AnswerPayloadV2 answer_payload_v2_from_json(const nlohmann::json& json) {
   const std::string type = json["type"].get<std::string>();
   if (type == "chord") {
     ChordAnswerV2 a{};
-    a.root_degree = json["root_degree"].get<int>();
-    if (!json["bass_deg"].is_null()) a.bass_deg = json["bass_deg"].get<int>();
-    if (!json["top_deg"].is_null()) a.top_deg = json["top_deg"].get<int>();
+    auto parse_int_array = [&](const char* key) {
+      std::vector<int> values;
+      if (json.contains(key) && json[key].is_array()) {
+        const auto& arr = json[key];
+        values.reserve(arr.size());
+        for (std::size_t i = 0; i < arr.size(); ++i) {
+          values.push_back(arr[i].get<int>());
+        }
+      }
+      return values;
+    };
+    auto parse_optional_array = [&](const char* key, std::size_t target) {
+      std::vector<std::optional<int>> values;
+      if (json.contains(key) && json[key].is_array()) {
+        const auto& arr = json[key];
+        values.reserve(arr.size());
+        for (std::size_t i = 0; i < arr.size(); ++i) {
+          values.push_back(arr[i].is_null() ? std::optional<int>() : std::optional<int>(arr[i].get<int>()));
+        }
+      }
+      if (!values.empty() && values.size() != target) {
+        values.resize(target);
+      }
+      return values;
+    };
+    auto parse_bool_array = [&](const char* key, std::size_t target) {
+      std::vector<bool> values;
+      if (json.contains(key) && json[key].is_array()) {
+        const auto& arr = json[key];
+        values.reserve(arr.size());
+        for (std::size_t i = 0; i < arr.size(); ++i) {
+          values.push_back(arr[i].get<bool>());
+        }
+      }
+      if (!values.empty() && values.size() != target) {
+        values.resize(target, true);
+      }
+      return values;
+    };
+
+    if (json.contains("root_degrees")) {
+      a.root_degrees = parse_int_array("root_degrees");
+    } else {
+      int single_root = json.contains("root_degree") ? json["root_degree"].get<int>() : 0;
+      a.root_degrees.push_back(single_root);
+    }
+    std::size_t len = a.root_degrees.size();
+    if (len == 0) {
+      a.root_degrees.push_back(0);
+      len = 1;
+    }
+    auto opt_or_default = [&](std::vector<std::optional<int>> values) {
+      if (values.empty()) {
+        values.resize(len);
+      }
+      return values;
+    };
+    a.bass_deg = opt_or_default(parse_optional_array("bass_deg", len));
+    a.top_deg = opt_or_default(parse_optional_array("top_deg", len));
+    auto ensure_bool = [&](std::vector<bool> values) {
+      if (values.empty()) {
+        values.resize(len, true);
+      }
+      return values;
+    };
+    a.expect_root = ensure_bool(parse_bool_array("expect_root", len));
+    a.expect_bass = ensure_bool(parse_bool_array("expect_bass", len));
+    a.expect_top = ensure_bool(parse_bool_array("expect_top", len));
     return a;
   }
   if (type == "melody") {

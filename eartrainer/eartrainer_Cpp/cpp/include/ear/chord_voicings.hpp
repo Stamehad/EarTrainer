@@ -177,11 +177,12 @@ public:
 
   static ChordVoicingEngine& instance();
 
-  void configure(const KeyQuality& quality, const DrillInstrument& inst, int tonic_midi, bool voice_leading_continuity); 
+  void configure(const KeyQuality& quality, const DrillInstrument& inst, const VoicingsStyle& voicing_style, int tonic_midi, bool voice_leading_continuity); 
 
   RightVoicing get_voicing(int deg, std::uint64_t& rng_state);
 
   BassChoice get_bass(int deg, std::uint64_t& rng_state);
+  BassChoice get_bass(int deg, bool allow_inversions, std::uint64_t& rng_state);
 
   RightHandPatterns get_ps();
 
@@ -210,6 +211,7 @@ private:
 
   KeyQuality keytype_{};
   DrillInstrument inst_{};
+  VoicingsStyle voicing_style_{};
   int tonic_midi_{};
   bool continuity_{};
   std::optional<int> top_degree_{};

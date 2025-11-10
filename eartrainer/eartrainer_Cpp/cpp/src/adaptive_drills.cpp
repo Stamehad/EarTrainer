@@ -1,12 +1,12 @@
 #include "ear/adaptive_drills.hpp"
 
 #include "ear/drill_factory.hpp"
-#include "resources/catalog_manager.hpp"
+#include "resources/catalog_manager2.hpp"
+#include "resources/level_catalog.hpp"
 #include "rng.hpp"
 
 #include <algorithm>
 #include <cmath>
-#include <filesystem>
 #include <stdexcept>
 #include <mutex>
 #include <sstream>
@@ -27,89 +27,101 @@ void ensure_factory_registered() {
 } // namespace
 
 AdaptiveDrills::AdaptiveDrills(std::string resources_dir, std::uint64_t seed)
-    : resources_dir_(std::move(resources_dir)),
-      master_rng_(seed == 0 ? 1 : seed),
-      factory_(DrillFactory::instance()) {
+    : master_rng_(seed == 0 ? 1 : seed),
+      factory_(DrillFactory::instance()),
+      manifest_(resources::manifest()),
+      last_track_levels_(resources::ManifestView::kTrackCount, 0),
+      last_track_weights_(resources::ManifestView::kTrackCount, 0) {
   ensure_factory_registered();
-
-  if (!resources_dir_.is_absolute()) {
-    resources_dir_ = std::filesystem::current_path() / resources_dir_;
-  }
-
-  catalog_index_ = resources::build_builtin_catalog_index();
-  using_builtin_catalogs_ = true;
-  track_catalog_error_.reset();
 }
 
 AdaptiveDrills::TrackPick AdaptiveDrills::pick_track(const std::vector<int>& current_levels) {
-  AdaptiveDrills::TrackPick pick;
-  phase_consistent_.reset();
+  const auto pick_info = manifest_.pick_track(current_levels, master_rng_);
 
-  auto pick_info = catalog_index_.pick_next_level(current_levels, master_rng_);
-
-  last_track_levels_ = pick_info.normalized_levels;
-  last_track_weights_ = pick_info.weights;
+  TrackPick pick;
+  pick.node = pick_info.node;
+  pick.track_index = pick_info.track_index;
   pick.weights = pick_info.weights;
   pick.normalized_levels = pick_info.normalized_levels;
-  pick.phase_digit = pick_info.phase_digit;
-  pick.picked_track = pick_info.track_index;
-  pick.next_level = pick_info.level;
 
-  if (pick.phase_digit >= 0) {
-    last_phase_digit_ = pick.phase_digit;
-  } else {
-    last_phase_digit_.reset();
-  }
-  if (pick.picked_track >= 0) {
-    last_track_pick_ = pick.picked_track;
-  } else {
-    last_track_pick_.reset();
-  }
-
-  std::optional<int> observed_phase;
-  bool consistent = true;
-  for (int level : last_track_levels_) {
-    if (level <= 0) continue;
-    int phase = (std::abs(level) / 10) % 10;
-    if (!observed_phase.has_value()) {
-      observed_phase = phase;
-    } else if (*observed_phase != phase) {
-      consistent = false;
-      if (phase < *observed_phase) {
-        observed_phase = phase;
-      }
-    }
-  }
-  phase_consistent_ = consistent;
+  last_track_pick_ = pick_info.node ? std::optional{pick_info} : std::nullopt;
+  last_track_levels_ = pick.normalized_levels;
+  last_track_weights_ = pick.weights;
 
   return pick;
 }
 
 void AdaptiveDrills::set_bout(const std::vector<int>& track_levels) {
-  if (catalog_index_.empty()) {
-    if (track_catalog_error_.has_value()) {
-      throw std::runtime_error("AdaptiveDrills: track catalogs unavailable (" + *track_catalog_error_ + ")");
-    }
-    throw std::runtime_error("AdaptiveDrills: no track catalogs available");
-  }
-
   auto pick = pick_track(track_levels);
-  if (pick.phase_digit < 0) {
-    throw std::runtime_error("AdaptiveDrills: unable to determine active phase from levels");
-  }
-  if (pick.picked_track < 0) {
-    throw std::runtime_error("AdaptiveDrills: no eligible track could be selected");
+  if (!pick.node) {
+    throw std::runtime_error("AdaptiveDrills: unable to select track/bout");
   }
 
-  int track_index = pick.picked_track;
-  int target_level = pick.next_level;
+  current_lesson_ = pick.node;
+  lesson_type_ = current_lesson_->type; 
+  current_track_index_ = pick.track_index;
+  question_limit_ = kDefaultQuestionTarget;
+  bout_questions_asked_ = 0;
+  bout_finished_ = false;
 
-  const auto& specs = catalog_index_.drills_for_level(target_level);
-  initialize_bout(target_level, specs);
-  active_track_index_ = track_index;
+  mix_ = current_lesson_->meta.mix >= 0;
+  mix_slot_index_.reset();
+  mix_slot_ = nullptr;
+
+  std::vector<DrillSpec> specs;
+  std::vector<const ear::builtin::catalog_numbered::DrillEntry*> slot_entries;
+  std::vector<bool> slot_mix_flags;
+  specs.reserve(current_lesson_->drills.size() + 1);
+  slot_entries.reserve(current_lesson_->drills.size() + 1);
+  slot_mix_flags.reserve(current_lesson_->drills.size() + 1);
+  int ordinal = 0;
+  for (const auto& drill : current_lesson_->drills) {
+    if (!drill.build) continue;
+    specs.push_back(make_spec_from_entry(*current_lesson_, drill, ordinal));
+    slot_entries.push_back(&drill);
+    slot_mix_flags.push_back(false);
+    ++ordinal;
+  }
+  std::optional<std::size_t> pending_mix_index;
+
+  if (mix_) {
+    const auto* mix_lesson =
+        manifest_.entry(current_lesson_->meta.mix, current_lesson_->family());
+    if (mix_lesson && !mix_lesson->drills.empty()) {
+      const auto& drill = mix_lesson->drills.back();
+      if (drill.build) {
+        specs.push_back(make_spec_from_entry(*mix_lesson, drill, ordinal));
+        slot_entries.push_back(&drill);
+        slot_mix_flags.push_back(true);
+        pending_mix_index = specs.size() - 1;
+      } else {
+        mix_ = false;
+      }
+    } else {
+      mix_ = false;
+    }
+  }
+
+  initialize_bout(current_lesson_->lesson, specs, slot_entries, slot_mix_flags);
+  active_track_index_ = current_track_index_;
+
+  set_current_slot(0);
+
+  if (mix_ && pending_mix_index.has_value() && *pending_mix_index < slots_.size()) {
+    mix_slot_index_ = pending_mix_index;
+    mix_slot_ = &slots_[*pending_mix_index];
+  } else {
+    mix_slot_index_.reset();
+    mix_slot_ = nullptr;
+    mix_ = false;
+  }
 }
 
-void AdaptiveDrills::initialize_bout(int level, const std::vector<DrillSpec>& specs) {
+void AdaptiveDrills::initialize_bout(
+    int level,
+    const std::vector<DrillSpec>& specs,
+    const std::vector<const ear::builtin::catalog_numbered::DrillEntry*>& entries,
+    const std::vector<bool>& mix_flags) {
   slots_.clear();
   question_counter_ = 0;
   current_level_ = level;
@@ -143,25 +155,85 @@ void AdaptiveDrills::initialize_bout(int level, const std::vector<DrillSpec>& sp
     throw std::runtime_error("Adaptive bout initialization produced zero drills");
   }
   drill_scores_.assign(slots_.size(), std::nullopt);
+  slot_entries_ = entries;
+  slot_is_mix_ = mix_flags;
+  if (slot_entries_.size() < slots_.size()) slot_entries_.resize(slots_.size(), nullptr);
+  if (slot_is_mix_.size() < slots_.size()) slot_is_mix_.resize(slots_.size(), false);
+  slot_runtime_.assign(slots_.size(), DrillRuntime{});
+  current_slot_ = nullptr;
+  overall_ema_ = 0.0;
+  overall_ema_initialized_ = false;
+}
+
+DrillSpec AdaptiveDrills::make_spec_from_entry(
+    const resources::ManifestView::Lesson& lesson,
+    const ear::builtin::catalog_numbered::DrillEntry& drill,
+    int ordinal) const {
+  DrillSpec spec;
+  DrillParams params = drill.build ? drill.build() : DrillParams{};
+  spec.id = drill.name
+                ? std::string(lesson.name) + "#" + std::to_string(ordinal)
+                : std::to_string(drill.number) + "#" + std::to_string(ordinal);
+  spec.family = ear::builtin::catalog_numbered::family_of(params);
+  spec.level = ear::builtin::catalog_numbered::block_of(drill.number);
+  spec.tier = ear::builtin::catalog_numbered::tier_of(drill.number);
+  spec.params = std::move(params);
+  return spec;
 }
 
 QuestionBundle AdaptiveDrills::next() {
   if (slots_.empty()) {
     throw std::runtime_error("AdaptiveDrills::next called before set_bout or with empty bout");
   }
+  if (bout_finished_) {
+    throw std::runtime_error("AdaptiveDrills::next called after bout finished");
+  }
+  using Type = ear::builtin::catalog_numbered::LessonType;
 
-  const int max_index = static_cast<int>(slots_.size()) - 1;
-  int pick = rand_int(master_rng_, 0, max_index);
-  auto& slot = slots_[static_cast<std::size_t>(pick)];
-  pick_counts_[static_cast<std::size_t>(pick)] += 1;
-  last_pick_ = static_cast<std::size_t>(pick);
-  auto bundle = slot.module->next_question(slot.rng_state);
-  // apply_prompt_rendering(slot.spec, bundle);
+  if (lesson_type_ == Type::Lesson){
+    if (!current_slot_) {
+      throw std::runtime_error("AdaptiveDrills: no active slot for lesson");
+    }
+    // LESSON: USE CURRENT SLOT
+    Slot* slot = current_slot_;
+    std::size_t slot_index = current_slot_index_;
 
-  std::string question_id = make_question_id();
-  question_slot_index_[question_id] = static_cast<std::size_t>(pick);
-  bundle.question_id = std::move(question_id);
-  return bundle;
+    // IF MIX: SAMPLE CURRENT AND MIX
+    if (mix_ && mix_slot_ && mix_slot_index_.has_value()) {
+      const double roll = rand_unit(master_rng_);
+      if (roll < mix_prob_) {
+        slot = mix_slot_;
+        slot_index = *mix_slot_index_;
+      }
+    }
+    if (slot_index >= pick_counts_.size()) {
+      throw std::runtime_error("AdaptiveDrills: slot index out of range");
+    }
+    pick_counts_[slot_index] += 1;
+    last_pick_ = slot_index;
+
+    // GET QUESTION BUNDLE
+    auto bundle = slot->module->next_question(slot->rng_state);
+    std::string question_id = make_question_id();
+    question_slot_index_[question_id] = slot_index;
+    bundle.question_id = std::move(question_id);
+    return bundle;
+
+  } else {
+    // SAMPLE UNIFORMLY
+    const int max_index = static_cast<int>(slots_.size()) - 1;
+    int pick = rand_int(master_rng_, 0, max_index);
+    auto& slot = slots_[static_cast<std::size_t>(pick)];
+    pick_counts_[static_cast<std::size_t>(pick)] += 1;
+    last_pick_ = static_cast<std::size_t>(pick);
+
+    // GET QUESTION BUNDLE
+    auto bundle = slot.module->next_question(slot.rng_state);
+    std::string question_id = make_question_id();
+    question_slot_index_[question_id] = static_cast<std::size_t>(pick);
+    bundle.question_id = std::move(question_id);
+    return bundle;
+  } 
 }
 
 std::string AdaptiveDrills::make_question_id() {
@@ -171,6 +243,44 @@ std::string AdaptiveDrills::make_question_id() {
   oss.fill('0');
   oss << ++question_counter_;
   return oss.str();
+}
+
+void AdaptiveDrills::set_current_slot(std::size_t index) {
+  if (index >= slots_.size()) {
+    throw std::out_of_range("AdaptiveDrills: slot index out of range");
+  }
+  current_slot_index_ = index;
+  current_slot_ = &slots_[index];
+  current_drill_ = entry_for_slot(index);
+}
+
+const ear::builtin::catalog_numbered::DrillEntry*
+AdaptiveDrills::entry_for_slot(std::size_t index) const {
+  if (index >= slot_entries_.size()) return nullptr;
+  return slot_entries_[index];
+}
+
+bool AdaptiveDrills::is_main_slot(std::size_t index) const {
+  if (index >= slot_is_mix_.size()) return true;
+  return !slot_is_mix_[index];
+}
+
+std::optional<std::size_t> AdaptiveDrills::adjacent_slot_index(std::size_t from,
+                                                               int direction) const {
+  if (slots_.empty()) return std::nullopt;
+  if (direction == 0) return from;
+  std::size_t idx = from;
+  if (direction > 0) {
+    while (++idx < slots_.size()) {
+      if (is_main_slot(idx)) return idx;
+    }
+  } else {
+    while (idx > 0) {
+      --idx;
+      if (is_main_slot(idx)) return idx;
+    }
+  }
+  return std::nullopt;
 }
 
 AdaptiveDrills::ScoreSnapshot AdaptiveDrills::submit_feedback(const ResultReport& report) {
@@ -196,40 +306,22 @@ AdaptiveDrills::ScoreSnapshot AdaptiveDrills::submit_feedback(const ResultReport
     current_score = score;
   }
 
+  ++bout_questions_asked_;
+  if (question_limit_ > 0 && bout_questions_asked_ >= question_limit_) {
+    bout_finished_ = true;
+  }
+
+  update_drill_stats(slot_index, score);
+  update_overall_ema(score);
+  if (slot_index == current_slot_index_) {
+    handle_progress_controller();
+  }
+  adjust_mix_probability();
+
   ScoreSnapshot snapshot;
   snapshot.bout_average = bout_average_score();
   snapshot.drill_scores = drill_scores_;
   return snapshot;
-}
-
-std::optional<int> AdaptiveDrills::next_level_for_track(int track_index) const {
-  if (track_index < 0 || static_cast<std::size_t>(track_index) >= catalog_index_.track_count()) {
-    return std::nullopt;
-  }
-  const auto& track = catalog_index_.tracks()[static_cast<std::size_t>(track_index)];
-  const std::vector<int>* levels = nullptr;
-  if (last_phase_digit_.has_value()) {
-    auto phase_it = track.phases.find(*last_phase_digit_);
-    if (phase_it != track.phases.end()) {
-      levels = &phase_it->second;
-    }
-  }
-  if (!levels) {
-    for (const auto& [phase_key, phase_levels] : track.phases) {
-      if (std::find(phase_levels.begin(), phase_levels.end(), current_level_) != phase_levels.end()) {
-        levels = &phase_levels;
-        break;
-      }
-    }
-  }
-  if (!levels) {
-    return std::nullopt;
-  }
-  auto it = std::upper_bound(levels->begin(), levels->end(), current_level_);
-  if (it != levels->end()) {
-    return *it;
-  }
-  return std::nullopt;
 }
 
 double AdaptiveDrills::bout_average_score() const {
@@ -237,6 +329,118 @@ double AdaptiveDrills::bout_average_score() const {
     return 0.0;
   }
   return bout_score_sum_ / static_cast<double>(bout_score_count_);
+}
+
+void AdaptiveDrills::update_drill_stats(std::size_t slot_index, double score) {
+  if (slot_index >= slot_runtime_.size()) return;
+  auto& stats = slot_runtime_[slot_index];
+  stats.asked += 1;
+  if (!stats.initialized) {
+    stats.ema = score;
+    stats.initialized = true;
+  } else {
+    stats.ema = kDrillEmaAlpha * stats.ema + (1.0 - kDrillEmaAlpha) * score;
+  }
+  stats.recent_scores.push_back(score);
+  if (stats.recent_scores.size() > static_cast<std::size_t>(kPlateauWindow)) {
+    stats.recent_scores.pop_front();
+  }
+}
+
+void AdaptiveDrills::update_overall_ema(double score) {
+  if (!overall_ema_initialized_) {
+    overall_ema_ = score;
+    overall_ema_initialized_ = true;
+  } else {
+    overall_ema_ = kOverallEmaAlpha * overall_ema_ + (1.0 - kOverallEmaAlpha) * score;
+  }
+}
+
+struct AdaptiveDrills::DrillThresholds {
+  int min_questions = kDefaultMinQuestions;
+  double promote_ema = kDefaultPromoteEma;
+  double demote_ema = kDefaultDemoteEma;
+};
+
+AdaptiveDrills::DrillThresholds
+AdaptiveDrills::thresholds_for_slot(std::size_t slot_index) const {
+  DrillThresholds thr;
+  const auto* entry = entry_for_slot(slot_index);
+  if (entry && entry->q > 0) {
+    thr.min_questions = entry->q;
+  }
+  return thr;
+}
+
+bool AdaptiveDrills::plateau_reached(const DrillRuntime& stats) const {
+  if (stats.recent_scores.size() < static_cast<std::size_t>(kPlateauWindow)) return false;
+  auto [min_it, max_it] =
+      std::minmax_element(stats.recent_scores.begin(), stats.recent_scores.end());
+  return (*max_it - *min_it) < kPlateauDelta;
+}
+
+bool AdaptiveDrills::promote_current_slot() {
+  auto next = adjacent_slot_index(current_slot_index_, +1);
+  if (!next) return false;
+  set_current_slot(*next);
+  return true;
+}
+
+bool AdaptiveDrills::demote_current_slot() {
+  auto prev = adjacent_slot_index(current_slot_index_, -1);
+  if (!prev) return false;
+  set_current_slot(*prev);
+  return true;
+}
+
+bool AdaptiveDrills::is_simplification_slot(std::size_t) const {
+  return lesson_type_ != ear::builtin::catalog_numbered::LessonType::Lesson;
+}
+
+double AdaptiveDrills::slot_ema(std::size_t slot_index, double fallback) const {
+  if (slot_index < slot_runtime_.size() && slot_runtime_[slot_index].initialized) {
+    return slot_runtime_[slot_index].ema;
+  }
+  return fallback;
+}
+
+void AdaptiveDrills::handle_progress_controller() {
+  if (current_slot_index_ >= slot_runtime_.size()) return;
+  auto& stats = slot_runtime_[current_slot_index_];
+  const auto thresholds = thresholds_for_slot(current_slot_index_);
+
+  const bool can_promote =
+      stats.asked >= static_cast<std::size_t>(thresholds.min_questions) &&
+      stats.ema >= thresholds.promote_ema;
+
+  const bool plateau_ok =
+      is_simplification_slot(current_slot_index_) &&
+      stats.asked >= static_cast<std::size_t>(std::max(1, static_cast<int>(
+                                  std::ceil(0.75 * thresholds.min_questions)))) &&
+      stats.ema >= kPlateauPromoteEma && plateau_reached(stats);
+
+  const bool should_demote =
+      stats.asked >= static_cast<std::size_t>(kWarmupQuestionThreshold) &&
+      stats.ema <= thresholds.demote_ema;
+
+  if (can_promote || plateau_ok) {
+    promote_current_slot();
+  } else if (should_demote) {
+    demote_current_slot();
+  }
+}
+
+void AdaptiveDrills::adjust_mix_probability() {
+  if (!mix_ || !mix_slot_index_.has_value()) {
+    mix_prob_ = std::clamp(mix_prob_, kMixProbMin, kMixProbMax);
+    return;
+  }
+  if (!overall_ema_initialized_) return;
+  const double mix_ema = slot_ema(*mix_slot_index_, 0.90);
+  const double new_ema = slot_ema(current_slot_index_, mix_ema);
+  const double err = kTargetOverallEma - overall_ema_;
+  const double gap = std::max(0.05, std::fabs(mix_ema - new_ema));
+  mix_prob_ = std::clamp(mix_prob_ + kMixGain * err / gap, kMixProbMin, kMixProbMax);
 }
 
 AdaptiveDrills::BoutOutcome AdaptiveDrills::current_bout_outcome() const {
@@ -269,16 +473,15 @@ AdaptiveDrills::BoutReport AdaptiveDrills::end_bout() const {
     }
     report.drill_scores.push_back(std::move(entry));
   }
-  if (active_track_index_.has_value()) {
+  if (active_track_index_.has_value() &&
+      *active_track_index_ >= 0 &&
+      *active_track_index_ < resources::ManifestView::kTrackCount) {
     LevelRecommendation recommendation;
     recommendation.track_index = *active_track_index_;
-    if (*active_track_index_ >= 0 &&
-        static_cast<std::size_t>(*active_track_index_) < catalog_index_.track_count()) {
-      recommendation.track_name =
-          catalog_index_.track_name(static_cast<std::size_t>(*active_track_index_));
-    }
+    recommendation.track_name =
+        resources::ManifestView::kTrackNames[static_cast<std::size_t>(*active_track_index_)];
     recommendation.current_level = current_level_;
-    recommendation.suggested_level = next_level_for_track(*active_track_index_);
+    recommendation.suggested_level = std::nullopt;
     report.level = std::move(recommendation);
   }
   return report;
@@ -286,11 +489,12 @@ AdaptiveDrills::BoutReport AdaptiveDrills::end_bout() const {
 
 nlohmann::json AdaptiveDrills::diagnostic() const {
   nlohmann::json info = nlohmann::json::object();
-  info["resources_dir"] = resources_dir_.string();
-  info["catalog_mode"] = using_builtin_catalogs_ ? "builtin" : "filesystem";
   info["level"] = current_level_;
   info["slots"] = static_cast<int>(slots_.size());
   info["questions_emitted"] = static_cast<int>(question_counter_);
+  info["question_limit"] = question_limit_;
+  info["questions_answered"] = bout_questions_asked_;
+  info["bout_finished"] = bout_finished_;
   const auto report = end_bout();
   info["bout_score_average"] = report.bout_average;
   info["level_up_threshold"] = report.graduate_threshold;
@@ -303,11 +507,9 @@ nlohmann::json AdaptiveDrills::diagnostic() const {
     info["level_track_index"] = report.level->track_index;
     info["level_track_name"] = report.level->track_name;
     info["level_current"] = report.level->current_level;
-    if (report.level->suggested_level.has_value()) {
-      info["level_suggested"] = *report.level->suggested_level;
-    } else {
-      info["level_suggested"] = nullptr;
-    }
+    info["level_suggested"] = report.level->suggested_level.has_value()
+                                  ? nlohmann::json(*report.level->suggested_level)
+                                  : nlohmann::json(nullptr);
   }
   nlohmann::json drill_scores = nlohmann::json::array();
   for (const auto& entry : report.drill_scores) {
@@ -318,9 +520,6 @@ nlohmann::json AdaptiveDrills::diagnostic() const {
     }
   }
   info["drill_scores"] = std::move(drill_scores);
-  if (track_catalog_error_.has_value()) info["track_catalog_error"] = *track_catalog_error_;
-  if (last_phase_digit_.has_value()) info["phase_digit"] = *last_phase_digit_; else info["phase_digit"] = nullptr;
-  if (phase_consistent_.has_value()) info["phase_consistent"] = *phase_consistent_; else info["phase_consistent"] = nullptr;
   nlohmann::json weights_json = nlohmann::json::array();
   for (int w : last_track_weights_) {
     weights_json.push_back(w);
@@ -332,16 +531,12 @@ nlohmann::json AdaptiveDrills::diagnostic() const {
   }
   info["track_levels"] = level_json;
   if (last_track_pick_.has_value()) {
-    info["last_track_pick"] = *last_track_pick_;
-    if (*last_track_pick_ >= 0 &&
-        static_cast<std::size_t>(*last_track_pick_) < catalog_index_.track_count()) {
-      info["current_track"] = catalog_index_.track_name(static_cast<std::size_t>(*last_track_pick_));
-    } else {
-      info["current_track"] = nullptr;
-    }
+    info["last_track_pick_index"] = last_track_pick_->track_index;
+    info["last_track_pick_level"] =
+        last_track_pick_->node ? last_track_pick_->node->lesson : 0;
   } else {
-    info["last_track_pick"] = nullptr;
-    info["current_track"] = nullptr;
+    info["last_track_pick_index"] = nullptr;
+    info["last_track_pick_level"] = nullptr;
   }
   if (last_pick_.has_value()) {
     info["last_pick"] = static_cast<int>(*last_pick_);
@@ -360,41 +555,7 @@ nlohmann::json AdaptiveDrills::diagnostic() const {
   info["families"] = families;
   info["pick_counts"] = counts;
 
-  // Add drills-in-scope per track for the last known phase and current level hints.
-  if (last_phase_digit_.has_value()) {
-    nlohmann::json tracks = nlohmann::json::array();
-    const auto& track_infos = catalog_index_.tracks();
-    for (std::size_t i = 0; i < track_infos.size(); ++i) {
-      nlohmann::json t = nlohmann::json::object();
-      t["name"] = track_infos[i].name;
-      int current_level_hint = 0;
-      if (i < last_track_levels_.size()) {
-        current_level_hint = last_track_levels_[i];
-      } else {
-        current_level_hint = current_level_;
-      }
-      std::vector<int> scope;
-      const auto phase_it = track_infos[i].phases.find(*last_phase_digit_);
-      if (phase_it != track_infos[i].phases.end()) {
-        const auto& phase_levels = phase_it->second;
-        const int level_phase = (std::abs(current_level_hint) / 10) % 10;
-        if (level_phase < *last_phase_digit_) {
-          scope = phase_levels;
-        } else if (level_phase == *last_phase_digit_) {
-          const auto lb = std::lower_bound(phase_levels.begin(), phase_levels.end(), current_level_hint);
-          scope.assign(lb, phase_levels.end());
-        }
-      }
-      nlohmann::json lvls = nlohmann::json::array();
-      for (int v : scope) lvls.push_back(v);
-      t["levels_in_scope"] = lvls;
-      t["current_level"] = current_level_hint;
-      int weight = (i < last_track_weights_.size()) ? last_track_weights_[i] : 0;
-      t["weight"] = weight;
-      tracks.push_back(t);
-    }
-    info["tracks"] = tracks;
-  }
+  info["tracks"] = nlohmann::json::array();
   return info;
 }
 

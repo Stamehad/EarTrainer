@@ -23,13 +23,13 @@ struct ChordQuestionV2 {
   int tonic_midi;               // e.g., 60
   std::string tonic;            // e.g., C, Eb, F#
   KeyQuality key;               // Major/Minor
-  int root_degree;              // 0..6
-  TriadQuality quality;         // derived, but useful for UI/telemetry
-  // Optional labeling (no MIDI): stable IDs for UI display
-  std::optional<std::vector<int>> rh_degrees;
-  std::optional<int> bass_degrees;
-  std::optional<std::string> right_voicing_id;
-  std::optional<std::string> bass_voicing_id;
+  std::vector<int> root_degrees;               // chord-by-chord root degrees
+  std::vector<TriadQuality> qualities;         // triad quality per chord
+  std::vector<std::optional<std::vector<int>>> rh_degrees; // per-chord RH degrees
+  std::vector<std::optional<int>> bass_degrees;             // per-chord bass degree
+  std::vector<std::optional<std::string>> right_voicing_ids;
+  std::vector<std::optional<std::string>> bass_voicing_ids;
+  std::vector<bool> is_anchor;                 // true when chord is a tonic anchor helper
 };
 
 struct MelodyQuestionV2 {
@@ -51,9 +51,12 @@ struct HarmonyQuestionV2 {
 };
 
 struct ChordAnswerV2 { 
-    int root_degree; 
-    std::optional<int> bass_deg; // used for inversion
-    std::optional<int> top_deg;  // query on top note
+    std::vector<int> root_degrees;
+    std::vector<std::optional<int>> bass_deg; // used for inversion
+    std::vector<std::optional<int>> top_deg;  // query on top note
+    std::vector<bool> expect_root;
+    std::vector<bool> expect_bass;
+    std::vector<bool> expect_top;
 };
 
 struct MelodyAnswerV2 {

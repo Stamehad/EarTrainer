@@ -128,15 +128,15 @@ QuestionBundle IntervalDrill::next_question(std::uint64_t& rng_state) {
         std::sort(midis.begin(), midis.end());
       } else {
         std::sort(midis.begin(), midis.end(), std::greater<int>());
-    }
-    auto helper_track = b.add_track("helper", 1, 0); // PIANO
-    Beats helper_beat = Beats{1.0};
-    for (int midi : midis) {
-      b.add_note(helper_track, helper_beat, Beats{params.note_beat}, midi, 64);
-      helper_beat.advance_by(0.5);
+      }
+      auto helper_track = b.add_track("helper", 1, 0); // PIANO
+      Beats helper_beat = Beats{1.0};
+      for (int midi : midis) {
+        b.add_note(helper_track, helper_beat, Beats{params.note_beat}, midi, 64);
+        helper_beat.advance_by(0.5);
+      }
     }
   }
-
   //-----------------------------------------------------------------
   // GENERATE QUESTION BUNDLE
   //-----------------------------------------------------------------

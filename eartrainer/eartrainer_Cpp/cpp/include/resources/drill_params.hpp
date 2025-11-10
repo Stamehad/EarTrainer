@@ -17,6 +17,7 @@ enum class DrillParamKind {
 };
 enum class DrillInstrument {Piano, Strings /*, Guitar*/};
 enum class ChordDelivery {Together, Arpeggio};
+enum class VoicingsStyle {Piano, Strings, Triad};
 
 struct NoteParams {
   std::vector<int> degrees = {0,1,2,3,4,5,6};
@@ -77,21 +78,27 @@ struct ChordParams {
     bool enabled = false;
     double delay_beats = 1.0;
     double dur_beats = 1.0;
-    int channel = 0;
+    int channel = 2;
     int program = 0;
-    int velocity = 0;
-    int duration_ms = 1000; // LEGACY
+    int velocity = 96;
   };
   
-  std::vector<int> allowed_degrees = {0,1,2,3,4,5,6};
-  DrillInstrument inst = DrillInstrument::Piano;
+  std::vector<int> degrees = {0,1,2,3,4,5,6};
+  DrillInstrument inst = DrillInstrument::Piano; // PIANO -> 0,  STRINGS -> 48, GUITAR -> 24
+  VoicingsStyle voicing_style = (inst == DrillInstrument::Strings) ? VoicingsStyle::Strings : VoicingsStyle::Piano ;
   ChordDelivery delivery = ChordDelivery::Together;
   std::vector<int> allowed_top_degrees{};
+  std::vector<int> sequence_lengths = {1};
   bool avoid_repeat = true;
   std::optional<bool> chord_avoid_repeat{};
   int range_semitones = 12;
   bool add_seventh = false;
-  int tempo_bpm = 120;
+  // Inversions and anchor
+  bool sample_inversions = false; // when true, bass may choose non-root positions
+  enum class TonicAnchor {Before, After};
+  bool use_anchor = false;
+  std::optional<TonicAnchor> tonic_anchor{}; // if unset, choose randomly each question
+  int bpm = 120;
   
   // VOICINGS
   // struct VoicingConfig {
@@ -99,20 +106,14 @@ struct ChordParams {
   std::string right_voicing_id{};
   std::string bass_voicing_id{};
   std::optional<std::string> voicing_profile{}; // "strings_ensemble"
-  bool prompt_split_tracks = false;
-  int prompt_program = 0; // -> PIANO, 48 -> STRINGS, GUITAR -> 24
-  int prompt_channel = 0;
-  int right_program = 0;
   int right_channel = 0;
-  int bass_program = 0;
   int bass_channel = 1;
   int velocity = 96;
   double dur_beats = 2;
-  int duration_ms = 1000; // LEGACY
   int strum_step_ms = 0;
   bool voice_leading_continuity = true;
   //std::optional<TrainingRootConfig> training_root{};
-  TrainingRootConfig training_root{};
+  TrainingRootConfig play_root{};
 };
 using DrillParams = std::variant<std::monostate, NoteParams, IntervalParams, MelodyParams, ChordParams>;
 
@@ -204,11 +205,16 @@ inline const Schema& chord_schema() {
       {"inst", {"Instrument", Kind::kEnum, 0, {}, {}, {{"Piano",0},{"Strings",1}}, "Playback instrument"}},
       {"delivery", {"Delivery", Kind::kEnum, 0, {}, {}, {{"Together",0},{"Arpeggio",1}}, "How to play chord"}},
       {"allowed_top_degrees", {"Allowed top degrees", Kind::kIntList, std::vector<int>{}, {}, {}, {}, "Optional constraint for top voice"}},
+      {"sequence_lengths", {"Progression lengths", Kind::kIntList, std::vector<int>{1}, {}, {}, {}, "Number of chords per question"}},
       {"avoid_repeat", {"Avoid immediate repeats", Kind::kBool, true, {}, {}, {}, ""}},
       // Represent optional<bool> as tri-state: -1 = default, 0 = false, 1 = true
       {"chord_avoid_repeat", {"Chord avoid repeat (override)", Kind::kEnum, -1, {}, {}, {{"Default",-1},{"No",0},{"Yes",1}}, "Override per-chord repetition constraint"}},
       {"range_semitones", {"Pitch range (± semitones)", Kind::kInt, 12, IntRange{1,24,1}, {}, {}, ""}},
       {"add_seventh", {"Add seventh", Kind::kBool, false, {}, {}, {}, ""}},
+      {"sample_inversions", {"Sample inversions", Kind::kBool, false, {}, {}, {}, "Allow non-root bass"}},
+      // Represent optional enum as tri-state: -1 = random/unset, 0 = Before, 1 = After
+      {"use_anchor", {"Use tonic anchor", Kind::kBool, false, {}, {}, {}, "Play tonic chord before/after"}},
+      {"tonic_anchor", {"Tonic anchor position", Kind::kEnum, -1, {}, {}, {{"Random",-1},{"Before",0},{"After",1}}, "Unset/Random, or force anchor position"}},
       {"tempo_bpm", {"Tempo (BPM)", Kind::kInt, 120, IntRange{30,240,1}, {}, {}, "Playback tempo"}},
 
       // Voicing and prompt controls

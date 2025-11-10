@@ -70,7 +70,7 @@ def main() -> None:
             if isinstance(expected, ChordAnswer):
                 expected_value = str(expected.root_degree)
                 correct = user.strip() == expected_value
-                final_answer = ChordAnswer(root_degree=int(user))
+                final_answer = ChordAnswer.single(root_degree=int(user))
             elif isinstance(expected, MelodyAnswer):
                 expected_value = " ".join(str(v) for v in expected.melody)
                 entered = [int(part) for part in user.split() if part.strip()]
