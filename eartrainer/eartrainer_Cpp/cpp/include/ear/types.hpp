@@ -77,6 +77,7 @@ struct SessionSpec {
   std::vector<int> track_levels;
   std::optional<int> inspect_level;
   std::optional<int> inspect_tier;
+  std::optional<int> lesson;
 };
 
 struct LevelCatalogEntry {

@@ -1,6 +1,11 @@
 import SwiftUI
 import Bridge
 
+private func normalizeDegreeIndex(_ value: Int) -> Int {
+    let mod = value % 7
+    return mod >= 0 ? mod : mod + 7
+}
+
 public struct GameView: View {
     @EnvironmentObject private var viewModel: SessionViewModel
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -234,7 +239,8 @@ public struct GameView: View {
         let zeroIndexed = answerSlots.compactMap { $0?.zeroIndexedValue }
         guard zeroIndexed.count == context.expectedCount,
               let payload = context.makePayload(from: zeroIndexed) else { return }
-        let isCorrect = zeroIndexed == context.expectedDegrees
+        let normalizedInput = zeroIndexed.map(normalizeDegreeIndex)
+        let isCorrect = normalizedInput == context.normalizedDegrees
         submissionResult = isCorrect ? .correct : .incorrect
         inputLocked = true
         viewModel.submit(
@@ -248,7 +254,7 @@ public struct GameView: View {
         guard answerSlots.indices.contains(index),
               slotStates.indices.contains(index) else { return }
         answerSlots[index] = degree
-        let expected = context.expectedDegrees[index]
+        let expected = context.normalizedDegrees[index]
         let isCorrect = degree.zeroIndexedValue == expected
         slotStates[index] = isCorrect ? .correct : .incorrect
     }
@@ -284,21 +290,22 @@ public struct GameView: View {
     private func buildAnswerContext(from envelope: QuestionEnvelope) -> AnswerContext? {
         switch envelope.bundle.correctAnswer {
         case let .chord(answer):
+            let roots = answer.rootDegrees.isEmpty ? [answer.rootDegree] : answer.rootDegrees
             return AnswerContext(
                 kind: .chord,
-                expectedDegrees: [answer.rootDegree],
+                rawDegrees: roots,
                 instruction: "Identify the chord’s scale degree."
             )
         case let .melody(answer):
             return AnswerContext(
                 kind: .melody,
-                expectedDegrees: answer.melody,
+                rawDegrees: answer.melody,
                 instruction: "Enter the degrees for each note in the melody."
             )
         case let .harmony(answer):
             return AnswerContext(
                 kind: .harmony,
-                expectedDegrees: answer.notes,
+                rawDegrees: answer.notes,
                 instruction: "Identify the harmony."
             )
         }
@@ -438,22 +445,39 @@ extension GameView {
         }
 
         let kind: Kind
-        let expectedDegrees: [Int]
+        let rawDegrees: [Int]
+        let normalizedDegrees: [Int]
         let instruction: String
 
         var expectedCount: Int {
-            max(expectedDegrees.count, 1)
+            max(rawDegrees.count, 1)
         }
 
         func makePayload(from zeroIndexedDegrees: [Int]) -> AnswerPayload? {
+            let canonical = canonicalDegrees(from: zeroIndexedDegrees)
             switch kind {
             case .chord:
-                guard let value = zeroIndexedDegrees.first else { return nil }
+                guard let value = canonical.first else { return nil }
                 return .chord(ChordAnswer(rootDegree: value))
             case .melody:
-                return .melody(MelodyAnswer(melody: zeroIndexedDegrees))
+                return .melody(MelodyAnswer(melody: canonical))
             case .harmony:
-                return .harmony(HarmonyAnswer(notes: zeroIndexedDegrees))
+                return .harmony(HarmonyAnswer(notes: canonical))
+            }
+        }
+
+        init(kind: Kind, rawDegrees: [Int], instruction: String) {
+            let sanitized = rawDegrees.isEmpty ? [0] : rawDegrees
+            self.kind = kind
+            self.rawDegrees = sanitized
+            self.normalizedDegrees = sanitized.map(normalizeDegreeIndex)
+            self.instruction = instruction
+        }
+
+        private func canonicalDegrees(from userInput: [Int]) -> [Int] {
+            guard userInput.count == rawDegrees.count else { return userInput }
+            return zip(userInput, rawDegrees).map { value, target in
+                normalizeDegreeIndex(value) == normalizeDegreeIndex(target) ? target : value
             }
         }
     }

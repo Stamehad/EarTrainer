@@ -1187,6 +1187,11 @@ nlohmann::json to_json(const SessionSpec& spec) {
   } else {
     json_spec["inspect_tier"] = nullptr;
   }
+  if (spec.lesson.has_value()) {
+    json_spec["lesson"] = spec.lesson.value();
+  } else {
+    json_spec["lesson"] = nullptr;
+  }
   return json_spec;
 }
 
@@ -1284,6 +1289,9 @@ SessionSpec session_spec_from_json(const nlohmann::json& json_spec) {
   }
   if (json_spec.contains("inspect_tier") && !json_spec["inspect_tier"].is_null()) {
     spec.inspect_tier = json_spec["inspect_tier"].get<int>();
+  }
+  if (json_spec.contains("lesson") && !json_spec["lesson"].is_null()) {
+    spec.lesson = json_spec["lesson"].get<int>();
   }
   if (json_spec.contains("params") && json_spec["params"].is_object()) {
     spec.params = params_from_json(spec.drill_kind, json_spec["params"]);

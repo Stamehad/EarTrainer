@@ -92,7 +92,11 @@ std::vector<Pattern> build_patterns(const std::vector<int>& cluster_ids) {
 //====================================================================
 void HarmonyDrill::configure(const DrillSpec& spec) {
   spec_ = spec;
-  params = std::get<IntervalParams>(spec_.params);
+  try {
+    params = std::get<IntervalParams>(spec_.params);
+  } catch (const std::bad_variant_access&) {
+    throw std::runtime_error("HarmonyDrill: spec '" + spec_.id + "' missing interval params");
+  }
   tonic_midi_ = drills::central_tonic_midi(spec_.key);
   avoid_repeat_ = params.avoid_repeat;
   allowed_root_degrees_ = params.allowed_degrees;

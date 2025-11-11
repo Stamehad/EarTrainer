@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <variant>
 #include <utility>
 
 #include "../drills/common.hpp"        // parse_key_from_string etc.
@@ -59,7 +60,12 @@ DrillAssignment DrillFactory::create(const DrillSpec& spec) const {
   assignment.family = spec.family;
   assignment.spec = spec;
   assignment.module = create_module(spec.family);
-  assignment.module->configure(assignment.spec);
+  try {
+    assignment.module->configure(assignment.spec);
+  } catch (const std::bad_variant_access& ex) {
+    throw std::runtime_error("DrillFactory: bad params variant for family '" + spec.family +
+                             "' (id=" + spec.id + ") : " + ex.what());
+  }
   return assignment;
 }
 

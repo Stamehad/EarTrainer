@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
+#include <string>
 
 namespace ear {
 
@@ -20,7 +21,8 @@ inline std::uint64_t advance_rng(std::uint64_t& state) {
 
 inline int rand_int(std::uint64_t& state, int min, int max) {
   if (max < min) {
-    throw std::invalid_argument("rand_int: invalid interval");
+    throw std::invalid_argument("rand_int: invalid interval [" + std::to_string(min) + "," +
+                                std::to_string(max) + "]");
   }
   auto span = static_cast<std::uint64_t>(max - min + 1);
   auto value = advance_rng(state);

@@ -62,7 +62,7 @@ struct Lesson{
 
 // ---------- family ----------
 inline const char* family_of(const ear::DrillParams& dp) {
-    if (std::holds_alternative<ear::NoteParams>(dp))    return "melody";
+    if (std::holds_alternative<ear::NoteParams>(dp))    return "note";
     if (std::holds_alternative<ear::MelodyParams>(dp))  return "melody";
     if (std::holds_alternative<ear::IntervalParams>(dp))return "interval";
     if (std::holds_alternative<ear::ChordParams>(dp))   return "chord";

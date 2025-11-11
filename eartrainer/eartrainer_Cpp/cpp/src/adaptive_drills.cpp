@@ -10,11 +10,35 @@
 #include <stdexcept>
 #include <mutex>
 #include <sstream>
+#include <string_view>
 #include <utility>
+#include <cstdlib>
+#include <iostream>
 
 namespace ear {
 
 namespace {
+
+bool adaptive_debug_enabled() {
+  static bool enabled = [] {
+    const char* env = std::getenv("EAR_DEBUG_ADAPTIVE");
+    if (!env) {
+      env = std::getenv("EAR_DEBUG_SESSION");
+    }
+    if (!env) {
+      return false;
+    }
+    std::string value(env);
+    return !(value.empty() || value == "0" || value == "false" || value == "FALSE");
+  }();
+  return enabled;
+}
+
+void adaptive_debug(const std::string& message) {
+  if (adaptive_debug_enabled()) {
+    std::cerr << "[adaptive] " << message << std::endl;
+  }
+}
 
 void ensure_factory_registered() {
   static std::once_flag flag;
@@ -22,6 +46,24 @@ void ensure_factory_registered() {
     auto& factory = DrillFactory::instance();
     register_builtin_drills(factory);
   });
+}
+
+int track_index_for_family(std::string_view name) {
+  if (name == "melody") {
+    return 0;
+  }
+  if (name == "harmony") {
+    return 1;
+  }
+  if (name == "chord") {
+    return 2;
+  }
+  return -1;
+}
+
+bool uses_sequential_slots(ear::builtin::catalog_numbered::LessonType type) {
+  using Type = ear::builtin::catalog_numbered::LessonType;
+  return type == Type::Lesson || type == Type::Warmup;
 }
 
 } // namespace
@@ -60,10 +102,17 @@ void AdaptiveDrills::set_bout(const std::vector<int>& track_levels) {
   current_lesson_ = pick.node;
   lesson_type_ = current_lesson_->type; 
   current_track_index_ = pick.track_index;
-  question_limit_ = kDefaultQuestionTarget;
+  question_limit_ = 0;
   bout_questions_asked_ = 0;
   bout_finished_ = false;
 
+  rebuild_current_lesson_slots();
+}
+
+void AdaptiveDrills::rebuild_current_lesson_slots() {
+  if (!current_lesson_) {
+    throw std::runtime_error("AdaptiveDrills: no lesson selected");
+  }
   mix_ = current_lesson_->meta.mix >= 0;
   mix_slot_index_.reset();
   mix_slot_ = nullptr;
@@ -117,6 +166,40 @@ void AdaptiveDrills::set_bout(const std::vector<int>& track_levels) {
   }
 }
 
+bool AdaptiveDrills::set_lesson(int lesson_number) {
+  const char* family = ear::builtin::catalog_numbered::lesson_to_family(lesson_number);
+  if (std::string_view(family) == "none") {
+    return false;
+  }
+  const auto* lesson = manifest_.entry(lesson_number, family);
+  if (!lesson) {
+    return false;
+  }
+  current_lesson_ = lesson;
+  lesson_type_ = current_lesson_->type;
+  current_track_index_ = track_index_for_family(family);
+  question_limit_ = kDefaultQuestionTarget;
+  bout_questions_asked_ = 0;
+  bout_finished_ = false;
+  mix_slot_index_.reset();
+  mix_slot_ = nullptr;
+  last_track_pick_.reset();
+
+  if (last_track_levels_.size() != resources::ManifestView::kTrackCount) {
+    last_track_levels_.assign(resources::ManifestView::kTrackCount, 0);
+  }
+  if (current_track_index_ >= 0 &&
+      static_cast<std::size_t>(current_track_index_) < resources::ManifestView::kTrackCount) {
+    last_track_levels_.assign(resources::ManifestView::kTrackCount, 0);
+    last_track_levels_[static_cast<std::size_t>(current_track_index_)] = lesson_number;
+  }
+  last_track_weights_.assign(resources::ManifestView::kTrackCount, 0);
+
+  rebuild_current_lesson_slots();
+  adaptive_debug("set_lesson lesson=" + std::to_string(lesson_number));
+  return true;
+}
+
 void AdaptiveDrills::initialize_bout(
     int level,
     const std::vector<DrillSpec>& specs,
@@ -160,6 +243,9 @@ void AdaptiveDrills::initialize_bout(
   if (slot_entries_.size() < slots_.size()) slot_entries_.resize(slots_.size(), nullptr);
   if (slot_is_mix_.size() < slots_.size()) slot_is_mix_.resize(slots_.size(), false);
   slot_runtime_.assign(slots_.size(), DrillRuntime{});
+  slot_completed_.assign(slots_.size(), false);
+  eligible_min_questions_ = 0;
+  update_question_limit();
   current_slot_ = nullptr;
   overall_ema_ = 0.0;
   overall_ema_initialized_ = false;
@@ -188,9 +274,9 @@ QuestionBundle AdaptiveDrills::next() {
   if (bout_finished_) {
     throw std::runtime_error("AdaptiveDrills::next called after bout finished");
   }
-  using Type = ear::builtin::catalog_numbered::LessonType;
+  const bool sequential = uses_sequential_slots(lesson_type_);
 
-  if (lesson_type_ == Type::Lesson){
+  if (sequential){
     if (!current_slot_) {
       throw std::runtime_error("AdaptiveDrills: no active slot for lesson");
     }
@@ -216,6 +302,10 @@ QuestionBundle AdaptiveDrills::next() {
     auto bundle = slot->module->next_question(slot->rng_state);
     std::string question_id = make_question_id();
     question_slot_index_[question_id] = slot_index;
+    adaptive_debug("lesson "
+                   + std::to_string(current_lesson_ ? current_lesson_->lesson : -1)
+                   + " slot=" + std::to_string(slot_index)
+                   + " question=" + question_id);
     bundle.question_id = std::move(question_id);
     return bundle;
 
@@ -252,6 +342,7 @@ void AdaptiveDrills::set_current_slot(std::size_t index) {
   current_slot_index_ = index;
   current_slot_ = &slots_[index];
   current_drill_ = entry_for_slot(index);
+  adaptive_debug("set_current_slot index=" + std::to_string(index) + " id=" + current_slot_->id);
 }
 
 const ear::builtin::catalog_numbered::DrillEntry*
@@ -262,7 +353,52 @@ AdaptiveDrills::entry_for_slot(std::size_t index) const {
 
 bool AdaptiveDrills::is_main_slot(std::size_t index) const {
   if (index >= slot_is_mix_.size()) return true;
-  return !slot_is_mix_[index];
+  if (slot_is_mix_[index]) {
+    return false;
+  }
+  if (index < slot_completed_.size() && slot_completed_[index]) {
+    return false;
+  }
+  return true;
+}
+
+void AdaptiveDrills::update_question_limit() {
+  eligible_min_questions_ = 0;
+  const int fallback = kDefaultMinQuestions;
+  for (std::size_t i = 0; i < slot_entries_.size(); ++i) {
+    if (i < slot_is_mix_.size() && slot_is_mix_[i]) {
+      continue;
+    }
+    const auto* entry = slot_entries_[i];
+    if (!entry) {
+      continue;
+    }
+    int min_q = entry->q > 0 ? entry->q : fallback;
+    eligible_min_questions_ += min_q;
+  }
+  if (eligible_min_questions_ <= 0) {
+    eligible_min_questions_ = fallback * static_cast<int>(slots_.size());
+    if (eligible_min_questions_ <= 0) {
+      eligible_min_questions_ = fallback;
+    }
+  }
+
+  const double elig_cutoff =
+      std::ceil(kProgressFactor * static_cast<double>(eligible_min_questions_));
+  double mix_factor = 1.0;
+  if (mix_ && mix_prob_ < 1.0) {
+    const double denom = std::max(0.05, 1.0 - mix_prob_);
+    mix_factor = 1.0 / denom;
+  }
+  const int total_cutoff =
+      static_cast<int>(std::ceil(elig_cutoff * mix_factor));
+  question_limit_ = std::max(eligible_min_questions_, total_cutoff);
+  if (question_limit_ <= 0) {
+    question_limit_ = eligible_min_questions_;
+  }
+  adaptive_debug("question_limit updated elig_min=" + std::to_string(eligible_min_questions_) +
+                 " mix_prob=" + std::to_string(mix_prob_) +
+                 " limit=" + std::to_string(question_limit_));
 }
 
 std::optional<std::size_t> AdaptiveDrills::adjacent_slot_index(std::size_t from,
@@ -380,8 +516,17 @@ bool AdaptiveDrills::plateau_reached(const DrillRuntime& stats) const {
 }
 
 bool AdaptiveDrills::promote_current_slot() {
+  if (current_slot_index_ < slot_completed_.size() && is_main_slot(current_slot_index_)) {
+    slot_completed_[current_slot_index_] = true;
+    adaptive_debug("slot completed index=" + std::to_string(current_slot_index_));
+  }
   auto next = adjacent_slot_index(current_slot_index_, +1);
-  if (!next) return false;
+  if (!next) {
+    bout_finished_ = true;
+    adaptive_debug("bout finished after promotions");
+    return false;
+  }
+  adaptive_debug("advancing to slot index=" + std::to_string(*next));
   set_current_slot(*next);
   return true;
 }
@@ -389,6 +534,7 @@ bool AdaptiveDrills::promote_current_slot() {
 bool AdaptiveDrills::demote_current_slot() {
   auto prev = adjacent_slot_index(current_slot_index_, -1);
   if (!prev) return false;
+  adaptive_debug("demoting to slot index=" + std::to_string(*prev));
   set_current_slot(*prev);
   return true;
 }
@@ -409,14 +555,12 @@ void AdaptiveDrills::handle_progress_controller() {
   auto& stats = slot_runtime_[current_slot_index_];
   const auto thresholds = thresholds_for_slot(current_slot_index_);
 
-  const bool can_promote =
-      stats.asked >= static_cast<std::size_t>(thresholds.min_questions) &&
-      stats.ema >= thresholds.promote_ema;
+  const bool has_met_min =
+      stats.asked >= static_cast<std::size_t>(std::max(1, thresholds.min_questions));
+  const bool can_promote = has_met_min && stats.ema >= thresholds.promote_ema;
 
   const bool plateau_ok =
-      is_simplification_slot(current_slot_index_) &&
-      stats.asked >= static_cast<std::size_t>(std::max(1, static_cast<int>(
-                                  std::ceil(0.75 * thresholds.min_questions)))) &&
+      has_met_min && is_simplification_slot(current_slot_index_) &&
       stats.ema >= kPlateauPromoteEma && plateau_reached(stats);
 
   const bool should_demote =
@@ -433,6 +577,7 @@ void AdaptiveDrills::handle_progress_controller() {
 void AdaptiveDrills::adjust_mix_probability() {
   if (!mix_ || !mix_slot_index_.has_value()) {
     mix_prob_ = std::clamp(mix_prob_, kMixProbMin, kMixProbMax);
+    update_question_limit();
     return;
   }
   if (!overall_ema_initialized_) return;
@@ -441,6 +586,7 @@ void AdaptiveDrills::adjust_mix_probability() {
   const double err = kTargetOverallEma - overall_ema_;
   const double gap = std::max(0.05, std::fabs(mix_ema - new_ema));
   mix_prob_ = std::clamp(mix_prob_ + kMixGain * err / gap, kMixProbMin, kMixProbMax);
+  update_question_limit();
 }
 
 AdaptiveDrills::BoutOutcome AdaptiveDrills::current_bout_outcome() const {
@@ -493,6 +639,7 @@ nlohmann::json AdaptiveDrills::diagnostic() const {
   info["slots"] = static_cast<int>(slots_.size());
   info["questions_emitted"] = static_cast<int>(question_counter_);
   info["question_limit"] = question_limit_;
+  info["eligible_min_questions"] = eligible_min_questions_;
   info["questions_answered"] = bout_questions_asked_;
   info["bout_finished"] = bout_finished_;
   const auto report = end_bout();

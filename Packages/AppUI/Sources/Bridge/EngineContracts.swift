@@ -102,6 +102,53 @@ public enum JSONValue: Codable, Equatable {
         }
     }
 
+    public func readableDescription() -> String {
+        let description = diagnosticDescription(indent: 0)
+        return description.isEmpty ? descriptionFallback() : description
+    }
+
+    private func diagnosticDescription(indent: Int) -> String {
+        let indentPrefix = String(repeating: "  ", count: indent)
+        switch self {
+        case let .object(values):
+            if values.isEmpty { return indentPrefix + "{}" }
+            return values
+                .sorted { $0.key < $1.key }
+                .map { key, value in
+                    let nested = value.diagnosticDescription(indent: indent + 1)
+                    if nested.contains("\n") {
+                        return "\(indentPrefix)\(key):\n\(nested)"
+                    } else {
+                        return "\(indentPrefix)\(key): \(nested.trimmingCharacters(in: .whitespaces))"
+                    }
+                }
+                .joined(separator: "\n")
+        case let .array(values):
+            if values.isEmpty { return indentPrefix + "[]" }
+            return values
+                .enumerated()
+                .map { index, value in
+                    let nested = value.diagnosticDescription(indent: indent + 1)
+                    if nested.contains("\n") {
+                        return "\(indentPrefix)[\(index)]:\n\(nested)"
+                    } else {
+                        return "\(indentPrefix)[\(index)]: \(nested.trimmingCharacters(in: .whitespaces))"
+                    }
+                }
+                .joined(separator: "\n")
+        case let .string(value):
+            return indentPrefix + "\"\(value)\""
+        case let .int(value):
+            return indentPrefix + String(value)
+        case let .double(value):
+            return indentPrefix + String(value)
+        case let .bool(value):
+            return indentPrefix + String(value)
+        case .null:
+            return indentPrefix + "null"
+        }
+    }
+
     private func toFoundation() -> Any {
         switch self {
         case let .string(value):
@@ -139,6 +186,7 @@ public struct SessionSpec: Codable, Equatable {
     public var levelInspect: Bool
     public var inspectLevel: Int?
     public var inspectTier: Int?
+    public var lesson: Int?
 
     public init(
         version: String = "v1",
@@ -146,7 +194,7 @@ public struct SessionSpec: Codable, Equatable {
         key: String = "C major",
         range: [Int] = [48, 72],
         tempoBpm: Int? = nil,
-        nQuestions: Int = 5,
+        nQuestions: Int = 0,
         generation: String = "adaptive",
         assistancePolicy: [String: Int] = [:],
         samplerParams: [String: JSONValue] = [:],
@@ -156,7 +204,8 @@ public struct SessionSpec: Codable, Equatable {
         trackLevels: [Int] = [1],
         levelInspect: Bool = false,
         inspectLevel: Int? = nil,
-        inspectTier: Int? = nil
+        inspectTier: Int? = nil,
+        lesson: Int? = nil
     ) {
         self.version = version
         self.drillKind = drillKind
@@ -174,6 +223,7 @@ public struct SessionSpec: Codable, Equatable {
         self.levelInspect = levelInspect
         self.inspectLevel = inspectLevel
         self.inspectTier = inspectTier
+        self.lesson = lesson
     }
 
     public init(from decoder: Decoder) throws {
@@ -183,7 +233,7 @@ public struct SessionSpec: Codable, Equatable {
         key = try container.decodeIfPresent(String.self, forKey: .key) ?? "C major"
         range = try container.decodeIfPresent([Int].self, forKey: .range) ?? [48, 72]
         tempoBpm = try container.decodeIfPresent(Int.self, forKey: .tempoBpm)
-        nQuestions = try container.decodeIfPresent(Int.self, forKey: .nQuestions) ?? 5
+        nQuestions = try container.decodeIfPresent(Int.self, forKey: .nQuestions) ?? 0
         generation = try container.decodeIfPresent(String.self, forKey: .generation) ?? "adaptive"
         assistancePolicy = try container.decodeIfPresent([String: Int].self, forKey: .assistancePolicy) ?? [:]
         samplerParams = try container.decodeIfPresent([String: JSONValue].self, forKey: .samplerParams) ?? [:]
@@ -194,6 +244,7 @@ public struct SessionSpec: Codable, Equatable {
         levelInspect = try container.decodeIfPresent(Bool.self, forKey: .levelInspect) ?? false
         inspectLevel = try container.decodeIfPresent(Int.self, forKey: .inspectLevel)
         inspectTier = try container.decodeIfPresent(Int.self, forKey: .inspectTier)
+        lesson = try container.decodeIfPresent(Int.self, forKey: .lesson)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -213,6 +264,7 @@ public struct SessionSpec: Codable, Equatable {
         case levelInspect = "level_inspect"
         case inspectLevel = "inspect_level"
         case inspectTier = "inspect_tier"
+        case lesson
     }
 }
 
@@ -383,8 +435,12 @@ extension AnswerPayload: Codable {
         let type = try container.decode(String.self, forKey: .type)
         switch type {
         case "chord":
-            let roots = (try? container.decode([Int].self, forKey: .rootDegrees))
-                ?? [try container.decode(Int.self, forKey: .rootDegree)]
+            let roots: [Int]
+            if let decoded = try? container.decode([Int].self, forKey: .rootDegrees) {
+                roots = decoded
+            } else {
+                roots = [try container.decode(Int.self, forKey: .rootDegree)]
+            }
             let bass = try AnswerPayload.decodeOptionalIntArray(from: container, key: .bassDegrees)
             let top = try AnswerPayload.decodeOptionalIntArray(from: container, key: .topDegrees)
             let expectRoot = (try? container.decode([Bool].self, forKey: .expectRoot))

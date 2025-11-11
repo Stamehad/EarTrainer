@@ -236,7 +236,11 @@ std::vector<int> degrees_to_midi(
 //====================================================================
 void MelodyDrill::configure(const DrillSpec& spec) {
   spec_ = spec;
-  params = std::get<MelodyParams>(spec_.params);
+  try {
+    params = std::get<MelodyParams>(spec_.params);
+  } catch (const std::bad_variant_access&) {
+    throw std::runtime_error("MelodyDrill: spec '" + spec_.id + "' missing melody params");
+  }
   tonic_midi = drills::central_tonic_midi(spec_.key);
   midi_range = {
     tonic_midi - params.range_down, 

@@ -74,6 +74,7 @@ public struct EntranceView: View {
     @State private var sessionMode: SessionMode = .adaptive
     @State private var selectedKeyValue: String = Self.randomKeyValue
     @State private var questionCount: Int = 20
+    @State private var adaptiveQuestionCapEnabled: Bool = false
     @State private var inspectorSelectionID: String = ""
     @State private var manualSelectionID: String?
     @State private var manualFieldValues: [String: JSONValue] = [:]
@@ -81,6 +82,7 @@ public struct EntranceView: View {
     @State private var showSettingsSheet = false
     @State private var showCustomSheet = false
     @State private var hasInitialisedState = false
+    @State private var adaptiveLessonInput: String = ""
 
     public init() {}
 
@@ -148,6 +150,12 @@ public struct EntranceView: View {
                 }
             }
         }
+        .onChange(of: adaptiveLessonInput) { newValue in
+            let filtered = newValue.filter { $0.isNumber }
+            if filtered != newValue {
+                adaptiveLessonInput = filtered
+            }
+        }
         .onChange(of: manualSelectionID) { newValue in
             guard let key = newValue,
                   let definition = viewModel.drillCatalog?.definition(for: key) else { return }
@@ -158,6 +166,17 @@ public struct EntranceView: View {
         }
         .sheet(isPresented: $showCustomSheet) {
             customSheet
+        }
+        .overlay(alignment: .top) {
+            if let message = viewModel.errorBanner {
+                ErrorBannerView(message: message) {
+                    withAnimation {
+                        viewModel.errorBanner = nil
+                    }
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(1)
+            }
         }
     }
 
@@ -274,7 +293,11 @@ public struct EntranceView: View {
         let key = selectedKeyValue == Self.randomKeyValue ? "Random key" : "Key \(selectedKeyValue)"
         let questions = "\(questionCount) question\(questionCount == 1 ? "" : "s")"
         let input = viewModel.answerInputMode.label
-        return [key, questions, input].joined(separator: " • ")
+        var parts = [key, questions, input]
+        if sessionMode == .adaptive, let lesson = adaptiveLessonNumber {
+            parts.append("Lesson \(lesson)")
+        }
+        return parts.joined(separator: " • ")
     }
 
     private var inspectorSelectionSummary: String? {
@@ -287,6 +310,12 @@ public struct EntranceView: View {
     private var manualDefinition: DrillDefinition? {
         guard let key = manualSelectionID else { return nil }
         return viewModel.drillCatalog?.definition(for: key)
+    }
+
+    private var adaptiveLessonNumber: Int? {
+        let trimmed = adaptiveLessonInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let value = Int(trimmed) else { return nil }
+        return value
     }
 
     private var isStartReady: Bool {
@@ -320,7 +349,11 @@ public struct EntranceView: View {
         } else {
             viewModel.spec.key = selectedKeyValue
         }
-        viewModel.spec.nQuestions = max(1, questionCount)
+        if sessionMode == .adaptive && !adaptiveQuestionCapEnabled {
+            viewModel.spec.nQuestions = 0
+        } else {
+            viewModel.spec.nQuestions = max(1, questionCount)
+        }
     }
 
     private func applyAdaptiveConfiguration() {
@@ -330,6 +363,16 @@ public struct EntranceView: View {
         viewModel.spec.inspectLevel = nil
         viewModel.spec.inspectTier = nil
         viewModel.spec.params = nil
+        if adaptiveQuestionCapEnabled {
+            viewModel.spec.nQuestions = max(1, questionCount)
+        } else {
+            viewModel.spec.nQuestions = 0
+        }
+        if let lesson = adaptiveLessonNumber {
+            viewModel.spec.lesson = lesson
+        } else {
+            viewModel.spec.lesson = nil
+        }
     }
 
     private func applyInspectorConfiguration() {
@@ -338,6 +381,7 @@ public struct EntranceView: View {
         viewModel.spec.trackLevels = []
         applyInspectorSelection(for: inspectorSelectionID)
         viewModel.spec.params = nil
+        viewModel.spec.lesson = nil
     }
 
     @discardableResult
@@ -349,6 +393,7 @@ public struct EntranceView: View {
         viewModel.spec.inspectLevel = nil
         viewModel.spec.inspectTier = nil
         viewModel.spec.drillKind = manualDefinition.key
+        viewModel.spec.lesson = nil
 
         let filtered = manualDefinition.fields.reduce(into: [String: JSONValue]()) { result, field in
             if let value = manualFieldValues[field.key] ?? field.defaultValue {
@@ -415,11 +460,21 @@ public struct EntranceView: View {
         guard !hasInitialisedState else { return }
         hasInitialisedState = true
 
-        questionCount = max(1, viewModel.spec.nQuestions)
-        if questionCount == 5 {
+        if viewModel.spec.nQuestions > 0 {
+            questionCount = max(1, viewModel.spec.nQuestions)
+            if questionCount == 5 {
+                questionCount = 20
+            }
+        } else {
             questionCount = 20
         }
-        viewModel.spec.nQuestions = questionCount
+        if viewModel.spec.adaptive {
+            adaptiveQuestionCapEnabled = viewModel.spec.nQuestions > 0
+            viewModel.spec.nQuestions = adaptiveQuestionCapEnabled ? max(1, questionCount) : 0
+        } else {
+            adaptiveQuestionCapEnabled = false
+            viewModel.spec.nQuestions = max(1, questionCount)
+        }
 
         if viewModel.spec.levelInspect {
             sessionMode = .levelInspector
@@ -427,6 +482,9 @@ public struct EntranceView: View {
             viewModel.loadInspectorOptionsIfNeeded()
         } else if viewModel.spec.adaptive {
             sessionMode = .adaptive
+            if let lesson = viewModel.spec.lesson {
+                adaptiveLessonInput = String(lesson)
+            }
         } else {
             sessionMode = .manual
             pendingManualSelection = viewModel.spec.drillKind
@@ -437,6 +495,9 @@ public struct EntranceView: View {
         }
 
         selectedKeyValue = Self.randomKeyValue
+        if viewModel.spec.lesson == nil {
+            adaptiveLessonInput = ""
+        }
     }
 
     private func ensureInspectorSelection() {
@@ -523,6 +584,12 @@ public struct EntranceView: View {
                     Stepper(value: $questionCount, in: 1...200) {
                         Text("\(questionCount) question\(questionCount == 1 ? "" : "s")")
                     }
+                    .disabled(sessionMode == .adaptive && !adaptiveQuestionCapEnabled)
+                    if sessionMode == .adaptive && !adaptiveQuestionCapEnabled {
+                        Text("Adaptive mode controls bout length unless a cap is enabled.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Section("Input Method") {
@@ -558,9 +625,7 @@ public struct EntranceView: View {
 
                 switch sessionMode {
                 case .adaptive:
-                    Section(footer: Text("Adaptive mode adapts to your progress and is recommended for daily practice.")) {
-                        EmptyView()
-                    }
+                    adaptiveConfigurationSection
                 case .levelInspector:
                     inspectorConfigurationSection
                 case .manual:
@@ -633,6 +698,22 @@ public struct EntranceView: View {
                 ForEach(definition.fields) { field in
                     manualFieldRow(for: field)
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var adaptiveConfigurationSection: some View {
+        Section(header: Text("Lesson Override"), footer: Text("Adaptive mode still tracks your progress. Use a lesson number to jump directly to a specific bout when testing.").font(.footnote).foregroundStyle(.secondary)) {
+            TextField("Lesson number", text: $adaptiveLessonInput)
+#if os(iOS)
+                .keyboardType(.numberPad)
+#endif
+            Toggle("Limit question count", isOn: $adaptiveQuestionCapEnabled)
+            if adaptiveQuestionCapEnabled {
+                Text("Stepper value applies when limit is enabled.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
     }

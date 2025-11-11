@@ -58,7 +58,11 @@ std::string get_interval_name(int semitones) {
 
 void IntervalDrill::configure(const DrillSpec& spec) {
   spec_ = spec;
-  params = std::get<IntervalParams>(spec.params);
+  try {
+    params = std::get<IntervalParams>(spec.params);
+  } catch (const std::bad_variant_access&) {
+    throw std::runtime_error("IntervalDrill: spec '" + spec.id + "' missing interval params");
+  }
   last_bottom_degree_.reset();
   last_bottom_midi_.reset();
 }

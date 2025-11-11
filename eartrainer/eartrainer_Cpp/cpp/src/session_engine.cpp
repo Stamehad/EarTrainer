@@ -20,10 +20,12 @@
 #include <mutex>
 #include <memory>
 #include <optional>
+#include <iostream>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>
+#include <cstdlib>
 
 namespace ear {
 namespace {
@@ -38,6 +40,24 @@ std::string make_question_id(std::size_t index) {
   oss.fill('0');
   oss << index + 1;
   return oss.str();
+}
+
+bool session_debug_enabled() {
+  static bool enabled = [] {
+    const char* env = std::getenv("EAR_DEBUG_SESSION");
+    if (!env) {
+      return false;
+    }
+    std::string value(env);
+    return !(value.empty() || value == "0" || value == "false" || value == "FALSE");
+  }();
+  return enabled;
+}
+
+void session_debug_log(const std::string& message) {
+  if (session_debug_enabled()) {
+    std::cerr << "[session] " << message << std::endl;
+  }
 }
 
 std::string factory_family_for(const std::string& kind) {
@@ -509,6 +529,12 @@ std::unique_ptr<SessionEngine> make_engine() {
 }
 
 std::string SessionEngineImpl::create_manual_session(const SessionSpec& spec) {
+  if (session_debug_enabled()) {
+    std::ostringstream oss;
+    oss << "create_manual_session kind=" << spec.drill_kind << " key=" << spec.key
+        << " n_questions=" << spec.n_questions;
+    session_debug_log(oss.str());
+  }
   SessionData session;
   session.spec = spec;
   session.mode = SessionMode::Manual;
@@ -538,6 +564,12 @@ std::string SessionEngineImpl::create_manual_session(const SessionSpec& spec) {
 }
 
 std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) {
+  if (session_debug_enabled()) {
+    std::ostringstream oss;
+    oss << "create_adaptive_session lesson=" << (spec.lesson.has_value() ? spec.lesson.value() : -1)
+        << " key=" << spec.key << " n_questions=" << spec.n_questions;
+    session_debug_log(oss.str());
+  }
   SessionData session;
   session.spec = spec;
   session.spec.drill_kind = "adaptive";
@@ -607,7 +639,20 @@ std::string SessionEngineImpl::create_adaptive_session(const SessionSpec& spec) 
       session.track_levels.resize(track_count);
     }
   }
-  session.adaptive_drills->set_bout(session.track_levels);
+  bool lesson_override = false;
+  if (spec.lesson.has_value()) {
+    if (!session.adaptive_drills->set_lesson(spec.lesson.value())) {
+      throw std::runtime_error("Adaptive session: unknown lesson " +
+                               std::to_string(spec.lesson.value()));
+    }
+    lesson_override = true;
+  }
+  if (!lesson_override) {
+    session.adaptive_drills->set_bout(session.track_levels);
+  }
+  if (session_debug_enabled()) {
+    session_debug_log("adaptive diagnostic: " + session.adaptive_drills->diagnostic().dump());
+  }
   session.track_levels = session.adaptive_drills->last_used_track_levels();
   session.spec.track_levels = session.track_levels;
   // DrillHub deprecated; adaptive_drills drives question selection directly
@@ -799,9 +844,7 @@ SessionEngine::Next SessionEngineImpl::submit_result_manual(const std::string& s
 
 SessionEngine::Next SessionEngineImpl::next_question_adaptive(const std::string& session_id,
                                                               SessionData& session) {
-  if (session.summary_ready &&
-      session.result_log.size() >= session.adaptive_target_questions &&
-      session.adaptive_target_questions != 0) {
+  if (session.summary_ready) {
     attach_adaptive_summary(session);
     return session.summary_cache;
   }
@@ -812,6 +855,20 @@ SessionEngine::Next SessionEngineImpl::next_question_adaptive(const std::string&
   }
 
   // DrillHub removed; no hub check needed
+
+  if (session.adaptive_drills && session.adaptive_drills->bout_finished()) {
+    if (!session.summary_ready) {
+      session.summary_cache =
+          build_summary(session_id, session.spec.drill_kind, session.result_log);
+      session.summary_ready = true;
+      attach_adaptive_summary(session);
+    }
+#ifndef NDEBUG
+    std::cerr << "[adaptive] bout finished early after "
+              << session.result_log.size() << " answers\n";
+#endif
+    return session.summary_cache;
+  }
 
   if (session.adaptive_target_questions != 0 &&
       session.adaptive_asked >= session.adaptive_target_questions) {
@@ -843,6 +900,16 @@ SessionEngine::Next SessionEngineImpl::next_question_adaptive(const std::string&
   session.questions.push_back(std::move(state));
   session.active_question = index;
   session.adaptive_asked += 1;
+  if (session_debug_enabled()) {
+    const auto& stored = session.questions.back();
+    std::ostringstream oss;
+    oss << "next_question_adaptive -> engine id=" << stored.id
+        << " (source "
+        << (stored.adaptive_question_id.has_value() ? stored.adaptive_question_id.value()
+                                                    : std::string("n/a"))
+        << ")";
+    session_debug_log(oss.str());
+  }
   // Not attributing per drill kind in this initial integration
 
   auto& stored = session.questions.back();
@@ -912,9 +979,12 @@ SessionEngine::Next SessionEngineImpl::submit_result_adaptive(const std::string&
   Next response;
   SubmitCache submit_cache{report};
 
+  const bool bout_finished =
+      session.adaptive_drills && session.adaptive_drills->bout_finished();
   const bool session_complete =
-      session.adaptive_target_questions != 0 &&
-      session.result_log.size() >= session.adaptive_target_questions;
+      (session.adaptive_target_questions != 0 &&
+       session.result_log.size() >= session.adaptive_target_questions) ||
+      bout_finished;
 
   if (session_complete) {
     if (!session.summary_ready) {
@@ -927,6 +997,9 @@ SessionEngine::Next SessionEngineImpl::submit_result_adaptive(const std::string&
     response = session.summary_cache;
     submit_cache.is_summary = true;
     submit_cache.summary = session.summary_cache;
+  } else if (session.mode == SessionMode::Adaptive) {
+    session.submit_cache[report.question_id] = submit_cache;
+    return next_question_adaptive(session_id, session);
   } else {
     auto bundle = make_bundle(session, state);
     response = bundle;
@@ -1011,6 +1084,12 @@ std::string SessionEngineImpl::session_key(const std::string& session_id) {
 
 MidiClip SessionEngineImpl::orientation_prompt(const std::string& session_id) {
   auto& session = get_session(session_id);
+  if (session_debug_enabled()) {
+    std::ostringstream oss;
+    oss << "orientation_prompt key=" << session.spec.key << " lesson="
+        << (session.spec.lesson.has_value() ? session.spec.lesson.value() : -1);
+    session_debug_log(oss.str());
+  }
   return assistance::orientation_clip(session.spec);
 }
 

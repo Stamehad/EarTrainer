@@ -24,6 +24,7 @@ class SessionSpec:
     level_inspect: bool = False
     inspect_level: Optional[int] = None
     inspect_tier: Optional[int] = None
+    lesson: Optional[int] = None
 
     def to_json(self) -> Dict[str, Any]:
         data = asdict(self)
@@ -32,6 +33,7 @@ class SessionSpec:
         data["sampler_params"] = dict(self.sampler_params)
         data["params"] = dict(self.params)
         data["track_levels"] = list(self.track_levels)
+        data["lesson"] = self.lesson
         return data
 
     @classmethod
@@ -55,6 +57,7 @@ class SessionSpec:
             level_inspect=bool(data.get("level_inspect", False)),
             inspect_level=data.get("inspect_level"),
             inspect_tier=data.get("inspect_tier"),
+            lesson=data.get("lesson"),
         )
 
 

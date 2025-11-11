@@ -67,6 +67,7 @@ public:
                           std::uint64_t seed = 1);
   // MAIN BOUT (LESSON) LOOP
   void set_bout(const std::vector<int>& track_levels);
+  bool set_lesson(int lesson_number);
   QuestionBundle next(); 
   ScoreSnapshot submit_feedback(const ResultReport& report);
   BoutOutcome current_bout_outcome() const;
@@ -79,6 +80,8 @@ public:
   std::size_t size() const { return slots_.size(); }
   std::size_t track_count() const { return resources::ManifestView::kTrackCount; }
   const std::vector<int>& last_used_track_levels() const { return last_track_levels_; }
+  bool bout_finished() const { return bout_finished_; }
+  int question_limit() const { return question_limit_; }
 
 private:
   //-----------------------------------------------------------------
@@ -119,7 +122,9 @@ private:
   bool demote_current_slot();
   std::optional<std::size_t> adjacent_slot_index(std::size_t from, int direction) const;
   void set_current_slot(std::size_t index);
+  void rebuild_current_lesson_slots();
   bool is_main_slot(std::size_t index) const;
+  void update_question_limit();
   const ear::builtin::catalog_numbered::DrillEntry* entry_for_slot(std::size_t index) const;
   struct DrillThresholds;
   DrillThresholds thresholds_for_slot(std::size_t slot_index) const;
@@ -157,9 +162,11 @@ private:
   // - overall_ema_: global EMA for CC (comfort) control
   std::vector<const ear::builtin::catalog_numbered::DrillEntry*> slot_entries_;
   std::vector<bool> slot_is_mix_;
+  std::vector<bool> slot_completed_;
   std::vector<DrillRuntime> slot_runtime_;
   double overall_ema_ = 0.0;
   bool overall_ema_initialized_ = false;
+  int eligible_min_questions_ = 0;
 
   int current_track_index_ = -1;
   std::vector<int> last_track_levels_;
@@ -189,6 +196,7 @@ private:
   static constexpr double kDefaultPromoteEma = 0.85;// default promote EMA
   static constexpr double kDefaultDemoteEma = 0.60; // default demote EMA
   static constexpr int kDefaultMinQuestions = 10;   // default min questions per drill
+  static constexpr double kProgressFactor = 1.5;
 
   // Comfort Controller (CC) parameters
   static constexpr double kOverallEmaAlpha = 0.95;  // overall EMA smoothing

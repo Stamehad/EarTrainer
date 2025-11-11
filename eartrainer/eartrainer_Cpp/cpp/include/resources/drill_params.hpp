@@ -34,7 +34,7 @@ struct NoteParams {
   bool pathway = false; 
   bool pathway_repeat_lead = false;
   double pathway_beats = 1.0;
-  double pathway_rest = 1.0;
+  double pathway_rest = 0.0;
   bool incomplete = false;
   
   // ANCHOR TONIC:

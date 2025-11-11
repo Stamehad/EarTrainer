@@ -8,6 +8,8 @@ struct DegreeGridKeypad: View {
     var keyCornerRadius: CGFloat = 12
     var keySpacing: CGFloat = 8
 
+    @Environment(\.colorScheme) private var colorScheme
+
     private struct Key: Identifiable {
         enum Kind {
             case degree(Degree)
@@ -78,12 +80,12 @@ struct DegreeGridKeypad: View {
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: keyCornerRadius)
-                    .fill(Color.white)
+                    .fill(Color.panelBackground)
                     .overlay(
                         RoundedRectangle(cornerRadius: keyCornerRadius)
-                            .stroke(Color.black.opacity(0.15), lineWidth: 1)
+                            .stroke(Color.primary.opacity(colorScheme == .dark ? 0.25 : 0.15), lineWidth: 1)
                     )
-                    .shadow(color: .black.opacity(0.06), radius: 3, y: 2)
+                    .shadow(color: shadowColor, radius: 3, y: 2)
 
                 VStack(spacing: 4) {
                     Text(key.title)
@@ -100,6 +102,10 @@ struct DegreeGridKeypad: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel(for: key))
+    }
+
+    private var shadowColor: Color {
+        colorScheme == .dark ? Color.black.opacity(0.45) : Color.black.opacity(0.1)
     }
 
     private func accessibilityLabel(for key: Key) -> String {

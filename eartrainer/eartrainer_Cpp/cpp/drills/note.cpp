@@ -93,7 +93,11 @@ std::vector<int> get_pathway_midi (int degree, int midi, int tonic_midi, bool in
 //====================================================================
 void NoteDrill::configure(const DrillSpec& spec) {
   spec_ = spec;
-  params = std::get<NoteParams>(spec_.params);
+  try {
+    params = std::get<NoteParams>(spec_.params);
+  } catch (const std::bad_variant_access&) {
+    throw std::runtime_error("NoteDrill: spec '" + spec_.id + "' missing note params");
+  }
   last_degree_.reset();
   last_midi_.reset();
   tonic_midi = drills::central_tonic_midi(spec_.key);

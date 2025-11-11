@@ -16,6 +16,15 @@ final class MidiAudioPlayer {
     private let queue = DispatchQueue(label: "com.eartrainer.midi-player")
     private var soundFontURL: URL?
     private var currentPlayer: AVMIDIPlayer?
+#if DEBUG
+    private static let isVerboseLoggingEnabled: Bool = {
+        guard let value = ProcessInfo.processInfo.environment["EAR_DEBUG_MIDI"] else {
+            return false
+        }
+        let lowered = value.lowercased()
+        return !(lowered.isEmpty || lowered == "0" || lowered == "false")
+    }()
+#endif
 
     private init() {}
 
@@ -26,11 +35,15 @@ final class MidiAudioPlayer {
             try session.setCategory(.playback, mode: .default, options: [])
             try session.setActive(true, options: [])
             #if DEBUG
-            print("[MidiAudioPlayer] AVAudioSession configured: category=playback")
+            if Self.isVerboseLoggingEnabled {
+                print("[MidiAudioPlayer] AVAudioSession configured: category=playback")
+            }
             #endif
         } catch {
             #if DEBUG
-            print("[MidiAudioPlayer] Failed to configure AVAudioSession:", error)
+            if Self.isVerboseLoggingEnabled {
+                print("[MidiAudioPlayer] Failed to configure AVAudioSession:", error)
+            }
             #endif
         }
     }
@@ -105,8 +118,10 @@ final class MidiAudioPlayer {
         primaryBundles.forEach { appendResources(from: $0) }
 
         #if DEBUG
-        print("[MidiAudioPlayer] Searching for soundfonts in:")
-        candidates.forEach { print("  - \($0.path)") }
+        if Self.isVerboseLoggingEnabled {
+            print("[MidiAudioPlayer] Searching for soundfonts in:")
+            candidates.forEach { print("  - \($0.path)") }
+        }
         #endif
 
         for baseURL in candidates {
@@ -135,19 +150,21 @@ final class MidiAudioPlayer {
         }
 
         #if DEBUG
-        if discoveredFonts.isEmpty {
-            print("[MidiAudioPlayer] No custom soundfonts discovered.")
-        } else {
-            print("[MidiAudioPlayer] Discovered soundfonts:")
-            discoveredFonts.forEach { print("  • \($0.lastPathComponent) @ \($0.path)") }
-        }
-        if let sf = soundFontURL {
-            print("[MidiAudioPlayer] Using soundfont:", sf.path)
-        } else {
-            print("[MidiAudioPlayer] No soundfont found; AVMIDIPlayer may be silent on iOS.")
-            if let resPath = Bundle.main.resourcePath {
-                let listing = (try? FileManager.default.contentsOfDirectory(atPath: resPath)) ?? []
-                print("[MidiAudioPlayer] Bundle resources:", listing)
+        if Self.isVerboseLoggingEnabled {
+            if discoveredFonts.isEmpty {
+                print("[MidiAudioPlayer] No custom soundfonts discovered.")
+            } else {
+                print("[MidiAudioPlayer] Discovered soundfonts:")
+                discoveredFonts.forEach { print("  • \($0.lastPathComponent) @ \($0.path)") }
+            }
+            if let sf = soundFontURL {
+                print("[MidiAudioPlayer] Using soundfont:", sf.path)
+            } else {
+                print("[MidiAudioPlayer] No soundfont found; AVMIDIPlayer may be silent on iOS.")
+                if let resPath = Bundle.main.resourcePath {
+                    let listing = (try? FileManager.default.contentsOfDirectory(atPath: resPath)) ?? []
+                    print("[MidiAudioPlayer] Bundle resources:", listing)
+                }
             }
         }
         #endif
@@ -164,19 +181,21 @@ final class MidiAudioPlayer {
         queue.async { [weak self] in
             guard let self else { return }
 #if DEBUG
-            print("[MidiAudioPlayer] Preparing AVMIDIPlayer with soundfont:", soundFontURL.lastPathComponent)
-            do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: soundFontURL.path)
-                if let size = attributes[.size] as? NSNumber {
-                    print("[MidiAudioPlayer] Soundfont size: \(size.intValue) bytes")
+            if Self.isVerboseLoggingEnabled {
+                print("[MidiAudioPlayer] Preparing AVMIDIPlayer with soundfont:", soundFontURL.lastPathComponent)
+                do {
+                    let attributes = try FileManager.default.attributesOfItem(atPath: soundFontURL.path)
+                    if let size = attributes[.size] as? NSNumber {
+                        print("[MidiAudioPlayer] Soundfont size: \(size.intValue) bytes")
+                    }
+                } catch {
+                    print("[MidiAudioPlayer] Unable to read soundfont attributes:", error)
                 }
-            } catch {
-                print("[MidiAudioPlayer] Unable to read soundfont attributes:", error)
+                for track in clip.tracks {
+                    print("[MidiAudioPlayer] Track '\(track.name)' channel=\(track.channel) program=\(track.program ?? -1) events=\(track.events.count)")
+                }
+                print("[MidiAudioPlayer] Play request: tempo=\(clip.tempoBpm), ppq=\(clip.ppq), tracks=\(clip.tracks.count)")
             }
-            for track in clip.tracks {
-                print("[MidiAudioPlayer] Track '\(track.name)' channel=\(track.channel) program=\(track.program ?? -1) events=\(track.events.count)")
-            }
-            print("[MidiAudioPlayer] Play request: tempo=\(clip.tempoBpm), ppq=\(clip.ppq), tracks=\(clip.tracks.count)")
 #endif
 #if os(iOS)
             self.setupAudioSession()
@@ -190,7 +209,9 @@ final class MidiAudioPlayer {
                 player.play()
             } catch {
                 #if DEBUG
-                print("[MidiAudioPlayer] Failed to play clip:", error)
+                if Self.isVerboseLoggingEnabled {
+                    print("[MidiAudioPlayer] Failed to play clip:", error)
+                }
                 #endif
             }
         }

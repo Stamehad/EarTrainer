@@ -116,7 +116,13 @@ public final class SessionViewModel: ObservableObject {
 
     public func start() {
         guard !isProcessing else { return }
+        spec.seed = Int.random(in: 1...Int.max)
         perform {
+#if DEBUG
+            print("[Session] Starting spec -> nQuestions:", spec.nQuestions,
+                  "lesson:", spec.lesson ?? -1,
+                  "key:", spec.key)
+#endif
             summary = nil
             questionJSON = nil
             debugJSON = nil
@@ -476,6 +482,9 @@ public final class SessionViewModel: ObservableObject {
     private func apply(response: EngineResponse) {
         switch response {
         case let .question(envelope):
+#if DEBUG
+            print("[Session] Question:", envelope.bundle.questionId)
+#endif
             currentQuestion = envelope
             summary = nil
             questionJSON = summariseQuestionBundle(envelope.bundle) ?? prettyJSONString(envelope.bundle)
@@ -499,6 +508,9 @@ public final class SessionViewModel: ObservableObject {
                 }
             }
         case let .summary(report, memory):
+#if DEBUG
+            print("[Session] Summary received. Total attempts:", questionsAnswered)
+#endif
             currentQuestion = nil
             questionJSON = nil
             debugJSON = nil
@@ -572,6 +584,9 @@ public final class SessionViewModel: ObservableObject {
                 deferredPromptPlaybackDelay = 0
             }
             audioPlayer.play(clip: clip)
+#if DEBUG
+            print("[Session] Played orientation clip (key:", spec.key, ", lesson:", spec.lesson ?? -1, ")")
+#endif
         } catch {
             presentError(error)
         }
@@ -665,7 +680,9 @@ public final class SessionViewModel: ObservableObject {
     }
 
     private func presentError(_ error: Error) {
-        errorBanner = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        print("[Session] Error: \(message)")
+        errorBanner = message
     }
 
 }

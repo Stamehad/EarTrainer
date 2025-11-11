@@ -2,6 +2,7 @@
 #include "../include/resources/builtin_degree_levels.hpp"
 #include "../include/resources/builtin_melody_levels.hpp"
 #include "../include/resources/builtin_chord_levels.hpp"
+#include "../include/resources/drill_params.hpp"
 #include "../include/ear/types.hpp"
 #include "../include/ear/question_bundle_v2.hpp"
 #include "scoring/scoring.hpp"
@@ -10,6 +11,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <exception>
+#include <cstdio>
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
@@ -504,6 +507,19 @@ ear::SessionSpec make_spec(const std::string& drill_kind, const std::string& gen
   spec.assistance_policy = {{"GuideTone", 2}, {"Replay", 99}};
   spec.sampler_params = nlohmann::json::object();
   spec.seed = seed;
+  if (drill_kind == "note") {
+    spec.params = ear::NoteParams{};
+  } else if (drill_kind == "interval" || drill_kind == "harmony") {
+    ear::IntervalParams interval{};
+    interval.intervals = {2, 3, 4};
+    spec.params = interval;
+  } else if (drill_kind == "melody") {
+    spec.params = ear::MelodyParams{};
+  } else if (drill_kind == "chord" || drill_kind == "chord_melody") {
+    spec.params = ear::ChordParams{};
+  } else {
+    spec.params = ear::DrillParams{};
+  }
   return spec;
 }
 
@@ -553,6 +569,18 @@ ear::SessionSpec make_spec(const std::string& drill_kind, const std::string& gen
 } // namespace
 
 int main() {
+  std::set_terminate([]() {
+    if (auto ex = std::current_exception()) {
+      try {
+        std::rethrow_exception(ex);
+      } catch (const std::exception& err) {
+        std::fprintf(stderr, "\nterminate called after throwing an exception: %s\n", err.what());
+      } catch (...) {
+        std::fprintf(stderr, "\nterminate called after throwing an unknown exception\n");
+      }
+    }
+    std::abort();
+  });
   TestSuite suite;
 
   // Track selector tests retired; selection is now exercised via SessionEngine flows.

@@ -6,6 +6,7 @@ struct DegreeLinearKeyboard: View {
     var keyCornerRadius: CGFloat = 12
 
     private let keys: [Degree] = Degree.allCases
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         GeometryReader { geometry in
@@ -20,12 +21,12 @@ struct DegreeLinearKeyboard: View {
                     } label: {
                         ZStack {
                             RoundedRectangle(cornerRadius: keyCornerRadius)
-                                .fill(Color.white)
+                                .fill(Color.panelBackground)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: keyCornerRadius)
-                                        .stroke(Color.black.opacity(0.15), lineWidth: 1)
+                                        .stroke(Color.primary.opacity(colorScheme == .dark ? 0.25 : 0.15), lineWidth: 1)
                                 )
-                                .shadow(color: .black.opacity(0.06), radius: 3, y: 2)
+                                .shadow(color: shadowColor, radius: 3, y: 2)
 
                             if showsLabels {
                                 VStack(spacing: 4) {
@@ -48,7 +49,9 @@ struct DegreeLinearKeyboard: View {
                     )
                 }
             }
-            .background(Color(white: 0.95))
+            .padding(4)
+            .background(Color.appBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 
@@ -56,5 +59,9 @@ struct DegreeLinearKeyboard: View {
 #if canImport(UIKit)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
 #endif
+    }
+
+    private var shadowColor: Color {
+        colorScheme == .dark ? Color.black.opacity(0.45) : Color.black.opacity(0.1)
     }
 }

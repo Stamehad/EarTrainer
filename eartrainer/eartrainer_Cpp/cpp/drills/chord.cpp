@@ -150,7 +150,11 @@ std::vector<int> absolute_degrees(int root_degree, const std::vector<int>& offse
 //====================================================================
 void ChordDrill::configure(const DrillSpec& spec) {
   spec_ = spec;
-  params = std::get<ChordParams>(spec_.params);
+  try {
+    params = std::get<ChordParams>(spec_.params);
+  } catch (const std::bad_variant_access&) {
+    throw std::runtime_error("ChordDrill: spec '" + spec_.id + "' missing chord params");
+  }
   if (params.use_anchor && params.play_root.enabled) {
     // ensure only one helper (anchor or training root) is active at a time
     params.play_root.enabled = false;
