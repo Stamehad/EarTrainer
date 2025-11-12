@@ -17,6 +17,10 @@ ear_training_modules.md
 melody_sampler_demo.ipynb
 temp.md
 temp.sh
+eartrainer/eartrainer_Cpp/test.ipynb
+eartrainer/eartrainer_Cpp/test_adaptive.ipynb
+eartrainer/eartrainer_Cpp/test_engine_adaptive.ipynb
+eartrainer/eartrainer_Cpp/test_levels.ipynb
 
 # C++ core build artifacts (eartrainer_Cpp)
 /eartrainer/eartrainer_Cpp/build/
