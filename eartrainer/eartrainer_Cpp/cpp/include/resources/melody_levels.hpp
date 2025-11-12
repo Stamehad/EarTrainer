@@ -1,6 +1,5 @@
 #pragma once
 #include "resources/level_catalog.hpp"
-#include "resources/catalog_base.hpp"
 
 // #include "ear/drill_spec.hpp"
 // #include "resources/drill_params.hpp"
@@ -101,37 +100,37 @@ namespace build {
 } // namespace build
 
 // -------------------------
-// The manifest (ONE ROW PER DRILL)
-// number = old_level_code*10 + tier
-// Keep it sparse as you wish.
+// The manifest
 // -------------------------
 using M = MetaData; // demote_to, promote_to, questions
 inline const std::vector<Lesson>& manifest() {
   static const std::vector<Lesson> Manifest = {
+    //-------------------------------------------------------------
     // LEVEL 0
+    //-------------------------------------------------------------
     Lesson{1, "M1: PW", {
       {10, &build::d10, 10, "1–4 90bpm"},
       {11, &build::d11, 10, "5–8 90bpm"},
       {15, &build::d15, 20, "90bpm"},
-      }, LessonType::Warmup, M{.demote_to=0, .promote_to=2, .mix=-1},},
+      }, LessonType::Lesson, M{.demote_to=0, .promote_to=2, .mix=-1},},
 
     Lesson{2, "M2: PW", {
     {20, &build::d20, 10, "1–4"},
     {21, &build::d21, 10, "5–8"},
     {25, &build::d25, 20, "1-8"},
-    }, LessonType::Lesson, M{.demote_to=1, .promote_to=3, .mix=90},},
+    }, LessonType::Lesson, M{.demote_to=1, .promote_to=3, .mix=-1},},
 
     Lesson{3, "M3: PWI", {
       {30, &build::d30, 10, "1–4"},
       {31, &build::d31, 10, "5–8"},
       {35, &build::d35, 20, "1-8"},
-      }, LessonType::Warmup, M{.demote_to=2, .promote_to=4},},
+      }, LessonType::Lesson, M{.demote_to=2, .promote_to=4},},
 
     Lesson{4, "M4: NOTE", {
       {40, &build::d40, 10, "1–4"},
       {41, &build::d41, 10, "5–8"},
       {45, &build::d45, 20, "1-8"},
-      }, LessonType::Lesson, M{.demote_to=3, .promote_to=90, .mix=90},},
+      }, LessonType::Lesson, M{.demote_to=3, .promote_to=9, .mix=3},},
     
     Lesson{9, "M9: MIXER", {
       {90, &build::d90, 10, "PW"},
@@ -139,8 +138,9 @@ inline const std::vector<Lesson>& manifest() {
       {92, &build::d92, 20, "NOTE"},
       }, LessonType::Mixer, M{.demote_to=1, .promote_to=10, .mix=-1},},
   
-    
-    // // LEVEL 1
+    //-------------------------------------------------------------
+    // LEVEL 1
+    //-------------------------------------------------------------
     Lesson{10, "M10: WU PW", {
       {100, &build::d100, 10, "WU PW"},
       {101, &build::d101, 10, "WU PWI"},
@@ -186,17 +186,20 @@ inline const std::vector<Lesson>& manifest() {
       {197, &build::d197, 15, "N197: MIXER (NOTE)"},
       {198, &build::d198, 15, "N198: MIXER (MEL)"},
       }, LessonType::Mixer, M{.demote_to=11, .promote_to=20, .mix=-1},},
-    // // LEVEL 2
+    //-------------------------------------------------------------
+    // LEVEL 2
+    //-------------------------------------------------------------
     Lesson{20, "M20: WU MEL", {
-    {200, &build::d200, 10, "N200: WU PW"},
-    {201, &build::d201, 10, "N201: WU PWI"},
-    {202, &build::d202, 10, "N202: WU MEL"},
+      {200, &build::d200, 10, "N200: WU PW"},
+      {201, &build::d201, 10, "N201: WU PWI"},
+      {202, &build::d202, 10, "N202: WU MEL"},
     }, LessonType::Warmup, M{.demote_to=10, .promote_to=21, .mix=-1},},
     Lesson{21, "M21: MELODY STEP 1-3", {
         {210, &build::d210, 10, "N210: MEL 1–4 Step 1"},
         {211, &build::d211, 10, "N211: MEL 5–8 Step 1"},
         {215, &build::d215, 20, "N215: MEL 1–8 Step 1"},
-    }, LessonType::Lesson, M{.demote_to=20, .promote_to=22, .mix=-1},},
+      }, LessonType::Lesson, M{.demote_to=20, .promote_to=22, .mix=-1},
+    },
     Lesson{22, "M22: MELODY STEP 2", {
       {220, &build::d220, 10, "N220: MEL 1–4 Step 2"},
       {221, &build::d221, 10, "N221: MEL 5–8 Step 2"},

@@ -1,20 +1,23 @@
 #include "ear/level_inspector.hpp"
 
 #include "ear/question_bundle_v2.hpp"
-#include "resources/catalog_manager.hpp"
 #include "rng.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <iomanip>
 #include <mutex>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
-#include <cctype>
+#include <utility>
 
 namespace ear {
 namespace {
+
+using Lesson = resources::ManifestView::Lesson;
+using DrillEntry = ear::builtin::catalog_numbered::DrillEntry;
 
 void ensure_factory_registered(DrillFactory& factory) {
   static std::once_flag flag;
@@ -30,44 +33,81 @@ std::string to_lower(std::string_view text) {
   return out;
 }
 
-bool has_catalog(const resources::CatalogIndex& index, std::string_view name) {
-  for (const auto& track : index.tracks()) {
-    if (track.name == name) {
-      return true;
-    }
-  }
-  return false;
+struct TrackCatalog {
+  std::string name;
+  const std::vector<Lesson>* lessons = nullptr;
+};
+
+std::vector<TrackCatalog> manifest_tracks(const resources::ManifestView& manifest) {
+  return {
+      {resources::ManifestView::kTrackNames[0], &manifest.melody},
+      {resources::ManifestView::kTrackNames[1], &manifest.harmony},
+      {resources::ManifestView::kTrackNames[2], &manifest.chords},
+  };
 }
 
-std::optional<std::string> resolve_catalog_name(const resources::CatalogIndex& index,
+bool has_catalog(const std::vector<TrackCatalog>& tracks, std::string_view name) {
+  const auto lower = to_lower(name);
+  return std::any_of(tracks.begin(), tracks.end(), [&](const TrackCatalog& track) {
+    return to_lower(track.name) == lower;
+  });
+}
+
+std::vector<std::string> all_catalog_names(const std::vector<TrackCatalog>& tracks) {
+  std::vector<std::string> names;
+  names.reserve(tracks.size());
+  for (const auto& track : tracks) {
+    names.push_back(track.name);
+  }
+  return names;
+}
+
+std::optional<std::string> resolve_catalog_name(const std::vector<TrackCatalog>& tracks,
                                                 const std::string& key) {
   const std::string lower = to_lower(key);
-  for (const auto& track : index.tracks()) {
+  for (const auto& track : tracks) {
     if (lower == to_lower(track.name)) {
       return track.name;
     }
   }
 
-  if ((lower == "degree" || lower == "degrees") && has_catalog(index, "degree_levels")) {
-    return std::string("degree_levels");
+  struct Alias {
+    std::string alias;
+    std::string canonical;
+  };
+  static const Alias kAliases[] = {
+      {"degree", "harmony"},
+      {"degrees", "harmony"},
+      {"degree_levels", "harmony"},
+      {"harmony_levels", "harmony"},
+      {"melodies", "melody"},
+      {"melody_levels", "melody"},
+      {"chords", "chord"},
+      {"chord_levels", "chord"},
+      {"chord_sustain", "chord"},
+  };
+  for (const auto& alias : kAliases) {
+    if (lower == alias.alias && has_catalog(tracks, alias.canonical)) {
+      return alias.canonical;
+    }
   }
-  if ((lower == "melody" || lower == "melodies") && has_catalog(index, "melody_levels")) {
-    return std::string("melody_levels");
-  }
-  if ((lower == "chord" || lower == "chords" || lower == "chord_sustain") &&
-      has_catalog(index, "chord_levels")) {
-    return std::string("chord_levels");
-  }
+
   return std::nullopt;
 }
 
-std::vector<std::string> all_catalog_names(const resources::CatalogIndex& index) {
-  std::vector<std::string> names;
-  names.reserve(index.track_count());
-  for (const auto& track : index.tracks()) {
-    names.push_back(track.name);
-  }
-  return names;
+DrillSpec make_spec_from_entry(const Lesson& lesson,
+                               const DrillEntry& drill,
+                               int ordinal) {
+  DrillSpec spec;
+  DrillParams params = drill.build ? drill.build() : DrillParams{};
+  spec.id = drill.name
+                ? std::string(lesson.name) + "#" + std::to_string(ordinal)
+                : std::to_string(drill.number) + "#" + std::to_string(ordinal);
+  spec.family = ear::builtin::catalog_numbered::family_of(params);
+  spec.level = ear::builtin::catalog_numbered::block_of(drill.number);
+  spec.tier = ear::builtin::catalog_numbered::tier_of(drill.number);
+  spec.params = std::move(params);
+  return spec;
 }
 
 } // namespace
@@ -77,7 +117,8 @@ LevelInspector::LevelInspector(std::filesystem::path resources_dir,
                                std::uint64_t seed)
     : catalog_basename_(std::move(catalog_basename)),
       master_rng_(seed == 0 ? 1 : seed),
-      factory_(DrillFactory::instance()) {
+      factory_(DrillFactory::instance()),
+      manifest_(resources::manifest()) {
   (void)resources_dir;
   ensure_factory_registered(factory_);
   load_catalog();
@@ -99,31 +140,37 @@ void LevelInspector::load_catalog() {
 
   allowed_catalogs_.clear();
   levels_.clear();
+  lesson_lookup_.clear();
 
-  catalog_index_ = resources::build_builtin_catalog_index();
-
+  const auto tracks = manifest_tracks(manifest_);
   const bool load_all = catalog_basename_.empty() || catalog_basename_ == "all" ||
                         catalog_basename_ == "builtin" ||
                         catalog_basename_ == "all_builtin";
 
   if (load_all) {
     catalog_display_name_ = "builtin";
-    allowed_catalogs_ = all_catalog_names(catalog_index_);
+    allowed_catalogs_ = all_catalog_names(tracks);
   } else {
-    auto resolved = resolve_catalog_name(catalog_index_, catalog_basename_);
+    auto resolved = resolve_catalog_name(tracks, catalog_basename_);
     if (!resolved.has_value()) {
-      throw std::runtime_error("LevelInspector: unknown builtin catalog '" + catalog_basename_ + "'");
+      throw std::runtime_error("LevelInspector: unknown catalog '" + catalog_basename_ + "'");
     }
     catalog_display_name_ = *resolved;
     allowed_catalogs_.push_back(*resolved);
   }
 
-  for (const auto& entry : catalog_index_.entries()) {
-    if (std::find(allowed_catalogs_.begin(), allowed_catalogs_.end(), entry.catalog) ==
+  for (const auto& track : tracks) {
+    if (std::find(allowed_catalogs_.begin(), allowed_catalogs_.end(), track.name) ==
         allowed_catalogs_.end()) {
       continue;
     }
-    levels_.push_back(entry.level);
+    if (!track.lessons) {
+      continue;
+    }
+    for (const auto& lesson : *track.lessons) {
+      levels_.push_back(lesson.lesson);
+      lesson_lookup_[lesson.lesson] = &lesson;
+    }
   }
 
   std::sort(levels_.begin(), levels_.end());
@@ -137,30 +184,27 @@ void LevelInspector::load_catalog() {
 std::string LevelInspector::overview() const {
   std::ostringstream oss;
   oss << catalog_display_name_ << " levels\n";
-  const auto descriptions = catalog_index_.describe_levels(levels_);
-  for (const auto& desc : descriptions) {
-    oss << "  Level " << desc.level << ": ";
-    if (desc.tiers.empty()) {
+  for (int level : levels_) {
+    const auto tier_map = describe_level_specs(level);
+    oss << "  Level " << level << ": ";
+    if (tier_map.empty()) {
       oss << "(no drills)\n";
       continue;
     }
     bool first_tier = true;
-    for (const auto& [tier, specs] : desc.tiers) {
+    for (const auto& [tier, specs] : tier_map) {
       if (!first_tier) {
         oss << " | ";
       }
       first_tier = false;
       oss << "tier " << tier << " -> [";
       bool first_id = true;
-      for (const DrillSpec* spec : specs) {
-        if (!spec) {
-          continue;
-        }
+      for (const auto& spec : specs) {
         if (!first_id) {
           oss << ", ";
         }
         first_id = false;
-        oss << spec->id;
+        oss << spec.id;
       }
       oss << "]";
     }
@@ -176,15 +220,15 @@ std::string LevelInspector::levels_summary() const {
   std::ostringstream oss;
   oss << "Levels: ";
   bool first_level = true;
-  const auto descriptions = catalog_index_.describe_levels(levels_);
-  for (const auto& desc : descriptions) {
+  for (int level : levels_) {
     if (!first_level) {
       oss << ", ";
     }
     first_level = false;
-    oss << desc.level << " (";
+    const auto tier_map = describe_level_specs(level);
+    oss << level << " (";
     bool first_tier = true;
-    for (const auto& [tier, _] : desc.tiers) {
+    for (const auto& [tier, _] : tier_map) {
       if (!first_tier) {
         oss << ",";
       }
@@ -205,9 +249,9 @@ std::vector<int> LevelInspector::tiers_for_level(int level) const {
   if (!std::binary_search(levels_.begin(), levels_.end(), level)) {
     return tiers;
   }
-  const auto desc = catalog_index_.describe_level(level);
-  tiers.reserve(desc.tiers.size());
-  for (const auto& [tier, _] : desc.tiers) {
+  const auto tier_map = describe_level_specs(level);
+  tiers.reserve(tier_map.size());
+  for (const auto& [tier, _] : tier_map) {
     tiers.push_back(tier);
   }
   return tiers;
@@ -215,20 +259,16 @@ std::vector<int> LevelInspector::tiers_for_level(int level) const {
 
 std::vector<LevelCatalogEntry> LevelInspector::catalog_entries() const {
   std::vector<LevelCatalogEntry> entries;
-  if (levels_.empty()) {
-    return entries;
-  }
-
-  const auto descriptions = catalog_index_.describe_levels(levels_);
-  for (const auto& desc : descriptions) {
-    for (const auto& [tier, specs] : desc.tiers) {
-      if (specs.empty() || specs.front() == nullptr) {
+  for (int level : levels_) {
+    const auto tier_map = describe_level_specs(level);
+    for (const auto& [tier, specs] : tier_map) {
+      if (specs.empty()) {
         continue;
       }
       std::ostringstream oss;
-      oss << desc.level << "-" << tier << ": " << specs.front()->id;
+      oss << level << "-" << tier << ": " << specs.front().id;
       LevelCatalogEntry entry;
-      entry.level = desc.level;
+      entry.level = level;
       entry.tier = tier;
       entry.label = oss.str();
       entries.push_back(std::move(entry));
@@ -242,29 +282,22 @@ void LevelInspector::select(int level, int tier) {
     throw std::runtime_error("LevelInspector: unknown level " + std::to_string(level));
   }
 
-  const auto desc = catalog_index_.describe_level(level);
-  auto tier_it = desc.tiers.find(tier);
-  if (tier_it == desc.tiers.end() || tier_it->second.empty()) {
+  auto tier_map = describe_level_specs(level);
+  auto tier_it = tier_map.find(tier);
+  if (tier_it == tier_map.end() || tier_it->second.empty()) {
     throw std::runtime_error("LevelInspector: no drills for level " + std::to_string(level) +
                              ", tier " + std::to_string(tier));
   }
 
-  std::vector<DrillSpec> selected_specs;
-  selected_specs.reserve(tier_it->second.size());
-  for (const DrillSpec* spec_ptr : tier_it->second) {
-    if (!spec_ptr) {
-      continue;
-    }
-    DrillSpec copy = *spec_ptr;
-    if (base_key_.has_value()) {
-      copy.key = *base_key_;
-    }
-    selected_specs.push_back(std::move(copy));
-  }
-
+  std::vector<DrillSpec> selected_specs = tier_it->second;
   if (selected_specs.empty()) {
     throw std::runtime_error("LevelInspector: tier " + std::to_string(tier) +
                              " for level " + std::to_string(level) + " has no drills");
+  }
+  if (base_key_.has_value()) {
+    for (auto& spec : selected_specs) {
+      spec.key = *base_key_;
+    }
   }
 
   slots_.clear();
@@ -313,7 +346,6 @@ QuestionBundle LevelInspector::next() {
   }
   auto& slot = slots_[next_slot_index_];
   auto bundle = slot.module->next_question(slot.rng_state);
-  // apply_prompt_rendering(slot.spec, bundle);
   bundle.question_id = make_question_id();
   next_slot_index_ = (next_slot_index_ + 1) % slots_.size();
   return bundle;
@@ -326,6 +358,32 @@ std::string LevelInspector::make_question_id() {
   oss.fill('0');
   oss << ++question_counter_;
   return oss.str();
+}
+
+const Lesson* LevelInspector::lesson_for(int level) const {
+  const auto it = lesson_lookup_.find(level);
+  if (it == lesson_lookup_.end()) {
+    return nullptr;
+  }
+  return it->second;
+}
+
+std::map<int, std::vector<DrillSpec>> LevelInspector::describe_level_specs(int level) const {
+  std::map<int, std::vector<DrillSpec>> tiers;
+  const auto* lesson = lesson_for(level);
+  if (!lesson) {
+    return tiers;
+  }
+  int ordinal = 0;
+  for (const auto& drill : lesson->drills) {
+    if (!drill.build) {
+      continue;
+    }
+    auto spec = make_spec_from_entry(*lesson, drill, ordinal++);
+    const int tier_key = spec.tier.has_value() ? *spec.tier : -1;
+    tiers[tier_key].push_back(std::move(spec));
+  }
+  return tiers;
 }
 
 } // namespace ear

@@ -118,10 +118,7 @@ The C++ session engine provides a deterministic, embeddable core for generating 
   - Implements `SessionEngine` (session lifecycle, eager/adaptive generation, idempotent submit, capability listing). Key helpers: `ensure_factory`, `ensure_question`, `materialise_all`, `build_summary`.
 
 - eartrainer/eartrainer_Cpp/cpp/include/ear/adaptive_drills.hpp
-  - `AdaptiveDrills` facade for adaptive bouts. Reads catalog levels (via `adaptive_catalog`) and wraps a collection of drills created by `DrillFactory`; `set_bout(levels)` loads drill specs based on per-track levels and `.next()` serves a random question.
-
-- eartrainer/eartrainer_Cpp/cpp/include/ear/adaptive_catalog.hpp
-  - YAML loader helper that turns `resources/degree_levels.yml` into `DrillSpec` lists, keeping file I/O separate from adaptive scheduling.
+  - `AdaptiveDrills` facade for adaptive bouts. It walks the builtin manifest (melody/harmony/chord tracks) and builds `DrillModule` slots from the numbered catalog definitions before dealing questions via `.next()`.
 
 - eartrainer/eartrainer_Cpp/cpp/src/json_bridge.hpp/.cpp
   - JSON adapters for all public types. Functions: `to_json`/`*_from_json` for `SessionSpec`, `QuestionBundle`, `AssistBundle`, `ResultReport`, `SessionSummary`; includes `PromptPlan` and `TypedPayload` conversions.

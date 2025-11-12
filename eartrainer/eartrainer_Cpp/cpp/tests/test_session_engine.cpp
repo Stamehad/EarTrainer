@@ -1,7 +1,4 @@
 #include "../include/ear/session_engine.hpp"
-#include "../include/resources/builtin_degree_levels.hpp"
-#include "../include/resources/builtin_melody_levels.hpp"
-#include "../include/resources/builtin_chord_levels.hpp"
 #include "../include/resources/drill_params.hpp"
 #include "../include/ear/types.hpp"
 #include "../include/ear/question_bundle_v2.hpp"

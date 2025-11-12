@@ -2,12 +2,14 @@
 
 #include "drill_factory.hpp"
 #include "types.hpp"
-#include "../resources/catalog_manager.hpp"
+#include "../resources/catalog_manager2.hpp"
 
 #include <optional>
 #include <string>
 #include <vector>
 #include <filesystem>
+#include <unordered_map>
+#include <map>
 
 namespace ear {
 
@@ -41,10 +43,11 @@ private:
 
   void load_catalog();
   std::string make_question_id();
+  const resources::ManifestView::Lesson* lesson_for(int level) const;
+  std::map<int, std::vector<DrillSpec>> describe_level_specs(int level) const;
 
   std::string catalog_basename_;
   std::string catalog_display_name_;
-  resources::CatalogIndex catalog_index_;
   std::vector<int> levels_;
   std::vector<std::string> allowed_catalogs_;
   std::vector<Slot> slots_;
@@ -55,6 +58,8 @@ private:
   std::optional<int> active_tier_;
   DrillFactory& factory_;
   std::optional<std::string> base_key_;
+  resources::ManifestView manifest_;
+  std::unordered_map<int, const resources::ManifestView::Lesson*> lesson_lookup_;
 };
 
 } // namespace ear

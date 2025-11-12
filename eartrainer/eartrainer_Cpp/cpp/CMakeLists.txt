@@ -8,10 +8,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_library(ear_core STATIC
-    src/adaptive_catalog.cpp
-    src/adaptive_catalog_builtin.cpp
     src/adaptive_drills.cpp
-    src/resources/catalog_manager.cpp
     src/level_inspector.cpp
     # src/track_selector_builtin.cpp (retired)
     # src/track_selector.cpp (removed; builtin-only now)

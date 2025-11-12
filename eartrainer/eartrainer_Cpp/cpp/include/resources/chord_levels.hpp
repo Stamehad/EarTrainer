@@ -1,7 +1,6 @@
 #pragma once
 
 #include "resources/level_catalog.hpp"
-#include "resources/catalog_base.hpp"
 
 namespace ear::builtin::ChordLevels {
 
