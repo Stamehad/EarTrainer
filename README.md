@@ -1,9 +1,14 @@
-# EarTrainer (Python CLI + Minimal GUI)
+# EarTrainer
 
-EarTrainer is a functional ear‑training toolkit for drilling scale degrees, harmonic intervals, melodic lines, and chords — all in a clear tonal context.
+EarTrainer pairs a deterministic C++ SessionEngine with lightweight clients so you can drill scale degrees, harmonic intervals, melodic lines, and chords in a consistent tonal context across platforms.
 
-- Chords are voiced realistically: each harmony is served from a small, curated set of three distinct right‑hand voicings (different top notes) plus a bass, to increase variety and reduce overfitting.
-- Melodies are sampled with musical bias — small steps favored, consecutive big leaps discouraged — to sound more "line‑like" while still exploring the key space.
+- The Python CLI + minimal GUI (this repo) talk to the engine through pybind, keeping everything scriptable.
+- A SwiftUI client (see `Packages/AppUI`) links the same static library for iOS/macOS builds.
+- The legacy pure-Python prototype (far fewer drills, no adaptive levels) lives on the `legacy/python_keep` branch for archival reference only.
+
+Musical highlights:
+- Chords are voiced from a curated pool (three RH voicings plus bass) to reduce “guess the MIDI pattern” habits.
+- Melodies bias toward steps and limit repeated big leaps so prompts feel like lines rather than random jumps.
 
 Planned features
 - Chord progressions: sampled and from a library of common progressions.
@@ -13,7 +18,25 @@ Planned features
 - Chord‑relative pitch ID: identify notes relative to the current chord.
 - Natural modulations: key changes that evolve within a session.
 
-This README documents the Python version on the `main` branch. A C++ core is under active development on a separate local branch and not pushed yet (see note at the end).
+This README focuses on the Python client; the shared C++ engine + Swift bridge ship from the same tree described here.
+
+## Current Drill Kinds
+
+- **Note** – identify single diatonic degrees with optional pathway/tonic anchor helpers.
+- **Melody** – short scalar or skip-biased phrases with configurable tempo and helper tones.
+- **Chord** – identify chord degrees from realistically voiced prompts (piano, strings, sustain) with inversion aids.
+- **Harmony** – recognize degrees inside harmonic blocks, with helper/no-helper variants.
+- **Interval** – melodic & harmonic interval comparisons drawn from configurable sets and render styles.
+
+## Adaptive Mode (preferred)
+
+`AdaptiveDrills` is the “just play” mode: it reads the built-in numbered level catalog (hundreds of melody, harmony, and chord lessons), chooses the next drill for you, and keeps the three tracks moving without any manual setup or external files.
+
+- **Integrated catalog** – every drill lives in the binary manifest; AdaptiveDrills simply walks it and instantiates what you need.
+- **Automatic continuity** – the engine tracks your level per family (melody / harmony / chord) and rotates through them so lagging areas get more reps.
+- **Comfort-first progression** – accuracy is monitored continuously; as long as you stay in the comfortable zone the bout nudges difficulty upward, and once you sustain higher scores it graduates you to the next level. If performance dips, it backs off until you recover.
+
+Each type of drill has various helpers and simplifications for gradual improvement, as well as more difficult variations. 
 
 ## Install
 
@@ -97,143 +120,39 @@ Common tweaks: drill length, allowed degrees, key/scale, drone template/volume, 
 - Dependencies: `pip install -r requirements.txt` (or rely on `pyproject.toml` when installing the package).
 - Entry points: `eartrainer` (CLI), `eartrainer-gui` (GUI).
 
-## About the C++ Core (WIP)
+## Clients
 
-A cross‑platform C++ SessionEngine (with Python bindings) is being developed on a separate local branch to support future integrations (e.g., iOS/Android). It is not part of `main` yet and does not affect the Python CLI/GUI.
-
-## C++ Session Engine (eartrainer_Cpp/cpp) – Summary
-
-The C++ session engine provides a deterministic, embeddable core for generating ear‑training sessions. DrillModules now own their internal sampling logic, emitting UI‑ready QuestionBundles with PromptPlans (what to play), while the SessionEngine orchestrates session state, assistance, and summaries. The design is UI‑agnostic (typed JSON payloads), reproducible (seeded RNG), side‑effect free between API calls, and easily bound to Python via pybind11.
-
-- eartrainer/eartrainer_Cpp/cpp/CMakeLists.txt
-  - Build config for the static core library, unit test binary, and optional pybind11 module `_earcore`.
-
-- eartrainer/eartrainer_Cpp/cpp/include/ear/types.hpp
-  - Core data types: `SessionSpec`, `Note`, `PromptPlan`, `TypedPayload`, `QuestionBundle`, `AssistBundle`, `ResultReport` (+ nested `Metrics`), and `SessionSummary`.
-
-- eartrainer/eartrainer_Cpp/cpp/include/ear/session_engine.hpp
-  - Engine interface: `create_session`, `next_question`, `assist`, `submit_result`, `capabilities`; factory `make_engine()` returning a concrete implementation.
-
-- eartrainer/eartrainer_Cpp/cpp/src/session_engine.cpp
-  - Implements `SessionEngine` (session lifecycle, eager/adaptive generation, idempotent submit, capability listing). Key helpers: `ensure_factory`, `ensure_question`, `materialise_all`, `build_summary`.
-
-- eartrainer/eartrainer_Cpp/cpp/include/ear/adaptive_drills.hpp
-  - `AdaptiveDrills` facade for adaptive bouts. It walks the builtin manifest (melody/harmony/chord tracks) and builds `DrillModule` slots from the numbered catalog definitions before dealing questions via `.next()`.
-
-- eartrainer/eartrainer_Cpp/cpp/src/json_bridge.hpp/.cpp
-  - JSON adapters for all public types. Functions: `to_json`/`*_from_json` for `SessionSpec`, `QuestionBundle`, `AssistBundle`, `ResultReport`, `SessionSummary`; includes `PromptPlan` and `TypedPayload` conversions.
-
-- eartrainer/eartrainer_Cpp/cpp/src/bindings.cpp
-  - pybind11 module `_earcore` exposing `SessionEngine` to Python (`create_session`, `next_question`, `assist`, `submit_result`, `capabilities`). Includes Python↔JSON conversion utilities.
-
-- eartrainer/eartrainer_Cpp/cpp/src/rng.hpp
-  - Simple xorshift RNG utilities: `advance_rng`, `rand_int`, `rand_unit` used for deterministic sampling.
-
-- eartrainer/eartrainer_Cpp/cpp/drills/drill.hpp
-  - Abstractions: `DrillModule::configure(SessionSpec)` primes per-session state; `DrillModule::next_question(spec, rng)` returns a `QuestionBundle` (caller stamps `question_id`, bundle already carries prompt/ui hints).
-
-- eartrainer/eartrainer_Cpp/cpp/drills/common.hpp
-  - Music theory helpers and MIDI mapping: `normalize_degree_index`, `degree_to_offset`, `tonic_from_key`, `central_tonic_midi`, range helpers, `midi_candidates_for_degree`, `degree_to_midi`.
-
-- eartrainer/eartrainer_Cpp/cpp/drills/note.hpp/.cpp
-  - `NoteDrill` owns the degree/midi sampling with repeat‑avoidance and allowed filters, emitting single-note prompts (`degree` answers, `Replay` assist).
-
-- eartrainer/eartrainer_Cpp/cpp/drills/interval.hpp/.cpp
-  - `IntervalDrill` internally selects bottom degree + size (with optional filters), computes MIDI/orientation, and produces two-note prompts (`interval_class` answers, `Replay`/`GuideTone` assists).
-
-- eartrainer/eartrainer_Cpp/cpp/drills/melody.hpp/.cpp
-  - `MelodyDrill` maintains the weighted diatonic step model (recent-sequence suppression) and emits count-in multi-note prompts (`melody_notes` answers, `Replay`/`TempoDown` assists).
-
-- eartrainer/eartrainer_Cpp/cpp/drills/chord.hpp/.cpp
-  - `ChordDrill` samples degree/quality/voicing via the built-in `ChordVoicingEngine`, producing consistent bass/right-hand selections without external JSON (`chord_degree` answers, `Replay`/`GuideTone` assists).
-
-- eartrainer/eartrainer_Cpp/cpp/assistance/assistance.hpp/.cpp
-  - Assistance generation: returns `AssistBundle` for `Replay`, `GuideTone`, `TempoDown`, `PathwayHint`, optionally altering `PromptPlan` and adding `ui_delta` messages. Main: `assistance::make_assist`.
-
-- eartrainer/eartrainer_Cpp/cpp/scoring/scoring.hpp/.cpp
-  - Scoring utilities used for summaries: `score_question`, `aggregate_accuracy`, `average_response_time` with simple latency/assist penalties.
-
-- eartrainer/eartrainer_Cpp/cpp/tests/test_session_engine.cpp
-  - Minimal tests: determinism under seeded eager generation, assist/submit idempotence, RNG side‑effect checks, and JSON round‑trip of public types.
-
-Note: The directory `include/nlohmann/json.hpp` contains the vendored JSON library used for all typed JSON payloads.
+- **Python CLI / GUI** (`eartrainer`, `eartrainer-gui`) – install via the steps above; powered by the `_earcore` pybind module.
+- **SwiftUI app** (`Packages/AppUI`) – links `EarTrainerEngine` for iOS/macOS with the same catalog resources.
+- **Legacy Python** (`legacy/python_keep` branch) – the original, feature-light prototype; kept for historical reference only.
 
 # System Architecture Overview
 
-## Mermaid Diagram
 ```mermaid
 graph TD
     UI --> Engine
     Engine --> DF[DrillFactory]
     Engine --> AD[AdaptiveDrills]
     AD --> DF
-    AD --> DS[DrillSampler]
-    DF --> DM1[DrillModule 1, 2, ..., k]
-    DM1 -.-> S1[Internal Sampler]
+    AD --> LC[LevelCatalog]
+    DF --> DM1[DrillModules 1, 2, ..., k]
 ```
 
-## Module Responsibilities
+## SessionEngine API
 
-### 1. Engine
-**Purpose:** Main orchestrator of the C++ core. Interfaces with UI (Python, Android, iOS, etc.) and memory/user data.
-
-**Modes:**
-- **Drill mode** – user selects a single drill.
-- **Set mode** – user selects a stack of drills.
-- **Adaptive mode** – system automatically manages drills and difficulty.
-
-**Key Methods:**
-- `engine.create_session(SessionSpec)` – initialize a session.
-- `engine.next_question() -> QuestionBundle` – generate next question.
-- `engine.submit_result(ResultReport)` – receive feedback from user.
-- `engine.end_session() -> MemoryPackage` – finalize session and produce summary.
-- `engine.diagnostic() -> EngineStatePackage` – report internal state.
-
-### 2. DrillFactory (DF)
-**Purpose:** Unified front-end for interacting with all drills or stacks of drills. Provides a common interface for question generation and result collection.
-(To be later renamed DrillHub but currently this name conflit with some old code not needed anymore)
-
-**Key Methods:**
-- `df.set_bout([DrillSpec])` – initialize a bout with selected drills.
-- `df.next(k) -> QuestionBundle` – fetch next question from drill *k*.
-- `df.diagnostics() -> DrillFactoryState` – provide drill hub diagnostics.
-
-### 3. AdaptiveDrills (AD)
-**Purpose:** Builds and manages adaptive bouts using user level and performance. Selects drills dynamically from pre-defined levels. Adjusts difficulty on-the-fly and updates user progress.
-
-**Bout Types:**
-- **Warm-up** – gentle start with lower difficulty.
-- **Standard** – regular adaptive sequence.
-- **Mixed** – combine multiple drill types (e.g., melody + chords).
-- **Exam** – evaluation bout to graduate to next level.
-
-**Key Methods:**
-- `ad.set_bout(levels)` – select a track/phase and initialise the bout using per-track levels.
-- `ad.next() -> QuestionBundle` – request next adaptive question.
-- `ad.feedback(ResultReport)` – update internal performance tracking.
-- `ad.update_level()` – recompute level/score post-bout.
-
-### 4. DrillModule (DM)
-**Purpose:** Encapsulates logic for one specific drill family (e.g., melody, chord, interval). Handles creation of individual questions by delegating to its sampler.
-
-**Key Methods:**
-- `dm.configure(SessionSpec)` – configure tempo, key, range, etc.
-- `dm.next() -> QuestionBundle` – generate question via internal sampler.
-- `dm.feedback(ResultReport)` – collect and process user feedback.
-
-### 5. Sampler (S)
-**Purpose:** encapsulates the logic of randomly choosing scale degrees and next note in a melody line, chords etc. These samplers now live entirely inside `DrillModule` implementations and are never exposed externally. 
-
-### 6. DrillSampler (DS)
-**Purpose:** The sampler logic specifically used by `AdaptiveDrills` to select which drill (and difficulty variant) to present next. Balances challenge and engagement.
-
-**Sampler Modes:**
-- **Uniform:** random among available drills.
-- **Progressive:** gradually increases difficulty.
-- **Responsive:** adapts immediately based on last few results.
-- **Streak:** stays on the same drill for a few questions before changing.
-
----
-
-### Summary
-This architecture separates orchestration (Engine), adaptation (AdaptiveDrills), and generation (DrillHub + DrillFactory). Each drill remains modular, and new families can be added easily by extending `DrillModule`.
+- `create_session(spec) -> session_id`
+- `next_question(session_id) -> QuestionBundle | SessionSummary`
+- `assist_options(session_id) -> [string]`
+- `assist(session_id, kind) -> AssistBundle`
+- `submit_result(session_id, report) -> QuestionBundle | SessionSummary`
+- `end_session(session_id) -> MemoryPackage`
+- `session_key(session_id) -> string`
+- `orientation_prompt(session_id) -> MidiClip`
+- `debug_state(session_id) -> json`
+- `capabilities() -> json`
+- `drill_param_spec() -> json`
+- `adaptive_diagnostics(session_id) -> json`
+- `set_level(session_id, level, tier)`
+- `level_catalog_overview(session_id) -> string`
+- `level_catalog_levels(session_id) -> string`
+- `level_catalog_entries(spec) -> [LevelCatalogEntry]`
